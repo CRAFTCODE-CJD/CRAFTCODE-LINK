@@ -5,14 +5,16 @@ const {createPathResolver}=require('../src/profile-relocations.cjs');
 const {ProfileStore,seed,publicCard,friend}=require('../src/direct/identity.cjs');
 const privateStorage={isEncryptionAvailable:()=>true,encryptString:s=>Buffer.from(s),decryptString:b=>b.toString('utf8')};
 function fixture(t){
-  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'link-storage-'));
+  // Windows CI may expose TEMP through an 8.3 alias; storage returns canonical paths.
+  const tempRoot=fs.realpathSync.native(os.tmpdir());
+  const temp=fs.realpathSync.native(fs.mkdtempSync(path.join(tempRoot,'link-storage-')));
   const anchor=path.join(temp,'AppData','CRAFTCODE LINK'),downloads=path.join(temp,'Downloads');fs.mkdirSync(downloads);
   for(const name of ['drive-a','drive-b'])fs.mkdirSync(path.join(temp,name));
   let pick;
   const options={anchor,downloads,privateDirectory:()=>{},dialog:{showOpenDialog:async()=>pick?{canceled:false,filePaths:[pick]}:{canceled:true,filePaths:[]}}};
   const create=(extra={})=>new StorageLocation({...options,...extra});
   const c=create();c.bootstrap();
-  t.after(()=>{assert(path.resolve(temp).startsWith(path.resolve(os.tmpdir())+path.sep));assert(path.basename(temp).startsWith('link-storage-'));fs.rmSync(temp,{recursive:true,force:true});});
+  t.after(()=>{assert(path.resolve(temp).startsWith(path.resolve(tempRoot)+path.sep));assert(path.basename(temp).startsWith('link-storage-'));fs.rmSync(temp,{recursive:true,force:true});});
   return {temp,anchor,downloads,create,c,pick:value=>{pick=value;}};
 }
 async function schedule(f,c=f.c,drive='drive-a'){
