@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Приватное сообщение об уязвимости / Private vulnerability report
+    url: https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/security/advisories/new
+    about: Передайте подробности через приватную форму Security / Submit details privately

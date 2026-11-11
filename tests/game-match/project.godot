@@ -1,0 +1,9 @@
+config_version=5
+[application]
+config/name="LINK ENet room audit"
+run/main_scene="res://room.tscn"
+[rendering]
+renderer/rendering_method="gl_compatibility"
+
+[threading]
+worker_pool/max_threads=2

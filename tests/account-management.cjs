@@ -1,0 +1,81 @@
+const {clickPath}=require('./qa-navigation.cjs');
+// Isolated Electron account lifecycle. Every XMPP endpoint and external account page is intercepted.
+'use strict';
+const assert=require('node:assert/strict'), fs=require('node:fs'), os=require('node:os'), path=require('node:path');
+const {_electron}=require(require.resolve('playwright',{paths:[__dirname,process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||__dirname]}));
+const {providers}=require('../src/renderer/providers.mjs');
+const {Fixture}=require('./xmpp-fixture.cjs');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'link-accounts-'));
+const output=path.join(__dirname,'../out/qa');fs.mkdirSync(output,{recursive:true});
+const server=new Fixture({});const errors=[];const password='fixture-password';
+let app,page;
+async function login(user){
+  await page.fill('#accountJid',user);await page.fill('#accountPass',password);await page.click('#loginAccount');
+  await page.waitForSelector('#onlineActive');await page.click('#closeInternet');await page.click('#profileBtn');
+  assert.equal(await page.inputValue('#profileId'),user);
+}
+async function confirmRemoval(){
+  await page.click('#profileDelete');await page.waitForSelector('#confirmYesBtn');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'confirmNoBtn');
+  assert.ok((await page.textContent('#confirmActionTitle')).includes(await page.inputValue('#profileId')));
+  await page.click('#confirmYesBtn');
+}
+(async()=>{
+  app=await _electron.launch({executablePath:require('electron'),args:['--headless','--ozone-platform=headless','--no-sandbox',path.join(__dirname,'..'),'--craftlink-profile=management'],env:{...process.env,XDG_CONFIG_HOME:dir}});
+  page=await app.firstWindow();page.setDefaultTimeout(16000);page.on('pageerror',e=>errors.push(e.message));
+  const context=page.context();
+  let suspendedService='';
+  for(const site of Object.values(providers))await context.routeWebSocket(site.service,socket=>{if(site.domain!==suspendedService)server.route(socket,site.domain);});
+  await context.route(providers.jabberclub.bosh,route=>route.abort());
+  await app.evaluate(({shell,session})=>{
+    globalThis.external=[];shell.openExternal=async url=>{globalThis.external.push(url);};
+    session.fromPartition('link-registration-check',{cache:false}).fetch=async()=>new Response('',{status:503});
+  });
+  await page.reload();await clickPath(page,'#startCreate');await page.click('#registerAccount');
+  await page.waitForSelector('#registrationReturn');
+  await page.fill('#accountJid','olduser');await page.fill('#accountPass','private');
+  await page.click('#reopenRegistration');await page.click('#changeRegistration');
+  assert.ok(await page.locator('#xmppProvider').isVisible());await page.selectOption('#xmppProvider','hotchilli');
+  await page.click('#registerAccount');
+  assert.equal(await page.inputValue('#accountJid'),'');assert.equal(await page.inputValue('#accountPass'),'');
+  await page.reload();await page.waitForSelector('#registrationReturn');assert.equal(await page.inputValue('#xmppProvider'),'hotchilli');
+  await page.click('#entryBack');await page.reload();await page.waitForSelector('#internetDialog',{state:'hidden'});
+  assert.deepEqual(await app.evaluate(()=>globalThis.external),[providers.jabberru.register,providers.jabberru.register,providers.hotchilli.register]);
+  console.log('PASS reopen registration, change provider, continue on restart and cancel without restoring old credentials');
+  await clickPath(page,'#internetBtn');
+  await login('first@jabber.ru');await page.fill('#profileName','Первый');await page.locator('#profileForm button').click();
+  await page.setViewportSize({width:1000,height:650});await page.screenshot({path:path.join(output,'account-profile-min.png')});
+  await page.click('#profileSwitch');assert.equal(await page.inputValue('#accountJid'),'');assert.equal(await page.inputValue('#accountPass'),'');
+  await login('second@jabber.ru');assert.notEqual(await page.inputValue('#profileName'),'Первый');assert.equal(server.removals.length,0);
+  await page.click('#profileLogout');await page.waitForSelector('#settingsGuest');
+  if(!await page.locator('#settingsLogin').isVisible())await page.click('#settingsGuest > details > summary');
+  await page.click('#settingsLogin');await login('first@jabber.ru');
+  assert.equal(await page.inputValue('#profileName'),'Первый');console.log('PASS two identities, one-click switch, logout and preserved account-specific display names');
+  await page.click('#profileDelete');await page.keyboard.press('Escape');assert.deepEqual(server.removals,[]);
+  server.removalMode='deny';await confirmRemoval();await page.waitForSelector('#profileHelp');assert.equal(await page.inputValue('#profileId'),'first@jabber.ru');
+  await page.click('#profileHelp');assert.equal((await app.evaluate(()=>globalThis.external)).at(-1),providers.jabberru['account-help']);
+  server.removalMode='silence';await confirmRemoval();
+  await page.waitForFunction(()=>document.querySelector('#profileFeedback').textContent.includes('не подтвердил'));
+  assert.equal(server.removals.length,2);assert.equal(server.deleted.size,0);
+  console.log('PASS cancellation, provider refusal and unacknowledged removal keep the account, with no repeated deletion');
+  server.removalMode='ok';await confirmRemoval();await page.waitForSelector('#settingsGuest');
+  assert.deepEqual([...server.deleted],['first@jabber.ru']);assert.equal(server.removals.length,3);
+  const prefs=await page.evaluate(()=>JSON.parse(localStorage.getItem('craftlink.settings.v1')));assert(!Object.hasOwn(prefs.profileNames,'first@jabber.ru'));
+  if(!await page.locator('#settingsLogin').isVisible())await page.click('#settingsGuest > details > summary');
+  await page.click('#settingsLogin');await page.fill('#accountJid','first@jabber.ru');
+  await page.fill('#accountPass',password);await page.click('#loginAccount');
+  await page.waitForFunction(()=>document.querySelector('#onlineError').textContent.includes('пароль'));
+  await login('second@jabber.ru');console.log('PASS only the confirmed current account is deleted, cannot sign back in, and other account still works');
+  await page.click('#profileSwitch');await login('third@jix.im');await page.click('#profileDelete');
+  assert.equal((await app.evaluate(()=>globalThis.external)).at(-1),providers.jix['account-help']);assert.equal(server.removals.length,3);
+  assert.equal(await page.inputValue('#profileId'),'third@jix.im');
+  console.log('PASS provider-managed deletion opens its exact web page and does not claim remote completion');
+  suspendedService='jix.im';
+  server.clients.get('third@jix.im').ws.close({code:1012,reason:'fixture link lost'});
+  await page.waitForFunction(()=>document.querySelector('#profileDelete').disabled && !document.querySelector('#profileSwitch').disabled);
+  assert(await page.locator('#profileActionHint').isVisible());
+  await page.click('#profileSwitch');await login('second@jabber.ru');
+  assert.equal(await page.inputValue('#profileId'),'second@jabber.ru');
+  console.log('PASS interrupted connection can switch accounts without deleting the offline identity');
+  assert.deepEqual(errors,[]);
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(app)await app.close();fs.rmSync(dir,{recursive:true,force:true});});

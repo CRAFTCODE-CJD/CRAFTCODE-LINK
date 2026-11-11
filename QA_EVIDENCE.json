@@ -1,0 +1,1878 @@
+{
+  "version": "0.7.14",
+  "base": "0.7.13",
+  "date": "2026-11-11",
+  "stand": "Windows x64; temporary LINK profiles, isolated Windows desktop, loopback and private discovery fixtures.",
+  "sync": {
+    "shippedBase": {
+      "version": "0.7.13",
+      "viewerVersion": "0.7.13",
+      "utc": "2026-11-11T01:15:41.877Z",
+      "elapsedMs": 300934,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 18785,
+        "firstReadMs": 11,
+        "medianMs": 29,
+        "p95Ms": 30
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 240,
+          "p05": 1,
+          "median": 15,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 240,
+          "p05": 50,
+          "median": 54,
+          "p95": 63,
+          "p95Abs": 63
+        },
+        "audioSender": {
+          "n": 240,
+          "p05": 50,
+          "median": 56,
+          "p95": 66,
+          "p95Abs": 66
+        },
+        "audioOutput": {
+          "n": 240,
+          "p05": 150,
+          "median": 210,
+          "p95": 278,
+          "p95Abs": 278
+        },
+        "audioReceiver": {
+          "n": 240,
+          "p05": 132,
+          "median": 200,
+          "p95": 254,
+          "p95Abs": 254
+        },
+        "pictureReceiver": {
+          "n": 240,
+          "p05": 129,
+          "median": 178,
+          "p95": 202,
+          "p95Abs": 202
+        },
+        "sourcePictureMinusAudio": {
+          "n": 240,
+          "p05": -58,
+          "median": -41,
+          "p95": -24,
+          "p95Abs": 58
+        },
+        "receivedPictureMinusAudio": {
+          "n": 240,
+          "p05": -102,
+          "median": -17,
+          "p95": 9,
+          "p95Abs": 96
+        },
+        "outputPictureMinusAudio": {
+          "n": 240,
+          "p05": -112,
+          "median": -32,
+          "p95": 0,
+          "p95Abs": 112
+        }
+      },
+      "frames": 8994,
+      "videoBytes": 2451227,
+      "soundBytes": 7210190,
+      "voiceBytes": 2414339
+    },
+    "candidate": {
+      "version": "0.7.14",
+      "viewerVersion": "0.7.14",
+      "utc": "2026-11-11T01:23:25.971Z",
+      "elapsedMs": 300914,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 15046,
+        "firstReadMs": 20,
+        "medianMs": 26,
+        "p95Ms": 36
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 241,
+          "p05": 1,
+          "median": 16,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 241,
+          "p05": 43,
+          "median": 52,
+          "p95": 60,
+          "p95Abs": 60
+        },
+        "audioSender": {
+          "n": 241,
+          "p05": 43,
+          "median": 52,
+          "p95": 60,
+          "p95Abs": 60
+        },
+        "audioOutput": {
+          "n": 241,
+          "p05": 140,
+          "median": 169,
+          "p95": 220,
+          "p95Abs": 220
+        },
+        "audioReceiver": {
+          "n": 241,
+          "p05": 134,
+          "median": 168,
+          "p95": 210,
+          "p95Abs": 210
+        },
+        "pictureReceiver": {
+          "n": 241,
+          "p05": 104,
+          "median": 155,
+          "p95": 190,
+          "p95Abs": 190
+        },
+        "audioWorkletToSender": {
+          "n": 241,
+          "p05": 0,
+          "median": 0,
+          "p95": 0,
+          "p95Abs": 0
+        },
+        "audioSenderToReceiver": {
+          "n": 241,
+          "p05": 80,
+          "median": 113,
+          "p95": 160,
+          "p95Abs": 160
+        },
+        "audioReceiverToOutput": {
+          "n": 241,
+          "p05": 0,
+          "median": 7,
+          "p95": 16,
+          "p95Abs": 16
+        },
+        "pictureInputToReceiver": {
+          "n": 241,
+          "p05": 102,
+          "median": 144,
+          "p95": 175,
+          "p95Abs": 175
+        },
+        "sourcePictureMinusAudio": {
+          "n": 241,
+          "p05": -55,
+          "median": -38,
+          "p95": -16,
+          "p95Abs": 55
+        },
+        "receivedPictureMinusAudio": {
+          "n": 241,
+          "p05": -57,
+          "median": -16,
+          "p95": 15,
+          "p95Abs": 57
+        },
+        "outputPictureMinusAudio": {
+          "n": 241,
+          "p05": -64,
+          "median": -23,
+          "p95": 15,
+          "p95Abs": 64
+        }
+      },
+      "frames": 8991,
+      "videoBytes": 2460822,
+      "soundBytes": 7207811,
+      "voiceBytes": 2413525
+    },
+    "baseRepeat": {
+      "version": "0.7.13",
+      "viewerVersion": "0.7.13",
+      "utc": "2026-11-11T01:31:06.319Z",
+      "elapsedMs": 120213,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 6762,
+        "firstReadMs": 20,
+        "medianMs": 29,
+        "p95Ms": 39,
+        "readFrames": 5801280,
+        "skippedFrames": 11520
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 95,
+          "p05": 1,
+          "median": 16,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 95,
+          "p05": 44,
+          "median": 55,
+          "p95": 68,
+          "p95Abs": 68
+        },
+        "audioSender": {
+          "n": 95,
+          "p05": 52,
+          "median": 57,
+          "p95": 68,
+          "p95Abs": 68
+        },
+        "audioOutput": {
+          "n": 95,
+          "p05": 140,
+          "median": 186,
+          "p95": 205,
+          "p95Abs": 205
+        },
+        "audioReceiver": {
+          "n": 95,
+          "p05": 130,
+          "median": 173,
+          "p95": 195,
+          "p95Abs": 195
+        },
+        "pictureReceiver": {
+          "n": 95,
+          "p05": 35,
+          "median": 115,
+          "p95": 179,
+          "p95Abs": 179
+        },
+        "audioWorkletToSender": {
+          "n": 95,
+          "p05": 0,
+          "median": 0,
+          "p95": 15,
+          "p95Abs": 15
+        },
+        "audioSenderToReceiver": {
+          "n": 95,
+          "p05": 74,
+          "median": 115,
+          "p95": 133,
+          "p95Abs": 133
+        },
+        "audioReceiverToOutput": {
+          "n": 95,
+          "p05": 7,
+          "median": 9,
+          "p95": 23,
+          "p95Abs": 23
+        },
+        "pictureInputToReceiver": {
+          "n": 95,
+          "p05": 32,
+          "median": 104,
+          "p95": 154,
+          "p95Abs": 154
+        },
+        "sourcePictureMinusAudio": {
+          "n": 95,
+          "p05": -60,
+          "median": -44,
+          "p95": -27,
+          "p95Abs": 60
+        },
+        "receivedPictureMinusAudio": {
+          "n": 95,
+          "p05": -97,
+          "median": -48,
+          "p95": -8,
+          "p95Abs": 97
+        },
+        "outputPictureMinusAudio": {
+          "n": 95,
+          "p05": -112,
+          "median": -64,
+          "p95": -16,
+          "p95Abs": 112
+        }
+      },
+      "frames": 3563,
+      "videoBytes": 951438,
+      "soundBytes": 2862892,
+      "voiceBytes": 959559
+    },
+    "candidateRepeat": {
+      "version": "0.7.14",
+      "viewerVersion": "0.7.14",
+      "utc": "2026-11-11T01:33:40.951Z",
+      "elapsedMs": 120078,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 5940,
+        "firstReadMs": 13,
+        "medianMs": 29,
+        "p95Ms": 39,
+        "readFrames": 5802240,
+        "skippedFrames": 4800
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 96,
+          "p05": 2,
+          "median": 15,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 96,
+          "p05": 41,
+          "median": 52,
+          "p95": 65,
+          "p95Abs": 65
+        },
+        "audioSender": {
+          "n": 96,
+          "p05": 41,
+          "median": 52,
+          "p95": 65,
+          "p95Abs": 65
+        },
+        "audioOutput": {
+          "n": 96,
+          "p05": 112,
+          "median": 135,
+          "p95": 154,
+          "p95Abs": 154
+        },
+        "audioReceiver": {
+          "n": 96,
+          "p05": 109,
+          "median": 125,
+          "p95": 151,
+          "p95Abs": 151
+        },
+        "pictureReceiver": {
+          "n": 96,
+          "p05": 61,
+          "median": 127,
+          "p95": 161,
+          "p95Abs": 161
+        },
+        "audioWorkletToSender": {
+          "n": 96,
+          "p05": 0,
+          "median": 0,
+          "p95": 0,
+          "p95Abs": 0
+        },
+        "audioSenderToReceiver": {
+          "n": 96,
+          "p05": 56,
+          "median": 73,
+          "p95": 96,
+          "p95Abs": 96
+        },
+        "audioReceiverToOutput": {
+          "n": 96,
+          "p05": 0,
+          "median": 8,
+          "p95": 16,
+          "p95Abs": 17
+        },
+        "pictureInputToReceiver": {
+          "n": 96,
+          "p05": 34,
+          "median": 115,
+          "p95": 138,
+          "p95Abs": 138
+        },
+        "sourcePictureMinusAudio": {
+          "n": 96,
+          "p05": -57,
+          "median": -34,
+          "p95": -25,
+          "p95Abs": 57
+        },
+        "receivedPictureMinusAudio": {
+          "n": 96,
+          "p05": -49,
+          "median": 0,
+          "p95": 32,
+          "p95Abs": 55
+        },
+        "outputPictureMinusAudio": {
+          "n": 96,
+          "p05": -57,
+          "median": -8,
+          "p95": 25,
+          "p95Abs": 57
+        }
+      },
+      "frames": 3564,
+      "videoBytes": 966701,
+      "soundBytes": 2863599,
+      "voiceBytes": 958433
+    },
+    "finalRepeat": {
+      "version": "0.7.14",
+      "viewerVersion": "0.7.14",
+      "utc": "2026-11-11T01:48:36.586Z",
+      "elapsedMs": 300527,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 16225,
+        "firstReadMs": 26,
+        "medianMs": 28,
+        "p95Ms": 38,
+        "readFrames": 14452800,
+        "skippedFrames": 15360
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 240,
+          "p05": 2,
+          "median": 16,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 240,
+          "p05": 42,
+          "median": 52,
+          "p95": 64,
+          "p95Abs": 64
+        },
+        "audioSender": {
+          "n": 240,
+          "p05": 42,
+          "median": 52,
+          "p95": 64,
+          "p95Abs": 64
+        },
+        "audioOutput": {
+          "n": 240,
+          "p05": 125,
+          "median": 188,
+          "p95": 227,
+          "p95Abs": 227
+        },
+        "audioReceiver": {
+          "n": 240,
+          "p05": 115,
+          "median": 180,
+          "p95": 221,
+          "p95Abs": 221
+        },
+        "pictureReceiver": {
+          "n": 240,
+          "p05": 94,
+          "median": 158,
+          "p95": 207,
+          "p95Abs": 207
+        },
+        "audioWorkletToSender": {
+          "n": 240,
+          "p05": 0,
+          "median": 0,
+          "p95": 0,
+          "p95Abs": 0
+        },
+        "audioSenderToReceiver": {
+          "n": 240,
+          "p05": 63,
+          "median": 127,
+          "p95": 167,
+          "p95Abs": 167
+        },
+        "audioReceiverToOutput": {
+          "n": 240,
+          "p05": 0,
+          "median": 8,
+          "p95": 17,
+          "p95Abs": 17
+        },
+        "pictureInputToReceiver": {
+          "n": 240,
+          "p05": 89,
+          "median": 145,
+          "p95": 193,
+          "p95Abs": 193
+        },
+        "sourcePictureMinusAudio": {
+          "n": 240,
+          "p05": -59,
+          "median": -35,
+          "p95": -19,
+          "p95Abs": 59
+        },
+        "receivedPictureMinusAudio": {
+          "n": 240,
+          "p05": -73,
+          "median": -24,
+          "p95": 31,
+          "p95Abs": 73
+        },
+        "outputPictureMinusAudio": {
+          "n": 240,
+          "p05": -80,
+          "median": -31,
+          "p95": 23,
+          "p95Abs": 80
+        }
+      },
+      "frames": 8979,
+      "videoBytes": 2458104,
+      "soundBytes": 7196098,
+      "voiceBytes": 2410594
+    },
+    "queueDiagnostics": {
+      "peakMs": 39,
+      "underruns": 17,
+      "discardedMs": 17,
+      "scope": "Five minute simulated 10ms source through actual LINK sender and receiver; physical output not measured"
+    }
+  },
+  "physicalAvSync": "NOT TESTED",
+  "privateChat": {
+    "status": "PASS",
+    "evidence": {
+      "files": [
+        {
+          "type": "document",
+          "bytes": 2097183,
+          "sha256": "91ebea26655f4c7e7ab4547bb52c917bff6a5a3b7dec9c15c7630c75b30959fc",
+          "cancelledAndRetried": true
+        },
+        {
+          "type": "photo",
+          "bytes": 254,
+          "sha256": "320c95c49a14dfa155fb9677ff5bda4e908692a79191b39108cbdfe6f2c6a5e9",
+          "dimensions": [
+            80,
+            48
+          ]
+        }
+      ],
+      "recordings": [
+        {
+          "type": "audio",
+          "bytes": 19702,
+          "sha256": "57a42fdb0a2f020a3a6d44e391efa0ecea99456660c993b2bcbb90ed12e566db",
+          "playedSeconds": 0.014083
+        },
+        {
+          "type": "video",
+          "bytes": 91256,
+          "sha256": "581cc3e8c8ace899ffc0d560f751a9635aa618e6df4242ce0e01053e97793d68",
+          "playedSeconds": 0.010305,
+          "decodedFrames": 4
+        }
+      ],
+      "stubs": [
+        "hidden test windows",
+        "temporary Downloads per profile",
+        "native picker and camera confirmation",
+        "fake microphone and camera",
+        "loopback DHT",
+        "private clipboard and notifications"
+      ]
+    },
+    "loopbackDownload2MiBms": {
+      "0.7.13": 4141,
+      "0.7.14": 376
+    },
+    "mixedVersions": "Both directions verified by contents",
+    "emojiShaped": 3944,
+    "receipts": "0714-chat-receipts.log",
+    "finalMedia": {
+      "files": [
+        {
+          "type": "document",
+          "bytes": 2097183,
+          "sha256": "052f8fa3c5a29c00eb96d4176f96276c921823e4ff7b2c37182cb38f5f9dad5e",
+          "cancelledAndRetried": true
+        },
+        {
+          "type": "photo",
+          "bytes": 254,
+          "sha256": "320c95c49a14dfa155fb9677ff5bda4e908692a79191b39108cbdfe6f2c6a5e9",
+          "dimensions": [
+            80,
+            48
+          ]
+        }
+      ],
+      "recordings": [
+        {
+          "type": "audio",
+          "bytes": 19857,
+          "sha256": "b3a5333ddbed3098ae1bc5d29a70afadc9942b3eb6baa6e1ec0cfc02522931d0",
+          "playedSeconds": 1.176031
+        },
+        {
+          "type": "video",
+          "bytes": 91849,
+          "sha256": "75a25261762a76cec3d98468bbcd80c04f99e7add817169239299a79dc93acb6",
+          "playedSeconds": 0.0179,
+          "decodedFrames": 4
+        }
+      ],
+      "stubs": [
+        "hidden test windows",
+        "temporary Downloads per profile",
+        "native picker and camera confirmation",
+        "fake microphone and camera",
+        "loopback DHT",
+        "private clipboard and notifications"
+      ]
+    },
+    "compactBubbleTest": "0714-chat-compact.log",
+    "identityVerification": {
+      "status": "PASS",
+      "uiLog": "0714-identity-ui.log",
+      "independentReview": "0714-encryption-review.log",
+      "deviceRace": "0714-identity-device-race.log",
+      "transport": "Real private HyperDHT/Noise and TLS 1.3, synthetic profiles only"
+    }
+  },
+  "lan": {
+    "status": "PASS (MTDS lobby on two isolated Windows desktops; bridged game sockets)",
+    "physicalAdapters": "NOT TESTED",
+    "queries": 9,
+    "correlatedReplies": 9,
+    "gamePort": 28844,
+    "packetsToHost": 7247,
+    "packetsFromHost": 4405,
+    "chatMedia": {
+      "scope": "two isolated Electron clients, one LAN session, gaming adapter remains off",
+      "files": [
+        {
+          "name": "lan-map.bin",
+          "size": 49159,
+          "sha256": "d28c004e5cacc28dc5f5d25d10969485e764e1ad248b8378ad1c84d19cab15d3"
+        },
+        {
+          "name": "lan-photo.png",
+          "size": 422,
+          "sha256": "363c3f049f9ada6497b9d6a819bf5d804c20003cbeb345061fcec4755fc4d221"
+        },
+        {
+          "name": "Voice-2026-11-11T02-06-01-028Z.weba",
+          "size": 19702,
+          "sha256": "3209a019289cff7fc37ac61354c6a13f9f3fc782058c3a7d892982577b8ea65e"
+        },
+        {
+          "name": "Video-2026-11-11T02-06-16-469Z.webm",
+          "size": 92648,
+          "sha256": "baff3fb2e23e17c1814655730142e7dcab322725315886c7098c33d1e79cf124"
+        }
+      ],
+      "recordings": [
+        {
+          "kind": "voice",
+          "seconds": 2.82
+        },
+        {
+          "kind": "circle",
+          "seconds": null,
+          "frames": 4
+        }
+      ]
+    },
+    "mediaLog": "0714-lan-final.log",
+    "securityRecheck": {
+      "status": "PASS",
+      "answers": 8,
+      "gameToHost": 6852,
+      "gameFromHost": 4023,
+      "scope": "Two actual MTDS clients on private Windows desktops and loopback packet fixtures",
+      "logs": "E:/CRAFTCODE-QA/DM-Security-0714/discovery-match-recheck.log"
+    }
+  },
+  "unit": {
+    "passed": 235,
+    "failed": 0,
+    "skipped": 0,
+    "log": "0714-publication-tests.log"
+  },
+  "previousRelease": {
+    "version": "0.7.13",
+    "base": "0.7.12",
+    "date": "2026-11-11",
+    "stand": "Windows x64; temporary LINK profiles, isolated Windows desktop, loopback and private discovery fixtures.",
+    "unit": {
+      "passed": 214,
+      "failed": 0,
+      "skipped": 0,
+      "log": "0713-unit-final.log"
+    },
+    "javascript": {
+      "checked": 226,
+      "log": "0713-syntax-final.log"
+    },
+    "security": {
+      "discovery": {
+        "status": "PASS",
+        "signedUdpRepliesAfterRevocationBefore": 1,
+        "signedUdpRepliesAfterRevocationAfter": 0,
+        "signedRepliesAfterOptIn": 1,
+        "log": "0713-discovery-wire.log"
+      },
+      "groups": {
+        "status": "PASS",
+        "cases": [
+          "pending invitations and file proposals per person",
+          "room history and voice directory reject unregistered devices"
+        ]
+      },
+      "direct": {
+        "status": "PASS",
+        "cases": [
+          "signed but unregistered 17th device rejected when hello, call and LAN invite arrive together",
+          "registered second device can call and invite"
+        ]
+      },
+      "files": {
+        "status": "PASS",
+        "cases": [
+          "replacement of a temporary path",
+          "mutation of an earlier block",
+          "recovery of old partials without identity",
+          "NTFS ZoneId=3 on a saved script, script never executed"
+        ],
+        "packagedPeerTest": {
+          "status": "PASS",
+          "files": [
+            {
+              "type": "document",
+              "bytes": 2097183,
+              "sha256": "93ff96f099aadfbff083aff9c7f4069d02234bd17bf4a95d25de6ba440f1ddcf",
+              "cancelledAndRetried": true
+            },
+            {
+              "type": "photo",
+              "bytes": 254,
+              "sha256": "320c95c49a14dfa155fb9677ff5bda4e908692a79191b39108cbdfe6f2c6a5e9",
+              "dimensions": [
+                80,
+                48
+              ]
+            }
+          ],
+          "recordings": [
+            {
+              "type": "audio",
+              "bytes": 18885,
+              "sha256": "860cf2814abd8e14a71b0ad30214237ed48a2ff041eb5dbde52f03f7ed69bb9c",
+              "playedSeconds": 0.018766
+            },
+            {
+              "type": "video",
+              "bytes": 98077,
+              "sha256": "d2784a4f84534c8590aacd20fc03b67004852791c691723dede099769391762a",
+              "playedSeconds": 0.014188,
+              "decodedFrames": 4
+            }
+          ],
+          "stubs": [
+            "hidden test windows",
+            "temporary Downloads per profile",
+            "native picker and camera confirmation",
+            "fake microphone and camera",
+            "loopback DHT",
+            "private clipboard and notifications"
+          ],
+          "log": "0713-shipped-private-attachments.log"
+        }
+      },
+      "game": {
+        "status": "PASS",
+        "cases": [
+          "invitation handle bound to the local consent operation",
+          "no packet reaches another service on an occupied diagnostic port",
+          "host and 16 game clients reach identical final scoreboard"
+        ],
+        "nativeUnitLog": "0713-native-lan.log"
+      },
+      "isolatedPlayer": {
+        "status": "PASS",
+        "stunBefore": 3,
+        "stunAfter": 0,
+        "turnTcpAfter": 0,
+        "decodedFrames": 3,
+        "fixture": "loopback HTTPS",
+        "log": "0713-perimeter-final.log"
+      },
+      "notifications": {
+        "status": "PASS",
+        "tests": 11,
+        "log": "0713-perimeter-tray.log"
+      },
+      "releaseDependencies": {
+        "source": "npm bulk advisory API",
+        "versionsChecked": 60,
+        "reportedAdvisories": 0,
+        "log": "0713-production-advisories.json"
+      }
+    },
+    "packagedStartup": {
+      "status": "PASS",
+      "profileIsolated": true,
+      "adapter": "off",
+      "dht": false,
+      "log": "0713-package-private.log"
+    },
+    "notTested": [
+      "Two physical PCs and privileged Windows adapter lifecycle in this release",
+      "Public YouTube playback, Epic cloud lobby and independent penetration testing"
+    ],
+    "previousRelease": {
+      "version": "0.7.12",
+      "base": "0.7.11",
+      "date": "2026-11-11",
+      "stand": "Windows x64 source checkout with hidden Electron clients in temporary profiles and a private DHT. Headless Edge for RU/EN navigation. Real game clients, loopback sockets and WSL network namespaces on one PC.",
+      "unit": {
+        "passed": 203,
+        "failed": 0,
+        "scope": "Full 0.7.12 unit regression suite.",
+        "log": "0712-unit-final.log"
+      },
+      "javascript": {
+        "checked": 224,
+        "log": "0712-syntax-final.log"
+      },
+      "chat": {
+        "privateAttachments": {
+          "status": "PASS",
+          "profiles": 2,
+          "documentBytes": 2097183,
+          "image": {
+            "bytes": 254,
+            "width": 80,
+            "height": 48
+          },
+          "voice": {
+            "bytes": 19702,
+            "playedSeconds": 0.011683
+          },
+          "circle": {
+            "bytes": 98084,
+            "decodedFrames": 4,
+            "playedSeconds": 0.006958
+          },
+          "checks": [
+            "saved contents matched hashes",
+            "cancel and retry",
+            "round mask and seeking",
+            "playback speed"
+          ],
+          "log": "0712-private-attachments-final.log"
+        },
+        "optionalLocalCleanup": {
+          "status": "PASS",
+          "checked": [
+            "cancel",
+            "unchecked history-only clear",
+            "checked clear all after text-only clear",
+            "other original files retained"
+          ],
+          "scope": "Private chat receipts include surviving older download records. Attribution requires a surviving receipt or message. Channel moderation preserves downloaded user copies.",
+          "log": "0712-private-attachments-final.log"
+        },
+        "compose": {
+          "status": "PASS",
+          "checks": [
+            "clipboard cancel and paste",
+            "dropped file with caption",
+            "identical received bytes",
+            "emoji delivered"
+          ],
+          "emojiEntries": 3944,
+          "searchLocales": [
+            "ru",
+            "en"
+          ],
+          "logs": [
+            "0712-drop-final.log",
+            "0712-emoji-electron.log",
+            "0712-room-chat-ru.log",
+            "0712-room-chat-en.log"
+          ]
+        },
+        "codecs": {
+          "status": "PASS",
+          "formats": [
+            "mp4",
+            "m4a",
+            "ogg",
+            "opus",
+            "mp3",
+            "wav",
+            "gif",
+            "avif"
+          ],
+          "sampleMP4DecodedFrames": 10,
+          "log": "0712-media-codecs.log"
+        },
+        "youtube": {
+          "id": "M7lc1UVf-VE",
+          "card": {
+            "status": "PASS",
+            "width": 320,
+            "height": 180,
+            "jpegBytes": 11314,
+            "author": "Google for Developers"
+          },
+          "externalPlayback": {
+            "status": "BLOCKED",
+            "reason": "YouTube required sign-in to confirm the viewer was not a bot.",
+            "decodedFrames": 0
+          },
+          "log": "0712-youtube-play.log"
+        }
+      },
+      "groupAppearance": {
+        "status": "PASS",
+        "profiles": 3,
+        "allowedRoles": [
+          "owner",
+          "admin"
+        ],
+        "avatar": {
+          "pixels": [
+            48,
+            48
+          ],
+          "wire": "RGB bytes fetched by validated digest from the authenticated group server"
+        },
+        "checks": [
+          "member write denied",
+          "old-format group opens",
+          "shape and privilege validation",
+          "settings preserved after ownership handoff and restart",
+          "group voice / Home / private call restore personal theme",
+          "separate personal preferences and one-time device migration"
+        ],
+        "groupRegressionPasses": 9,
+        "logs": [
+          "group-appearance-final-e2e.log",
+          "group-appearance-final-ru.log",
+          "group-appearance-final-en.log"
+        ],
+        "tests": [
+          "tests/groups-service.test.cjs",
+          "tests/group-theme.test.mjs",
+          "tests/group-desktop.cjs",
+          "tests/group-ui-flow.cjs"
+        ]
+      },
+      "profile": {
+        "status": "PASS",
+        "checks": [
+          "four presence states",
+          "invisible during active game and after leaving",
+          "private DHT contact with 0.5.4",
+          "welcome, theme, skipping, reload and separate profiles in RU/EN",
+          "avatar and profile style delivery"
+        ],
+        "logs": [
+          "0712-status-appearance.log",
+          "0712-status-dht.log",
+          "0712-status-services.log",
+          "0712-welcome-ru.log",
+          "0712-welcome-en.log"
+        ]
+      },
+      "navigation": {
+        "status": "PASS",
+        "profiles": 3,
+        "friendVolumeSavedPercent": 58,
+        "checks": [
+          "explicit card exchange and mismatched card rejected",
+          "open correct DM from room roster",
+          "block removes messaging access",
+          "return to an active call",
+          "screen frames and voice after media host election"
+        ],
+        "logs": [
+          "0712-group-navigation.log",
+          "0712-group-navigation-en.log",
+          "0712-room-navigation.log",
+          "0712-room-navigation-en.log"
+        ]
+      },
+      "microphone": {
+        "status": "PASS",
+        "checks": [
+          "manual entry and saved mute/enable choice",
+          "release after rights revocation and profile change",
+          "decoded voice on both sides"
+        ],
+        "logs": [
+          "0712-mic-default.log",
+          "0712-beacon-mic.log"
+        ]
+      },
+      "deafenRecovery": {
+        "status": "PASS",
+        "detail": "The initial single-sample check timed out. Two isolated three-client runs subsequently verified playback restoration. The final probe checked seven consecutive output samples at each gain setting.",
+        "rms": {
+          "full": 0.1434653,
+          "friendAt43Percent": 0.06196685,
+          "roomAt50Percent": 0.03097648,
+          "muteMax": 0.0001,
+          "afterUnmute": 0.03069649
+        },
+        "logs": [
+          "0712-deafen-final.log",
+          "0712-deafen-investigation.log",
+          "0712-remember-mix.log"
+        ]
+      },
+      "lan": {
+        "probe": {
+          "status": "PASS",
+          "previous": "unavailable with the fixed port in use",
+          "current": "bound port 39319 in this run",
+          "log": "0712-busy-udp.log"
+        },
+        "gameMatch": {
+          "status": "PASS",
+          "server": "Godot ENet at invited seat 2",
+          "clients": 16,
+          "orderedRPCsPerClient": 30,
+          "finalScoreboardsMatch": true,
+          "udpFramesDelivered": 1405,
+          "log": "0712-game-match.log"
+        },
+        "kernelSockets": {
+          "status": "PASS",
+          "transport": "UDP broadcast discovery, ephemeral response, TCP handshake and full duplex data through the LINK adapter interface bridged to WSL namespace peers",
+          "verifiedBytesPerDirection": 65536,
+          "log": "0712-game-kernel.log"
+        },
+        "valveIP": {
+          "status": "PASS",
+          "version": "GameNetworkingSockets 1.6.1",
+          "mode": "CreateListenSocketIP / ConnectByIPAddress",
+          "verifiedBytesPerDirection": 65536,
+          "log": "0712-valve-ip.log"
+        },
+        "mixed": {
+          "status": "PASS",
+          "checks": [
+            "old host/current guest",
+            "current host/old guest",
+            "authenticated invitation and ready seats",
+            "identical broadcast and unicast reply bytes"
+          ],
+          "log": "0712-mixed-lan.log"
+        }
+      },
+      "notTested": [
+        "Physical match on the user's two PCs and diagnosis of their exact discovery failure",
+        "SteamID, Steam Datagram Relay and commercial account sign-in",
+        "Physical display/speaker timing",
+        "New five-minute A/V synchronization measurement on 0.7.12",
+        "Windows installation over the user's active call"
+      ],
+      "logsRoot": "out/qa (development workspace). Reproduction scripts are in the source archive.",
+      "previousRelease": {
+        "version": "0.7.11",
+        "base": "0.7.10",
+        "stand": "Windows x64, isolated Electron profiles, private loopback, actual WebRTC, selected synthetic screen and independent stereo PCM source. Physical transducers and WAN not measured.",
+        "unit": {
+          "passed": 192,
+          "failed": 0
+        },
+        "javascript": {
+          "checked": 210
+        },
+        "sync": {
+          "units": "ms; paired value is picture minus sound; negative means late audio, p95Abs is the 95th percentile of the absolute difference",
+          "old": {
+            "version": "0.7.10",
+            "viewerVersion": "0.7.10",
+            "utc": "2026-11-10T21:59:46.000Z",
+            "elapsedMs": 300164,
+            "frames": 8819,
+            "videoBytes": 2405890,
+            "systemBytes": 7194282,
+            "voiceBytes": 1797547,
+            "nativeRead": {
+              "n": 16226,
+              "firstReadMs": 30,
+              "medianMs": 30,
+              "p95Ms": 40
+            },
+            "stages": {
+              "pictureInput": {
+                "n": 240,
+                "p05": 2,
+                "median": 16,
+                "p95": 30,
+                "p95Abs": 30
+              },
+              "audioWorklet": {
+                "n": 240,
+                "p05": 63,
+                "median": 85,
+                "p95": 96,
+                "p95Abs": 96
+              },
+              "audioSender": {
+                "n": 240,
+                "p05": 72,
+                "median": 95,
+                "p95": 106,
+                "p95Abs": 106
+              },
+              "audioOutput": {
+                "n": 240,
+                "p05": 163,
+                "median": 187,
+                "p95": 200,
+                "p95Abs": 200
+              },
+              "audioReceiver": {
+                "n": 240,
+                "p05": 153,
+                "median": 177,
+                "p95": 190,
+                "p95Abs": 190
+              },
+              "pictureReceiver": {
+                "n": 240,
+                "p05": 72,
+                "median": 94,
+                "p95": 115,
+                "p95Abs": 115
+              },
+              "sourcePictureMinusAudio": {
+                "n": 240,
+                "p05": -99,
+                "median": -82,
+                "p95": -51,
+                "p95Abs": 98
+              },
+              "receivedPictureMinusAudio": {
+                "n": 240,
+                "p05": -112,
+                "median": -87,
+                "p95": -55,
+                "p95Abs": 111
+              },
+              "outputPictureMinusAudio": {
+                "n": 240,
+                "p05": -120,
+                "median": -96,
+                "p95": -64,
+                "p95Abs": 120
+              }
+            },
+            "markerWindows": 324,
+            "first10MarkerMedianMs": -110,
+            "last10MarkerMedianMs": -100,
+            "device": {
+              "sampleRate": 48000,
+              "baseLatencyMs": 10,
+              "outputLatencyMs": 41
+            }
+          },
+          "newest": {
+            "version": "0.7.11",
+            "viewerVersion": "0.7.11",
+            "utc": "2026-11-10T22:15:39.006Z",
+            "elapsedMs": 300732,
+            "frames": 8857,
+            "videoBytes": 2368553,
+            "systemBytes": 7208515,
+            "voiceBytes": 1783268,
+            "nativeRead": {
+              "n": 20300,
+              "firstReadMs": 24,
+              "medianMs": 20,
+              "p95Ms": 30
+            },
+            "stages": {
+              "pictureInput": {
+                "n": 240,
+                "p05": 1,
+                "median": 15,
+                "p95": 30,
+                "p95Abs": 30
+              },
+              "audioWorklet": {
+                "n": 240,
+                "p05": 34,
+                "median": 48,
+                "p95": 61,
+                "p95Abs": 61
+              },
+              "audioSender": {
+                "n": 240,
+                "p05": 44,
+                "median": 51,
+                "p95": 61,
+                "p95Abs": 61
+              },
+              "audioOutput": {
+                "n": 240,
+                "p05": 130,
+                "median": 204,
+                "p95": 240,
+                "p95Abs": 240
+              },
+              "audioReceiver": {
+                "n": 240,
+                "p05": 120,
+                "median": 194,
+                "p95": 230,
+                "p95Abs": 230
+              },
+              "pictureReceiver": {
+                "n": 240,
+                "p05": 85,
+                "median": 146,
+                "p95": 194,
+                "p95Abs": 194
+              },
+              "sourcePictureMinusAudio": {
+                "n": 240,
+                "p05": -54,
+                "median": -38,
+                "p95": -22,
+                "p95Abs": 54
+              },
+              "receivedPictureMinusAudio": {
+                "n": 240,
+                "p05": -65,
+                "median": -31,
+                "p95": 0,
+                "p95Abs": 65
+              },
+              "outputPictureMinusAudio": {
+                "n": 240,
+                "p05": -80,
+                "median": -39,
+                "p95": -8,
+                "p95Abs": 80
+              }
+            },
+            "markerWindows": 326,
+            "first10MarkerMedianMs": -60,
+            "last10MarkerMedianMs": -70,
+            "device": {
+              "sampleRate": 48000,
+              "baseLatencyMs": 10,
+              "outputLatencyMs": 42
+            }
+          },
+          "concurrentLoad": {
+            "version": "0.7.11",
+            "viewerVersion": "0.7.11",
+            "utc": "2026-11-10T22:10:05.731Z",
+            "elapsedMs": 300375,
+            "frames": 8795,
+            "videoBytes": 2370882,
+            "systemBytes": 7166387,
+            "voiceBytes": 1786831,
+            "nativeRead": {
+              "n": 15725,
+              "firstReadMs": 15,
+              "medianMs": 30,
+              "p95Ms": 40
+            },
+            "stages": {
+              "pictureInput": {
+                "n": 240,
+                "p05": 1,
+                "median": 15,
+                "p95": 30,
+                "p95Abs": 30
+              },
+              "audioWorklet": {
+                "n": 240,
+                "p05": 44,
+                "median": 55,
+                "p95": 71,
+                "p95Abs": 71
+              },
+              "audioSender": {
+                "n": 240,
+                "p05": 45,
+                "median": 58,
+                "p95": 71,
+                "p95Abs": 71
+              },
+              "audioOutput": {
+                "n": 240,
+                "p05": 148,
+                "median": 206,
+                "p95": 246,
+                "p95Abs": 246
+              },
+              "audioReceiver": {
+                "n": 240,
+                "p05": 138,
+                "median": 194,
+                "p95": 239,
+                "p95Abs": 239
+              },
+              "pictureReceiver": {
+                "n": 240,
+                "p05": 32,
+                "median": 101,
+                "p95": 219,
+                "p95Abs": 219
+              },
+              "sourcePictureMinusAudio": {
+                "n": 240,
+                "p05": -66,
+                "median": -43,
+                "p95": -26,
+                "p95Abs": 66
+              },
+              "receivedPictureMinusAudio": {
+                "n": 240,
+                "p05": -175,
+                "median": -90,
+                "p95": 17,
+                "p95Abs": 175
+              },
+              "outputPictureMinusAudio": {
+                "n": 240,
+                "p05": -192,
+                "median": -104,
+                "p95": 9,
+                "p95Abs": 192
+              }
+            },
+            "markerWindows": 318,
+            "first10MarkerMedianMs": -90,
+            "last10MarkerMedianMs": -140,
+            "device": {
+              "sampleRate": 48000,
+              "baseLatencyMs": 10,
+              "outputLatencyMs": 42
+            }
+          },
+          "mixed": {
+            "version": "0.7.10",
+            "viewerVersion": "0.7.11",
+            "utc": "2026-11-10T22:10:06.350Z",
+            "elapsedMs": 24554,
+            "frames": 698,
+            "videoBytes": 193027,
+            "systemBytes": 561719,
+            "voiceBytes": 140109,
+            "nativeRead": {
+              "n": 651,
+              "firstReadMs": 51,
+              "medianMs": 88,
+              "p95Ms": 105
+            },
+            "stages": {
+              "pictureInput": {
+                "n": 19,
+                "p05": 2,
+                "median": 20,
+                "p95": 32,
+                "p95Abs": 32
+              },
+              "audioWorklet": {
+                "n": 19,
+                "p05": 97,
+                "median": 143,
+                "p95": 153,
+                "p95Abs": 153
+              },
+              "audioSender": {
+                "n": 19,
+                "p05": 109,
+                "median": 147,
+                "p95": 161,
+                "p95Abs": 161
+              },
+              "audioOutput": {
+                "n": 19,
+                "p05": 185,
+                "median": 228,
+                "p95": 261,
+                "p95Abs": 261
+              },
+              "audioReceiver": {
+                "n": 19,
+                "p05": 173,
+                "median": 217,
+                "p95": 250,
+                "p95Abs": 250
+              },
+              "pictureReceiver": {
+                "n": 19,
+                "p05": 54,
+                "median": 104,
+                "p95": 143,
+                "p95Abs": 143
+              },
+              "sourcePictureMinusAudio": {
+                "n": 19,
+                "p05": -159,
+                "median": -127,
+                "p95": -86,
+                "p95Abs": 159
+              },
+              "receivedPictureMinusAudio": {
+                "n": 19,
+                "p05": -151,
+                "median": -112,
+                "p95": -55,
+                "p95Abs": 151
+              },
+              "outputPictureMinusAudio": {
+                "n": 19,
+                "p05": -159,
+                "median": -127,
+                "p95": -64,
+                "p95Abs": 159
+              }
+            },
+            "markerWindows": 25,
+            "first10MarkerMedianMs": -130,
+            "last10MarkerMedianMs": -130,
+            "device": {
+              "sampleRate": 48000,
+              "baseLatencyMs": 10,
+              "outputLatencyMs": 41
+            }
+          },
+          "sourceCalibration": {
+            "audioShiftMs": 120,
+            "advanced": {
+              "n": 14,
+              "p05": 72,
+              "median": 81,
+              "p95": 98
+            },
+            "delayed": {
+              "n": 14,
+              "p05": -172,
+              "median": -157,
+              "p95": -142
+            }
+          },
+          "quietThresholds": {
+            "medianAbsolute": {
+              "targetMs": 34,
+              "actualMs": 39,
+              "passed": false
+            },
+            "p95Absolute": {
+              "targetMs": 95,
+              "actualMs": 80,
+              "passed": true
+            }
+          },
+          "screenShareBufferSwitching": {
+            "test": "screen-sync-desktop.cjs, packaged 0.7.11: Auto -> 2000 ms -> Auto",
+            "worstMarkerWindowMs": 120,
+            "finalOutput": {
+              "n": 38,
+              "p05": -152,
+              "median": -80,
+              "p95": 24,
+              "p95Abs": 152
+            }
+          }
+        },
+        "switches": {
+          "clean": [
+            {
+              "label": "auto",
+              "worstWindowMedian": 60,
+              "worstPulse": 61,
+              "pulseCount": 5,
+              "frames": 196,
+              "voiceBytes": 53873,
+              "soundBytes": 160942
+            },
+            {
+              "label": "raise",
+              "worstWindowMedian": 80,
+              "worstPulse": 115,
+              "pulseCount": 14,
+              "frames": 618,
+              "voiceBytes": 182484,
+              "soundBytes": 545052
+            },
+            {
+              "label": "lower",
+              "worstWindowMedian": 180,
+              "worstPulse": 161,
+              "pulseCount": 15,
+              "frames": 683,
+              "voiceBytes": 168130,
+              "soundBytes": 502274
+            },
+            {
+              "label": "medium",
+              "worstWindowMedian": 80,
+              "worstPulse": 103,
+              "pulseCount": 6,
+              "frames": 251,
+              "voiceBytes": 74534,
+              "soundBytes": 222839
+            },
+            {
+              "label": "second-source",
+              "worstWindowMedian": 80,
+              "worstPulse": 147,
+              "pulseCount": 5,
+              "frames": 213,
+              "voiceBytes": 60982,
+              "soundBytes": 182091
+            },
+            {
+              "label": "return-to-film",
+              "worstWindowMedian": 80,
+              "worstPulse": 111,
+              "pulseCount": 12,
+              "frames": 505,
+              "voiceBytes": 149548,
+              "soundBytes": 446947
+            },
+            {
+              "label": "reduce",
+              "worstWindowMedian": 100,
+              "worstPulse": 59,
+              "pulseCount": 11,
+              "frames": 490,
+              "voiceBytes": 119211,
+              "soundBytes": 356258
+            },
+            {
+              "label": "restore-auto",
+              "worstWindowMedian": 270,
+              "worstPulse": 294,
+              "pulseCount": 6,
+              "frames": 291,
+              "voiceBytes": 75713,
+              "soundBytes": 225849
+            },
+            {
+              "label": "calibration-removed",
+              "worstWindowMedian": 40,
+              "worstPulse": 47,
+              "pulseCount": 4,
+              "frames": 248,
+              "voiceBytes": 66711,
+              "soundBytes": 199083
+            }
+          ],
+          "controls": [
+            {
+              "label": "incorrect-video-timestamp",
+              "stamp": 790,
+              "pulse": 49,
+              "pulseCount": 5,
+              "rtpEstimate": 74
+            },
+            {
+              "label": "real-source-audio-delay",
+              "stamp": -690,
+              "pulse": -720,
+              "pulseCount": 5,
+              "rtpEstimate": 42
+            }
+          ]
+        },
+        "networkRecovery": {
+          "dropped": 2520,
+          "afterDirect": {
+            "samples": 63,
+            "longestPictureMs": 125,
+            "issues": [],
+            "voiceMs": 137,
+            "systemMs": 1051,
+            "videoMs": 1039,
+            "skewMs": -10,
+            "roles": {
+              "voice": {
+                "rttMs": 10,
+                "jitterMs": 10,
+                "lost": 0,
+                "bytes": 32704,
+                "bufferMs": 74,
+                "concealed": 0
+              },
+              "system": {
+                "rttMs": 10,
+                "jitterMs": 10,
+                "lost": 0,
+                "bytes": 98031,
+                "bufferMs": 983,
+                "concealed": 0
+              },
+              "screen": {
+                "rttMs": 10,
+                "jitterMs": 3,
+                "lost": 0,
+                "playoutSkewMs": -23,
+                "targetMs": 1000,
+                "bytes": 251605,
+                "frames": 118,
+                "bufferMs": 972,
+                "freezeSeconds": 0
+              }
+            }
+          },
+          "afterRelay": {
+            "samples": 79,
+            "longestPictureMs": 148,
+            "issues": [],
+            "voiceMs": 188,
+            "systemMs": 280,
+            "videoMs": 220,
+            "skewMs": -60,
+            "roles": {
+              "system": {
+                "rttMs": 9,
+                "jitterMs": 2,
+                "lost": 0,
+                "bytes": 97148,
+                "bufferMs": 129,
+                "concealed": 0
+              },
+              "voice": {
+                "rttMs": 9,
+                "jitterMs": 2,
+                "lost": 0,
+                "bytes": 32361,
+                "bufferMs": 39,
+                "concealed": 0
+              },
+              "screen": {
+                "rttMs": 9,
+                "jitterMs": 4,
+                "lost": 0,
+                "playoutSkewMs": 41,
+                "targetMs": 88,
+                "bytes": 180135,
+                "frames": 115,
+                "bufferMs": 60,
+                "freezeSeconds": 0
+              }
+            }
+          },
+          "hostTargets": [
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "notTested": [
+          "Physical WASAPI and acoustic/display timing",
+          "Two PCs across the internet",
+          "Physical Unreal LAN match",
+          "Installation over an active call"
+        ],
+        "priorEvidence": "0.7.10 QA_REPORT.md and 0.7.10 Source.zip"
+      },
+      "gameCompatibility": {
+        "linkEndpoints": "authenticated admitted seats; game socket endpoints attached over loopback, one Windows PC",
+        "mtds": {
+          "engine": "5.7 Shipping",
+          "pack": "MTDS_V2_1_01_steam",
+          "originalProvider": "Steam",
+          "originalDriver": "SteamSockets.SteamSocketsNetDriver",
+          "originalFallback": "SteamSockets.SteamNetSocketsNetDriver",
+          "steamClientRunning": false,
+          "sourceFilesChanged": false,
+          "override": "MTDS_V2/Config/Windows/WindowsEngine.ini",
+          "testProvider": "Null",
+          "testDriver": "IpNetDriver",
+          "cases": [
+            {
+              "map": "L_Lobby",
+              "toServer": 2495,
+              "toClient": 1416,
+              "bytesToServer": 142988,
+              "bytesToClient": 38744
+            },
+            {
+              "map": "L_WaveDemo",
+              "toServer": 2463,
+              "toClient": 1385,
+              "bytesToServer": 130173,
+              "bytesToClient": 33083
+            }
+          ],
+          "shippedExeSha256": "cf249e5cff89e60879c562109c8dc19e8d920ff71cb22319ba47f984be79e099",
+          "shippedPakSha256": "96ed6b038e3173aacec355f75f20c8cd0a32b2298f8ba83ea72a6ca0bc05114f",
+          "menuObserved": "With the separate local config and the normal HOST button, the game advertises on UDP 14001 and listens on UDP 7777. The guest opened the JOIN menu, enabled LAN? and used Refresh List. Default JOIN starts with LAN? unchecked.",
+          "testKitSha256": "a00c9e653e7c721d82125b5e2df7d6b2a817644329c87acd91b5b541e74972bd"
+        },
+        "eik": {
+          "source": "https://github.com/betidestudio/EOSIntegrationKit/commit/e918aa5eea86c947486ddbafc1187a51e793818d",
+          "engine": "5.6.1",
+          "version": "4.85",
+          "windowsModules": "PASS",
+          "ipGameRpc": "PASS",
+          "driver": "IpNetDriver",
+          "cloudLobby": "BLOCKED: no configured EOS sandbox or authenticated product users",
+          "log": "0712-eik-gameplay.log",
+          "packagedWin64": {
+            "built": true,
+            "engine": "5.6.1",
+            "gameMap": "/Engine/Maps/Entry",
+            "archiveSha256": "b94a5df68556f522a95db2c93bb9ce0bc3d17117534de238af06cff1736323aa",
+            "ipRpcAfterExtraction": "B59662064A9891A2C2E577BE2651C6E3",
+            "ipRpcThroughLink": "1C3CA9D14BB0DC5A4B181D9DCE0E71B6",
+            "serverExit": 0,
+            "clientExit": 0,
+            "log": "0712-eik-packaged-final.log"
+          }
+        },
+        "udpRanges": {
+          "portsVerified": [
+            7777,
+            7831,
+            7876
+          ],
+          "log": "0712-game-kernel-range.log"
+        },
+        "physicalTwoPCMatch": "NOT TESTED"
+      },
+      "packagedStartup": {
+        "verified": true,
+        "profileIsolated": true,
+        "network": "private LAN, adapter off",
+        "personalChatsModuleLoaded": true,
+        "log": "0712-package-private.log"
+      }
+    }
+  },
+  "knownUnverified": [
+    "Physical two-PC audio/video output",
+    "Physical game adapters and match on two PCs",
+    "Friend microphone/camera hardware and Windows privacy permissions",
+    "Full ten-minute continuous voice recording",
+    "Authenticated Epic and Steam cloud matchmaking"
+  ],
+  "publicationSource": {
+    "status": "PASS",
+    "syntaxFiles": 248,
+    "lockedPackages": 74,
+    "node": "24.22.1",
+    "go": "1.27.3",
+    "logs": [
+      "0714-ci-install.log",
+      "0714-ci-check.log",
+      "0714-ci-tests.log",
+      "0714-ci-go.log"
+    ],
+    "scope": "Clean independent Windows source checkout and official checksum-verified toolchains"
+  },
+  "help": {
+    "status": "PASS",
+    "locales": [
+      "ru",
+      "en"
+    ],
+    "widths": [
+      900,
+      1100,
+      1440
+    ],
+    "tutorialSeconds": {
+      "chat": 14,
+      "call": 15.25,
+      "lan": 13.75
+    },
+    "videoSize": [
+      1280,
+      800
+    ],
+    "decodedFrames": true,
+    "adapterEnabled": false,
+    "evidence": "E:/CRAFTCODE-QA/Help-0714-final",
+    "independentProfileStateReview": "PASS"
+  },
+  "multiDevice": {
+    "profileTransfer": "PASS",
+    "log": "0714-profile-devices.json",
+    "ownDeviceHistorySync": "NOT IMPLEMENTED",
+    "android": "NOT IMPLEMENTED"
+  }
+}

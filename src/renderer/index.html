@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://jabber.club/ws https://jabber.club/bosh wss://jabber.ru/ws wss://api.xmpp.jp/ws/ wss://xmpp.jix.im/ws wss://jabber.hot-chilli.net/xmpp-websocket wss://jabberes.org:5443/websocket; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="dark">
+  <title>CRAFTCODE LINK</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="chat-view.css">
+<link rel="stylesheet" href="private-chat.css">
+<link rel="stylesheet" href="profile-appearance.css">
+<link rel="stylesheet" href="groups.css">
+  <link rel="stylesheet" href="group-feed.css">
+<link rel="stylesheet" href="room-layout.css">
+  <link rel="stylesheet" href="shell.css">
+  <link rel="stylesheet" href="voice-settings.css">
+  <link rel="stylesheet" href="chat-input.css">
+  <link rel="stylesheet" href="help-center.css">
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" class="icon-library" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="icon-profile" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="10" cy="10" r="2.2"/><path d="M6.5 16c.8-3.1 6.2-3.1 7 0M16 9h2m-2 4h2"/></symbol>
+    <symbol id="icon-voice" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8"/></symbol>
+    <symbol id="icon-stream" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M9 21h6m-3-4v4"/></symbol>
+    <symbol id="icon-connection" viewBox="0 0 24 24"><path d="M5 15c2-3 1-5 2-8a5.5 5.5 0 0 1 10 0c1 3 0 5 2 8v2H5zm5 5a2.3 2.3 0 0 0 4 0"/></symbol>
+    <symbol id="icon-reading" viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2"/><path d="M4 8.5c5 2.5 11 2.5 16 0m-8 2v4m0 0-3.5 6m3.5-6 3.5 6"/></symbol>
+    <symbol id="icon-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 13.5a3.9 3.9 0 0 0 7 0M9 9h.01M15 9h.01"/></symbol>
+    <symbol id="icon-attach" viewBox="0 0 24 24"><path d="M8 13.5 14.8 6.7a2.5 2.5 0 1 1 3.5 3.5l-8.1 8.1a4.2 4.2 0 0 1-6-6l9-9"/></symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.6"/></symbol>
+    <symbol id="icon-back" viewBox="0 0 24 24"><path d="m10 5-7 7 7 7M4 12h16"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 5v14"/></symbol>
+  </svg>
+  <div class="app-shell">
+<nav id="groupRail" aria-label="Пространства LINK">
+  <button type="button" id="navFriends" class="space-button home-space" aria-label="Главная" title="Главная"><img src="assets/craftlink.png" width="32" height="32" alt=""></button>
+  <div id="spaceList" aria-label="Мои группы"></div>
+  <button type="button" id="groupCreate" class="space-button create-space" aria-label="Создать группу" title="Создать группу"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button type="button" class="space-button" id="navGroups" title="Группы" aria-label="Группы"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="2"/><rect x="14.5" y="3.5" width="6" height="6" rx="2"/><rect x="3.5" y="14.5" width="6" height="6" rx="2"/><rect x="14.5" y="14.5" width="6" height="6" rx="2"/></svg><b id="groupBadge" class="request-count" hidden></b></button>
+  <div class="space-utilities"><button class="button button-ghost" id="networkHelpBtn" title="Справка LINK" aria-label="Справка LINK"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1 .7-1.8 1.1-1.8 2.8M12 17h.01"/></svg></button></div>
+</nav>
+<aside id="navRail" aria-label="Навигация">
+  <div id="sidebarSearch"></div>
+  <nav aria-label="Разделы LINK">
+    <button type="button" class="nav-item" id="homeDirectory" title="Друзья" aria-label="Друзья"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-2a5 5 0 0 0-10 0v2M11 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M18 7a3 3 0 0 1 0 6m1 2a5 5 0 0 1 3 4"/></svg><span>Друзья</span></button>
+    <button type="button" class="nav-item" id="navChats" title="Чаты" aria-label="Чаты"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-2.9-.4-4.1-1L3 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 10h8m-8 4h5"/></svg><span>Чаты</span><b id="dmBadge" class="request-count" hidden></b></button>
+    <button type="button" class="nav-item" id="navRequests" title="Заявки" aria-label="Заявки"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v13H3z M3 7l9 6 9-6"/></svg><span>Заявки</span><b id="requestBadge" class="request-count" aria-live="polite" hidden></b></button>
+    <button type="button" class="nav-item" id="navRoom" title="Комната" aria-label="Комната"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v13H3z M8 21h8m-4-4v4"/></svg><span>Комната</span></button>
+    <button type="button" class="nav-item" id="navRooms" title="Комнаты друзей" aria-label="Комнаты друзей"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="13" height="12" rx="3"/><path d="M8 16v3l4-3m6-8h1a2 2 0 0 1 2 2v9l-3-2"/></svg><span>Комнаты друзей</span></button>
+    <button type="button" class="nav-item" id="navGame" title="Игровая LAN" aria-label="Игровая LAN"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16l2 9-3 2-4-4H9l-4 4-3-2z M6 11h4m-2-2v4m7-2h1m2 2h1"/></svg><span>Игровая LAN</span><b id="gameBadge" class="request-count" hidden></b></button>
+  </nav>
+</aside>
+<aside id="friendsContext" class="context-pane" aria-labelledby="friendContextTitle">
+  <header class="context-heading"><h2 id="friendContextTitle">Личные сообщения</h2><button type="button" class="icon-button" id="contextAddFriend" aria-label="Добавить друга" title="Добавить друга"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11a4 4 0 100-8 4 4 0 000 8Zm-8 9v-2a5 5 0 015-5h4m5 0v8m-4-4h8"/></svg></button></header>
+  <label class="dm-search"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 16a6 6 0 100-12 6 6 0 000 12Zm5-1 5 5"/></svg><input id="friendContextSearch" type="search" aria-label="Найти друга" placeholder="Найти или начать беседу" autocomplete="off"></label>
+  <div class="friend-context-scroll">
+    <section id="quickOnline"><div id="quickPeople"></div><p id="friendContextEmpty" class="field-help"></p></section>
+    <section id="quickRoomSection" hidden><h3>Комнаты друзей</h3><div id="quickRooms"></div></section>
+  </div>
+</aside>
+<section id="profileDock" aria-label="Мой профиль">
+  <div id="voiceDockStatus" hidden>
+    <span class="status-badge" id="statusBadge"><i aria-hidden="true"></i><span id="statusText">Не в сети</span></span>
+    <button id="backToCall" class="button button-secondary" hidden>Вернуться в звонок</button><button class="button button-secondary" id="copyInviteBtn" hidden>Пригласить</button>
+  </div>
+  <div class="profile-tools"><button id="profileBtn" aria-label="Мой профиль" class="profile-button" title="Открыть профиль"><span class="local-avatar" aria-hidden="true" id="profileAvatar">Я</span><span><small>Мой профиль</small><strong id="profileLabel">Войти</strong></span></button><div id="voiceQuickControls"></div><button id="settingsBtn" class="icon-button settings-button" aria-label="Настройки" title="Настройки"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button></div>
+</section>
+<header class="app-header">
+  <button type="button" class="icon-button" id="contextToggle" aria-expanded="false" aria-label="Открыть список" title="Открыть список"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 5v14"/></svg></button>
+  <strong id="crumb">Друзья</strong>
+</header>
+<button type="button" id="contextScrim" aria-label="Закрыть список" tabindex="-1" hidden></button>
+<section id="directoryPage" aria-labelledby="directoryTitle">
+  <header class="directory-heading"><div><h1 id="directoryTitle" tabindex="-1">Друзья</h1><span id="directoryCount" class="field-help"></span></div><div id="bookFilters" role="group" aria-label="Показать"><button data-filter="all" aria-pressed="true">Все</button><button data-filter="online">В сети</button><button data-filter="favorite">Избранные</button><button data-filter="blocked">Заблокированные</button></div><button id="linkFriends" class="button button-primary">Добавить друга</button></header>
+  <section id="gamePage" class="game-page" hidden>
+    <section class="surface lan-discovered" id="gameReturns" hidden></section><div id="gameInvites" aria-live="polite"></div>
+    <section id="gameLobby" class="lan-lobby surface">
+      <div class="lan-symbol" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="6" rx="2"/><path d="M12 8v4M5 16v-4h14v4"/><rect x="2" y="16" width="6" height="5" rx="1.5"/><rect x="16" y="16" width="6" height="5" rx="1.5"/></svg></div>
+      <div><h2>Соберите игроков в одной сети</h2><p>Создайте сеть или присоединитесь к друзьям. Голосовой звонок можно продолжать во время игры.</p></div>
+      <button id="gameProfile" class="button button-primary">Открыть профиль LINK</button>
+      <form id="gameCreate"><label for="gameTitle">Название игровой LAN</label><div class="game-row"><input id="gameTitle" maxlength="48" required placeholder="Например, пятничный матч"><button class="button button-primary">Создать</button></div><label><input type="checkbox" id="lanPublish" checked> Друзья могут запросить вход</label></form>
+    </section>
+    <div id="gameSession" hidden>
+      <header class="lan-summary"><div><span id="gameRole"></span><h2 id="gameName"></h2></div><button class="button button-primary" id="gameActivate"></button><button class="button button-secondary" id="gameLeave">Выйти из LAN</button></header>
+      <div class="lan-tabs"><div role="tablist" aria-label="Игровая LAN"><button type="button" role="tab" id="gameChatTab" aria-controls="gameChatPane" aria-selected="true">Чат матча</button><button type="button" role="tab" id="gameNetworkTab" aria-controls="gameNetworkPane" aria-selected="false" tabindex="-1">Подключение</button></div><button type="button" id="gameMembersToggle" aria-controls="gameMembers" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>Участники</span></button></div>
+      <section class="lan-chat link-chat" id="gameChatPane" role="tabpanel" aria-labelledby="gameChatTab"><header class="conversation-heading"><h3># <span>Чат матча</span></h3><button id="gameClearChat" class="button button-ghost" hidden>Очистить у меня</button></header><div id="gameHistory" class="link-chat-log" role="log" aria-live="polite" aria-label="Сообщения матча"></div><p id="gameChatEmpty">Здесь можно договориться о матче.</p><form class="chat-form link-chat-compose" id="gameComposer"><div class="chat-tools"><details id="gameAttach"><summary aria-label="Вложения и запись"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></summary><div><button id="gameFile" type="button">Прикрепить файл или фото</button><button id="gameVoice" type="button">Голосовое сообщение</button><button id="gameCircle" type="button">Видеосообщение</button><small id="gameFileHint" hidden>Для вложений в LAN обновите LINK у организатора.</small></div></details><details id="gameEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div id="gameEmojiChoices" class="link-chat-emoji-choices"></div></details></div><label class="sr-only" for="gameMessage">Сообщение в чат матча</label><textarea id="gameMessage" rows="1" maxlength="1000" placeholder="Сообщение участникам…" disabled></textarea><button id="gameSendMessage" type="submit" class="send-button" disabled aria-label="Отправить сообщение"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button></form></section>
+      <section id="gameNetworkPane" class="lan-main" role="tabpanel" aria-labelledby="gameNetworkTab" hidden>
+        <section id="gameConnection" class="lan-connection"><div class="lan-state-line"><i aria-hidden="true"></i><h3 id="gameStateTitle"></h3></div><p id="gameStatus" role="status"></p><section id="gamePath" hidden><label for="gameTarget">На каком ПК создан матч</label><select id="gameTarget"></select><button class="button button-secondary" id="gameTestPath">Проверить игровой канал</button><p id="gamePathResult" role="status"></p><button class="button button-secondary" id="gameCopyDiag">Скопировать диагностику LAN</button></section></section>
+        <section class="lan-guide"><h3>Как подключиться в игре</h3><p>На одном ПК создайте LAN-матч в самой игре. На другом откройте список локальных серверов и нажмите «Обновить».</p><section id="ueDiscovery" hidden><p id="gameSearchStatus" role="status"></p><p id="ueTraffic"></p><details><summary>Параметры запуска игры</summary><p>LINK может передать игре адрес адаптера и порт. Если открылось главное меню, выберите в игре подключение по IP.</p><label for="gameLaunchPort">Игровой порт UDP</label> <input id="gameLaunchPort" type="number" min="1024" max="65535" value="7777" step="1"><button class="button button-secondary" id="ueLaunch">Выбрать и запустить игру…</button><button class="button button-secondary" id="ueJoin">Запустить игру и войти к участнику</button></details></section></section>
+        <details class="lan-guide"><summary>Настройка портов вручную</summary><form id="gamePortsForm"><label for="gamePorts">Порты для этой игровой сети</label><input id="gamePorts" maxlength="180" placeholder="UDP 19132, TCP 25565"><p>Если игра использует особый порт и не сообщает его при поиске, укажите правило у игроков и организатора LAN.</p><button type="button" id="gameEosPorts" class="button button-secondary">Подставить диапазон EOS</button><small>UDP 7777–7876 — стандартный диапазон EOS P2P. Выбранные порты действуют после нажатия «Применить».</small><button type="submit" class="button button-secondary">Применить</button></form></details>
+        <details class="lan-guide"><summary>Если игра использует сетевой сервис</summary><p>Для игры через LINK выберите в самой игре «Локальная сеть» или «Подключиться по IP». Если доступно только онлайн-лобби Epic или Steam, войдите в него через игру и отправьте другу её приглашение. Игровой IP понадобится только для режима прямого подключения.</p></details>
+      </section>
+      <section id="gameMembers" class="lan-members" aria-labelledby="gameMembersHeading"><header><h3 id="gameMembersHeading">Участники</h3><span id="gameCount"></span></header><label id="lanVisibility"><input type="checkbox" id="lanVisible"> Друзья могут запросить вход</label><div id="lanRequests"></div><div id="gameRoster"></div><div id="gameInviteBox" class="game-row"><select id="gameFriend" aria-label="Выберите друга"></select><button class="button button-secondary" id="gameSendInvite">Пригласить</button></div><p id="gameInviteHint" class="field-help" hidden></p></section>
+    </div>
+  </section>
+  <section id="roomsDirectory" hidden><div id="friendRooms"></div><section class="rooms-empty surface" id="roomsEmpty" hidden><div class="room-glyph" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 5h14v10H8l-4 4v-4H3z"/><path d="M19 8h2v11h-3v2l-3-2h-4"/></svg></div><div><h2>Открытых комнат пока нет</h2><p>Здесь появятся звонки, в которые друзья разрешили попроситься. Вы также можете открыть свою комнату и пригласить друзей.</p><button class="button button-secondary" id="openRoomWorkspace">Перейти в комнату</button></div></section></section><div id="peopleDirectory" class="directory-body"><div id="workspaceBook" class="surface">
+    <section id="profileWelcome" hidden aria-labelledby="welcomeHeading">
+      <div><h2 id="welcomeHeading">Добро пожаловать в LINK</h2><p>Выберите, как будет выглядеть ваше пространство. В профиле можно добавить фото и рассказать о себе.</p></div>
+      <fieldset id="welcomeThemes"><legend>Тема приложения</legend></fieldset>
+      <div class="welcome-actions"><button type="button" id="welcomeProfile" class="button button-primary">Настроить мой профиль</button><button type="button" id="welcomeDone" class="button button-secondary">Готово</button><button type="button" id="welcomeSkip" class="entry-link">Пропустить</button></div>
+    </section>
+    <section id="firstSteps" hidden aria-labelledby="firstStepsTitle"><div><h2 id="firstStepsTitle"></h2><p id="firstStepsText"></p></div><div class="welcome-actions"><button id="firstStepsOpen" type="button" class="button button-secondary"></button><button id="firstStepsSkip" type="button" class="entry-link"></button></div></section>
+    <div class="book-tools"><input type="search" id="bookQuery" maxlength="180" placeholder="Имя, логин или ID" aria-label="Поиск друзей"><select id="bookSort" aria-label="Порядок"><option value="available">Сначала в сети</option><option value="name">По имени</option><option value="recent">Недавние звонки</option></select></div>
+    <div class="presence-hint" id="bookPresence" hidden><span id="bookPresenceText" role="status"></span><button type="button" id="bookPresenceAction" class="entry-link"></button></div><div id="workspaceContacts"></div>
+  </div><div id="workspaceRequests" hidden><section class="surface"><h2>Входящие</h2><div id="inRequests"></div></section><section class="surface"><h2>Отправленные</h2><div id="outRequests"></div></section></div>
+  <aside class="directory-side"><section class="home-activity" aria-labelledby="activityTitle"><h2 id="activityTitle">Активные контакты</h2><div id="homeActivities"></div></section><section class="home-room-action"><button class="button button-secondary" id="linkHost">Создать комнату LINK</button></section>
+  <section id="myCardBox" class="home-card-action" hidden><span id="myCardHint" class="field-help" hidden></span><button id="bookCopy" class="button button-secondary">Скопировать карточку</button></section>
+  <details class="fallback" id="lobbyFallback"><summary>Другие способы подключения</summary><div class="entry-actions"><button class="button button-secondary" id="createBtn">Создать комнату</button><button class="button button-secondary" id="joinBtn">Ввести код комнаты</button><button class="button button-secondary" id="bookNearby">Локальная сеть или Radmin VPN</button><button class="button button-secondary" id="internetBtn">Контакты Jabber</button></div></details></aside></div>
+</section>
+  <aside class="group-sidebar" id="groupContext" aria-labelledby="groupsTitle" hidden>
+    <header class="group-sidebar-head">
+      <span id="groupContextMark" hidden></span><h1 id="groupsTitle" tabindex="-1">Группы</h1>
+      <button type="button" class="icon-button" id="groupOptions" title="Действия группы" aria-label="Действия группы" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+    </header>
+    <div id="groupInvites" aria-live="polite"></div>
+    <button type="button" class="group-members-command" id="groupMembersButton" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m1-15a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5"/></svg><span>Участники</span><small></small></button>
+    <nav id="groupChannels" aria-label="Каналы"></nav>
+    <template id="groupMutedIcon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M9 9v2a3 3 0 0 0 5 2M9 4a3 3 0 0 1 6 1v5M5 11a7 7 0 0 0 12 5m2-5c0 1 0 2-1 3m-6 4v4m-4 0h8"/></svg></template>
+    <button type="button" class="button button-ghost" id="groupAddChannel" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m-7-7h14"/></svg><span>Создать канал</span></button>
+  </aside>
+<main id="groupsPage" aria-labelledby="groupChannelName" hidden>
+  <section id="groupMain" class="group-main">
+    <div class="group-welcome" id="groupWelcome"><h2 id="groupWelcomeTitle">Пока нет групп</h2><p id="groupWelcomeText"></p><button type="button" id="groupBegin" class="button button-primary"></button></div>
+    <div id="groupContent" hidden>
+      <header class="group-head"><div class="group-head-text"><h2 id="groupChannelName" tabindex="-1"></h2><p id="groupConnection" class="group-connection" role="status"></p></div>
+        <details id="groupShelf" hidden><summary title="Файлы канала" aria-label="Файлы канала"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg><b id="groupFileRequests" hidden></b></summary><div class="group-file-pop"><h3>Файлы канала</h3><div id="groupFiles"></div></div></details>
+        <button type="button" class="icon-button" id="groupRosterToggle" title="Список участников" aria-label="Список участников" aria-controls="groupRoster" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m1-15a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5"/></svg></button>
+      </header>
+      <div id="groupText" class="link-chat">
+        <div id="groupHistoryBar"><button type="button" class="entry-link" id="groupEarlier" hidden>Раньше</button><button type="button" class="entry-link" id="groupLatest" hidden>К последним сообщениям</button></div>
+        <div id="groupScroll" class="chat-scroll"><p id="groupEmptyChat" class="collection-empty">В этом канале пока нет сообщений.</p><div id="groupLog" role="log" aria-label="Сообщения канала"></div></div>
+        <form id="groupComposer" class="chat-form"><button type="button" class="icon-button" id="groupAttach" aria-label="Прикрепить файл" title="Прикрепить файл"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></button><label for="groupInput" class="sr-only">Сообщение в канал</label><textarea id="groupInput" rows="1" placeholder="Сообщение в канал"></textarea><details id="groupEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи" title="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div class="link-chat-emoji-choices"></div></details><button id="groupSend" type="submit" class="send-button" aria-label="Отправить" title="Отправить"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button></form>
+      </div>
+      <div id="groupVoicePane" class="group-welcome" hidden><svg class="icon group-voice-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9H2v6h3l5 4V5L5 9Zm9-2a7 7 0 0 1 0 10m3-13a11 11 0 0 1 0 16"/></svg><h3 id="groupVoiceTitle"></h3><button type="button" id="groupVoiceJoin" class="button button-primary">Войти в голосовой канал</button></div>
+      <aside id="groupRoster" aria-label="Участники" hidden></aside>
+      <p id="groupFeedback" class="group-feedback" role="status" hidden></p>
+      <button type="button" class="entry-link" id="groupRetry" hidden>Попробовать снова</button>
+    </div>
+  </section>
+</main>
+<dialog class="modal" id="groupManage" aria-labelledby="groupManageTitle"><header class="modal-header"><h2 id="groupManageTitle"></h2><button type="button" class="close-button" id="groupManageClose" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div id="groupManageBody"></div></dialog>
+<dialog class="modal" id="groupAppearance" aria-labelledby="groupAppearanceTitle">
+  <form id="groupAppearanceForm">
+    <header class="modal-header"><h2 id="groupAppearanceTitle">Оформление группы</h2><button type="button" class="close-button" id="groupAppearanceClose" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header>
+    <div class="group-appearance-fields">
+      <div class="group-identity-preview"><span id="groupPhotoPreview"></span><strong id="groupAppearanceName"></strong></div>
+      <div class="group-photo-actions">
+        <input type="file" id="groupPhotoFile" accept="image/png,image/jpeg" aria-label="Фото группы" hidden>
+        <button type="button" class="button button-secondary" id="groupChoosePhoto">Выбрать фото</button>
+        <button type="button" class="button button-ghost" id="groupRemovePhoto">Убрать фото</button>
+      </div>
+      <label class="field"><span>Тема группы</span><select id="groupTheme"><option value="personal">Личная тема каждого участника</option></select></label>
+      <p class="field-help">Участники увидят эту тему в каналах группы и её голосовых комнатах.</p>
+      <p id="groupAppearanceError" class="error-text" role="alert" hidden></p>
+    </div>
+    <div class="modal-actions"><button type="button" class="button button-secondary" id="groupAppearanceCancel">Отмена</button><button type="submit" class="button button-primary" id="groupAppearanceSave">Сохранить</button></div>
+  </form>
+</dialog>
+<dialog class="modal" id="groupEdit" aria-labelledby="groupEditTitle"><form id="groupEditForm"><header class="modal-header"><h2 id="groupEditTitle"></h2><button type="button" class="close-button" id="groupEditClose" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div id="groupFields"></div><p class="field-help" id="groupEditError" role="alert" hidden></p><div class="modal-actions"><button type="button" class="button button-secondary" id="groupEditCancel">Отмена</button><button type="submit" class="button button-primary" id="groupEditSubmit"></button></div></form></dialog>
+  <aside id="dmContext" class="dm-index context-pane" hidden aria-labelledby="dmListTitle">
+    <header class="dm-index-head"><h1 id="dmListTitle" tabindex="-1">Личные сообщения</h1>
+      <details id="dmStorage" class="dm-menu"><summary aria-label="Хранилище чатов" title="Хранилище чатов"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-more"/></svg></summary><div class="dm-pop"><span id="dmStorageSize"></span><button id="dmClearAll" type="button">Очистить все личные чаты</button></div></details>
+    </header>
+    <label class="dm-search"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="dmSearch" type="search" aria-label="Найти друга" placeholder="Найти или начать беседу" autocomplete="off"></label>
+    <div id="dmList" class="dm-list" aria-label="Диалоги"></div><p id="dmListEmpty" class="field-help"></p>
+  </aside>
+<main id="messagesPage" aria-label="Личные чаты" hidden>
+
+  <section id="dmConversation" class="dm-conversation link-chat" aria-labelledby="dmTitle" hidden>
+    <header class="dm-head">
+      <button id="dmBack" class="icon-button" type="button" aria-label="К списку чатов" title="К списку чатов"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-back"/></svg></button>
+      <span id="dmAvatar" class="dm-avatar" aria-hidden="true"></span>
+      <div class="dm-head-copy"><h2 id="dmTitle" tabindex="-1"></h2><small id="dmPresence"></small></div>
+      <button id="dmCall" type="button" class="icon-button" aria-label="Позвонить" title="Позвонить"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3 3 5-2 2a14 14 0 0 0 6 6l2-2 5 3-1 4C12 23 1 12 3 4z"/></svg></button>
+      <button id="dmProfileToggle" type="button" class="icon-button" aria-controls="dmProfile" aria-expanded="false" aria-label="Профиль собеседника" title="Профиль собеседника"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profile"/></svg></button>
+      <details id="dmActions" class="dm-menu"><summary aria-label="Действия с чатом" title="Действия с чатом"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-more"/></svg></summary><div class="dm-pop"><button type="button" id="dmSecurity">Защита переписки</button><button type="button" id="dmClear">Очистить переписку</button></div></details>
+    </header>
+    <section class="dm-thread-body">
+    <div id="dmScroll" class="dm-scroll"><button id="dmEarlier" type="button" class="dm-history-step" hidden>Предыдущие сообщения</button><div id="dmIntro" class="dm-intro" hidden><span id="dmIntroAvatar" class="dm-avatar"></span><h3 id="dmIntroName" dir="auto"></h3><p>Начало вашей личной переписки</p></div><div id="dmLog" class="link-chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Личные сообщения"></div></div>
+    <div id="dmPast" class="dm-history-nav" hidden><button type="button" id="dmLater" class="entry-link">Следующие сообщения</button><button type="button" id="dmLatest" class="entry-link">К последним</button></div>
+    <p id="dmNotice" role="status" class="dm-notice" hidden></p>
+    <button id="dmRetry" type="button" class="entry-link" hidden>Попробовать снова</button>
+    <form id="dmForm" class="link-chat-compose dm-compose">
+      <details id="dmAttach" class="dm-menu"><summary aria-label="Вложения и запись" title="Вложения и запись"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></summary><div class="dm-pop"><button id="dmFile" type="button">Прикрепить файл или фото</button><button id="dmVoice" type="button">Голосовое сообщение</button><button id="dmCircle" type="button">Видеосообщение</button><small id="dmFileHint"></small></div></details>
+      <details id="dmEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи" title="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div class="link-chat-emoji-choices"></div></details>
+      <textarea id="dmInput" rows="1" aria-label="Личное сообщение" autocomplete="off" placeholder="Написать сообщение…" disabled></textarea>
+      <button type="submit" id="dmSend" class="icon-button" aria-label="Отправить" title="Отправить" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button>
+    </form>
+    </section>
+    <aside id="dmProfile" aria-label="Профиль собеседника" hidden>
+      <div id="dmProfileCover" class="dm-profile-cover profile-cover" aria-hidden="true"></div>
+      <div class="dm-profile-info"><span id="dmProfileAvatar" class="dm-avatar"></span><h3 id="dmProfileName" dir="auto"></h3><p id="dmProfileStatus"></p>
+        <section id="dmAbout" hidden><h4>О себе</h4><p id="dmAboutText" dir="auto"></p></section>
+        <section id="dmFriendSince"><h4>В друзьях с</h4><time></time></section>
+        <section id="dmSharedGroups" hidden><h4>Общие группы</h4><div id="dmSharedList"></div></section>
+      </div>
+    </aside>
+  </section>
+  <div id="dmIdle" class="dm-idle"><span>Выберите чат</span></div>
+</main>
+    <main id="roomPage" class="workspace" hidden>
+
+      <section class="stage-column" aria-label="Трансляция">
+        <header class="room-bar">
+          <div class="room-title">
+            <span class="room-symbol" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 5.5 8.5H3v7h2.5L11 20V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg></span>
+            <div class="room-title-lines"><h1 id="roomLabel">Комната</h1><div class="room-meta" hidden id="roomMeta"><span class="room-member-count" title="Участники"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M9.5 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm7 1a3.4 3.4 0 0 1 0 6m1.5 4a4 4 0 0 1 2 3.5V20"/></svg><span id="participantsCount">0 / 8</span></span><time id="callElapsed" aria-label="Длительность звонка" hidden></time></div></div>
+          </div>
+          <div class="room-toolbar">
+            <button id="roomConversation" type="button" class="button button-secondary" hidden>Личный чат</button>
+            <button id="studioBtn" type="button" class="button studio-button" aria-controls="studioDock" aria-expanded="false" title="Настройки вашей трансляции"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5m5 0h8M3 17h10m5 0h3"/><circle cx="10.5" cy="7" r="2.5"/><circle cx="15.5" cy="17" r="2.5"/></svg><span>Настройки показа</span></button>
+            <button id="cinemaBtn" class="button button-secondary" aria-pressed="false" title="Кинорежим">Кинорежим</button>
+            <button type="button" class="icon-button" id="roomOptionsBtn" title="Управление комнатой" aria-label="Управление комнатой" aria-haspopup="dialog" popovertarget="hostAccess" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h1m6 0h1m6 0h1"/></svg></button>
+            <button type="button" class="button button-secondary" id="togglePanelBtn" aria-label="Открыть чат комнаты" title="Открыть чат комнаты" aria-controls="roomSidebar" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-2.9-.4-4.1-1L3 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5ZM8 10h8m-8 4h5"/></svg><span>Чат</span></button>
+          </div>
+        </header>
+        <section id="hostAccess" class="room-popover" popover="auto" role="dialog" aria-labelledby="hostAccessHeading">
+          <header class="sound-menu-head"><strong id="hostAccessHeading">Управление комнатой</strong><button type="button" class="icon-button" popovertarget="hostAccess" popovertargetaction="hide" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg></button></header>
+          <label><input type="checkbox" id="roomModerated"> Режим комментатора</label><p>Зрители слушают трансляцию. Вы можете дать слово отдельному участнику.</p>
+<div id="linkAccess" hidden><label for="audienceMode">Кто может попроситься</label><select id="audienceMode"><option value="friends">Мои друзья</option><option value="selected">Выбранные друзья</option><option value="invite">Только по приглашению</option></select><div id="audiencePeople"></div><div id="returnAccess" hidden><p>Могут вернуться без запроса</p><div id="returnMembers"></div></div></div>
+        </section>
+        <div class="stage-heading room-stream-heading" hidden><div class="stage-label"><h2 id="stageTitle">Общий экран</h2><span id="stageBadge" class="stage-badge">В эфире</span></div><div class="stage-tools"><span id="stageStats" class="mono">—</span><button class="icon-button" id="fullscreenBtn" disabled aria-label="Открыть трансляцию на весь экран" title="На весь экран"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div>
+        <div class="stream-stage" id="streamStage">
+          <video id="remoteVideo" class="remote-video" autoplay muted playsinline hidden></video>
+          <div id="voiceGrid" class="voice-grid" role="list" aria-label="Участники голосовой комнаты" hidden></div>
+          <div class="stage-empty" id="stageEmpty">
+            <div class="empty-emblem" aria-hidden="true"><div class="emblem-orbit orbit-one"></div><div class="emblem-orbit orbit-two"></div><div class="emblem-screen"><svg viewBox="0 0 64 64"><rect x="9" y="12" width="46" height="32" rx="5"/><path d="M24 53h16M32 44v9m-5-32 15 7-15 7z"/></svg></div></div>
+            
+            <h2 id="lobbyTitle">Звонки друзьям</h2>
+            <p id="stageSubtitle">Создайте комнату или присоединитесь по приглашению.<br>Экран, голос и чат — между вашими компьютерами.</p>
+            <div id="lobbyActions" class="entry-actions"><label class="commentary-choice"><input type="checkbox" id="nextCommentary"> Режим комментатора</label><button id="roomCreate" class="button button-primary">Создать комнату</button><button id="roomCode" class="button button-secondary">Ввести код комнаты</button></div>
+          </div>
+          <div id="mediaNotice" class="media-notice" role="status" hidden><strong id="mediaTitle"></strong><span id="mediaHint"></span><button id="stageStun" class="button button-primary" hidden>Разрешить поиск через STUN</button><button id="routeHelp" class="button button-secondary">Проверить связь</button></div>
+          <div id="playerBar" class="stage-caption"><span id="stageName">Трансляция ещё не началась</span><span id="playerFormat" class="mono"></span><label id="watchBufferBox" class="watch-buffer" hidden><span>Буфер просмотра</span><select id="watchBuffer" aria-describedby="watchBufferNote"><option value="0">Авто</option><option value="500">0,5 с</option><option value="1000">1 с</option><option value="2000">2 с</option></select></label><span id="watchBufferNote" class="watch-note" hidden></span><div id="playerVolumeBox" class="player-volume" hidden><label id="playerVolumeLabel" for="playerVolume">Громкость стрима</label><input id="playerVolume" type="range" min="0" max="200" value="100"><output id="playerVolumeValue" for="playerVolume">100%</output></div><span id="broadcastStatus" class="broadcast-status" role="status" hidden></span><button type="button" id="pinPlayer" class="icon-button" aria-pressed="false" title="Закрепить панель" aria-label="Закрепить панель"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3 9 4-3 2-2 5 1 3-9-4 3-1 2-5zM9 15l-4 7"/></svg></button><button type="button" id="exitPlayer" class="button fullscreen-exit" aria-label="Выйти из полноэкранного режима"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v5H3m18 0h-5V3M3 16h5v5m8 0v-5h5"/></svg>Выйти из полного экрана</button></div>
+        </div>
+        <div id="roomFilmstrip" hidden></div>
+          <section id="lobbyRooms" hidden><h2>Комнаты друзей</h2><div id="lobbyRoomList"></div></section>
+      </section>
+      <aside id="studioDock" aria-label="Настройки показа" hidden></aside>
+      <aside id="roomSidebar" class="side-panel" aria-labelledby="chatHeading" hidden>
+        <header class="room-chat-heading"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-2.9-.4-4.1-1L3 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5ZM8 10h8m-8 4h5"/></svg><h2 id="chatHeading">Чат комнаты</h2><button type="button" id="closeRoomChat" class="icon-button" title="Закрыть чат комнаты" aria-label="Закрыть чат комнаты"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg></button></header>
+        <section id="roomChat" class="chat-panel link-chat" aria-labelledby="chatHeading"><div class="room-chat-context"><span class="chat-session-label" role="status" id="chatStatus">Подключение…</span></div>
+<details id="roomShelf" class="room-options"><summary>Файлы комнаты</summary><div id="shelfItems"></div><button class="button button-secondary" id="shelfOffer">Поделиться файлом</button></details>
+          <div class="chat-scroll"><div id="emptyChat" class="empty-chat"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg><p>Сообщений пока нет.</p><small>Сообщения не сохраняются на диск.</small></div><div id="chatMessages" class="chat-messages" role="log" aria-label="Сообщения чата" aria-live="polite" aria-relevant="additions"></div></div>
+          <form class="chat-form link-chat-compose" id="chatForm"><div class="chat-tools"><details id="chatAttach"><summary aria-label="Вложения и запись"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></summary><div><button id="chatFile" type="button">Прикрепить файл или фото</button><button id="chatVoice" type="button">Голосовое сообщение</button><button id="chatCircle" type="button">Видеосообщение</button></div></details><details id="chatEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div id="emojiChoices" class="link-chat-emoji-choices"></div></details></div><label class="sr-only" for="chatInput">Сообщение в чат</label><textarea id="chatInput" rows="1" maxlength="4000" placeholder="Сообщение…" disabled></textarea><button id="sendChatBtn" type="submit" class="send-button" disabled aria-label="Отправить сообщение"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button></form>
+        </section>
+      </aside>
+    </main>
+<div id="callControls" class="call-controls" role="group" aria-label="Управление звонком" hidden>
+        <button id="micBtn" class="control-button" disabled title="Включить / выключить микрофон (Ctrl+Shift+M)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg><span id="micLabel">Микрофон</span><span id="localMicMeter" class="local-audio-label"><span class="mic-meter" role="meter" aria-label="Уровень вашего микрофона" aria-valuemin="0" aria-valuemax="1"><span id="micLevel"></span></span></span></button>
+        <button id="deafenBtn" class="control-button" disabled title="Отключить весь входящий звук"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="3" y="12" width="4" height="9" rx="2"/><rect x="17" y="12" width="4" height="9" rx="2"/></svg><span>Входящий звук</span></button>
+        <button id="leaveBtn" class="control-button leave-call" disabled aria-label="Покинуть комнату" title="Покинуть комнату"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H4v14h5m6-14 7 7-7 7m7-7H9"/></svg><span>Покинуть</span></button>
+        <span class="control-divider" aria-hidden="true"></span>
+        <button id="shareBtn" class="button button-primary share-button" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4m0-15v7m-3-4 3-3 3 3"/></svg><span id="shareLabel">Показать экран</span></button>
+        <button id="stopShareBtn" aria-label="Остановить показ экрана" title="Остановить показ экрана" class="control-button stop-share" hidden><span class="stop-dot" aria-hidden="true"></span><span>Остановить</span></button>
+      </div>
+
+  </div>
+  <dialog id="callDialog" class="modal call-prompt" aria-labelledby="callName" aria-describedby="callState">
+    <button id="minimizeCall" class="close-button" aria-label="Свернуть" title="Свернуть">−</button>
+    <div id="callAvatar" class="call-avatar" aria-hidden="true"></div>
+    <p id="callState" class="call-state" role="status"></p><h2 id="callName" dir="auto"></h2>
+    <p id="callAddress" class="call-address" dir="auto"></p>
+    <div id="hubRing" class="call-actions" hidden><button id="hubAccept" class="button button-primary">Принять</button><button id="hubDecline" class="button button-secondary">Отклонить</button></div>
+    <div id="hubOutgoing" class="call-actions" hidden><button id="hubCancelCall" class="button button-secondary">Отменить</button></div>
+    <section id="hubAccess" hidden><p id="accessText" class="entry-note" role="status"></p><div class="call-actions"><button id="accessAccept" class="button button-primary">Войти в звонок</button><button id="accessCancel" class="button button-secondary">Отменить</button></div></section>
+    <p id="callError" class="online-error" role="alert" hidden></p>
+  </dialog>
+  <dialog id="hubDialog" class="modal online-dialog" aria-labelledby="hubTitle">
+    <div class="modal-header"><div><h2 id="hubTitle">Создать комнату</h2><p class="online-status" id="hubStatus"></p></div><button id="closeHub" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div id="hubCreate"><p class="entry-note">Комната для друзей по аккаунту. После входа можно приглашать из списка или отправить код.</p>
+      <button id="hubStart" class="button button-primary button-wide">Создать комнату для друзей</button>
+    </div>
+    <div id="hubJoin" hidden>
+      <p id="inboxEmpty" class="entry-note">Если друг позвонит, здесь появится приглашение. Код из сообщения можно вставить ниже.</p>
+      <form id="hubCodeForm"><label class="field" for="hubCode"><span>Код комнаты</span><input id="hubCode" spellcheck="false" autocomplete="off" maxlength="8192" placeholder="Код от друга — LINK1:… или CL1:…" required></label><button id="hubEnter" class="button button-primary button-wide">Войти по коду</button></form>
+      <button id="cancelJoin" class="button button-secondary" hidden>Отменить подключение</button>
+    </div>
+    <div id="hubInvite" hidden><p class="entry-note" id="inviteIntro">Пригласите друга, который сейчас в сети, или скопируйте код комнаты для него.</p>
+      <div id="inviteFriends" aria-label="Кого пригласить"></div>
+      <div class="friend-actions"><button id="hubCopy" class="button button-secondary">Скопировать код комнаты</button><button id="hubFriends" class="entry-link">Добавить друга</button></div>
+      <p id="hubWaiting" class="entry-note" role="status"></p>
+    </div>
+    <p id="hubError" role="alert" class="online-error" hidden></p>
+    <button id="hubAccount" class="button button-secondary button-wide" hidden>Войти или создать аккаунт</button>
+    <div id="hubDirect" class="direct-option"><button id="hubManual" class="button button-secondary">Комната по IP</button><p class="entry-note" id="directHint"></p></div>
+  </dialog>
+  <dialog id="roomDialog" class="modal room-modal" aria-labelledby="roomDialogTitle">
+    <div class="modal-header"><div><span class="eyebrow accent">ПРЯМОЕ ПОДКЛЮЧЕНИЕ</span><h2 id="roomDialogTitle">Подключение по IP</h2></div><button id="closeRoomDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="segmented" aria-label="Способ подключения"><button id="createModeBtn" class="active" type="button">Создать комнату</button><button id="joinModeBtn" type="button">Присоединиться</button></div>
+    <label class="field" for="nameInput"><span>Как вас называть</span><input id="nameInput" type="text" maxlength="32" autocomplete="off" placeholder="Ваше имя"></label>
+    <div id="hostFields"><div class="field-row"><label class="field field-grow" for="addressInput"><span>IP, по которому вас найдёт друг</span><input id="addressInput" type="text" spellcheck="false" autocomplete="off" placeholder="Локальный, VPN-адрес или публичный IPv4"></label><label class="field port-field" for="portInput"><span>TCP-порт</span><input id="portInput" type="number" min="1024" max="65535" value="45831"></label></div><div class="info-box"><strong>Какой адрес указать?</strong><p>Одна сеть Wi-Fi или Ethernet — адрес компьютера в этой сети. Radmin VPN — ваш адрес из окна Radmin. Через интернет — публичный IPv4 с доступными TCP-портом комнаты и UDP 45832–45863.</p></div></div>
+    <div id="joinFields" hidden><label class="field" for="inviteInput"><span>Приглашение от друга</span><textarea id="inviteInput" maxlength="2048" rows="4" spellcheck="false" autocomplete="off" placeholder="Вставьте приглашение CL1:…"></textarea></label><p class="field-help">В приглашении есть адрес комнаты и секретный ключ. Не публикуйте его и принимайте приглашения только от знакомых.</p></div>
+    <p id="roomError" class="error-text" role="alert" hidden></p>
+    <button id="roomSubmitBtn" class="button button-primary button-wide" type="button">Создать комнату</button><p class="modal-footnote">Микрофон и трансляция включаются только вами.</p>
+  </dialog>
+  <dialog id="inviteDialog" class="modal invite-modal" aria-labelledby="inviteTitle">
+    <div class="modal-header"><div><span class="eyebrow accent">КОМНАТА СОЗДАНА</span><h2 id="inviteTitle">Пригласите друга</h2></div></div>
+    <p class="modal-description">Передайте это приглашение личным сообщением. Оно действует, пока открыта ваша комната.</p>
+    <label class="field" for="inviteOutput"><span>Секретное приглашение</span><textarea id="inviteOutput" class="mono invitation-text" rows="5" readonly spellcheck="false"></textarea></label>
+    <div class="info-box"><strong>Как другу войти</strong><p>Открыть «По приглашению», вставить код и подтвердить вход. В домашней сети или Radmin VPN компьютеры должны видеть друг друга.</p></div>
+    <div class="modal-actions"><button id="directInvite" class="button button-secondary" hidden>Пригласить из друзей</button><button id="inviteDoneBtn" class="button button-secondary">Готово</button><button id="inviteCopyBtn" class="button button-primary">Скопировать приглашение</button></div>
+  </dialog>
+  <dialog id="sourceDialog" class="modal source-modal" aria-labelledby="sourceTitle">
+    <div class="modal-header"><div><span class="eyebrow accent">ТРАНСЛЯЦИЯ</span><h2 id="sourceTitle">Что показать друзьям?</h2></div><button id="closeSourceDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="source-toolbar"><div id="sourceTabs" class="segmented compact"><button id="screenTabBtn" class="active" type="button">Экраны</button><button id="windowTabBtn" type="button">Окна и игры</button></div><button id="refreshSourcesBtn" class="button button-secondary">Обновить</button></div>
+    <div id="sourcesGrid" class="sources-grid" aria-live="polite" aria-label="Доступные источники"></div>
+    <label class="switch-row system-audio-toggle" for="withSystemAudio"><span><strong>Звук компьютера</strong><small id="captureSoundHint">Игры, музыка и другие приложения. Звонок исключается из захвата.</small></span><input id="withSystemAudio" type="checkbox" checked></label>
+    <div class="picker-footer"><p id="sourceSelection" aria-live="polite">Выберите экран или окно</p><button id="startShare" class="button button-primary" disabled>Начать показ</button></div>
+  </dialog>
+  <dialog id="settingsDialog" class="modal settings-modal" aria-labelledby="settingsTitle">
+    <div class="modal-header"><h2 id="settingsTitle">Настройки</h2><button id="closeSettingsDialog" class="close-button" aria-label="Закрыть настройки"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="preferences">
+      <nav class="pref-nav" aria-label="Разделы настроек">
+        <label class="dm-search pref-search"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="settingsSearch" type="search" autocomplete="off" placeholder="Найти настройку" aria-label="Найти настройку"></label>
+        <button data-pane="profile"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profile"/></svg>Мой профиль</button><button data-pane="voice"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-voice"/></svg>Голос и устройства</button>
+        <button data-pane="stream"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-stream"/></svg>Трансляция</button><button data-pane="connection"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-connection"/></svg>Звуки и связь</button>
+        <button data-pane="reading"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-reading"/></svg>Специальные возможности</button>
+        <small id="settingsNoMatch" role="status" hidden>Настройки не найдены</small>
+      </nav>
+      <div class="pref-content">
+        <section id="pref-reading" hidden><h3>Специальные возможности</h3>
+          <div class="reading-preview"><h4>Предпросмотр</h4><div class="link-chat-log"><article class="link-chat-message"><p class="link-chat-body">Так будет выглядеть текст в вашем чате.</p></article></div></div>
+          <label class="field"><span class="range-label"><span>Размер текста в чатах</span><output id="chatFontValue" for="chatFontSize">14 px</output></span><input id="chatFontSize" type="range" min="12" max="24" step="1" value="14"></label>
+          <label class="switch-row"><span>Компактные сообщения</span><input type="checkbox" id="compactMessages"></label>
+          <label class="switch-row"><span>Уменьшить движение</span><input type="checkbox" id="reduceMotion"></label>
+          <p class="field-help">Также учитывается настройка анимации Windows.</p>
+        </section>
+        <section id="pref-profile" hidden><h3>Мой профиль</h3><p id="identitySummary" class="online-notice" role="status"></p>      <section id="directIdentity" hidden><form id="directEdit"><label class="field">Ваше имя<input id="directNick" required maxlength="48" autocomplete="nickname"></label><button class="button button-secondary">Сохранить имя</button></form>
+        <div id="avatarEditor" class="avatar-editor" hidden>
+          <div class="profile-card-preview" aria-label="Предпросмотр профиля">
+            <div id="profileCoverPreview" class="profile-cover" aria-hidden="true"></div>
+            <div class="profile-card-body"><span id="avatarPreview" class="room-avatar" aria-hidden="true"></span>
+              <strong id="profileCardName" dir="auto"></strong><p id="profileAboutPreview" dir="auto" hidden></p></div>
+          </div>
+          <div><strong>Фото профиля</strong><div class="avatar-actions">
+            <button id="chooseAvatar" type="button" class="button button-secondary">Выбрать фото</button>
+            <button id="removeAvatar" type="button" class="button button-ghost">Убрать фото</button>
+            <input id="avatarFile" type="file" accept="image/png,image/jpeg" hidden>
+          </div></div>
+          <fieldset class="cover-editor"><legend>Цвет обложки</legend><div id="profileCoverChoices"></div></fieldset>
+          <label class="field" for="profileAboutInput"><span>О себе</span><input type="text" maxlength="160" id="profileAboutInput" dir="auto" autocomplete="off"></label>
+          <div class="profile-card-save"><small>Обложку и описание видят подтверждённые друзья LINK.</small><button id="saveProfileStyle" class="button button-secondary" type="button" disabled>Сохранить</button></div>
+        </div>
+        <label class="field"><span>Статус на этом устройстве</span><select id="directStatus" aria-describedby="directStatusHelp"><option value="online">В сети</option><option value="away">Отошёл</option><option value="busy">Занят</option><option value="invisible">Невидимый</option></select></label>
+        <p class="field-help" id="directStatusHelp" hidden>Поиск и личная связь приостановлены до смены статуса. Участники текущего звонка или матча по-прежнему видят вас.</p>
+        <details class="fallback"><summary>Кто может связаться со мной</summary>
+          <label class="switch-row"><span>Принимать новые заявки в друзья</span><input id="directFriendRequests" type="checkbox"></label>
+          <label class="switch-row"><span>Принимать личные звонки от друзей</span><input id="directAllowCalls" type="checkbox"></label>
+          <label class="switch-row"><span>Принимать новые приглашения от друзей</span><input id="directAllowInvites" type="checkbox"></label>
+        </details>
+        <label class="switch-row"><span><strong>Находить друзей через интернет</strong><small>Использовать HyperDHT для связи по карточке LINK. Узлы сети видят ваш IP-адрес.</small></span><input id="directDht" type="checkbox"></label>
+        <p class="field-help" id="discoveryStatus" role="status"></p><p class="field-help" id="directProfileFeedback" role="status"></p><details id="linkProfileTools"><summary>Перенос и удаление профиля</summary><div class="profile-transfer"><button id="directExport" class="button button-secondary">Перенести профиль на другой ПК</button>
+        <p class="field-help">На втором ПК выберите «Перенести профиль с другого ПК». Друзья увидят вас под прежним именем.</p></div><button id="directReset" class="entry-link danger-link">Удалить профиль с этого ПК…</button>    <p id="directProfileBusy" class="field-help" hidden>Перенос и удаление профиля доступны после завершения вызова.</p></details></section>
+<div id="linkSessionActions" class="friend-actions" hidden><button class="entry-link" id="changeMethod">Сменить способ входа</button><button class="entry-link" id="linkLogout">Выйти из LINK</button></div><button id="settingsDirect" class="button button-secondary">Профиль LINK и перенос на другой ПК</button><div id="settingsGuest"><details class="fallback"><summary>Другие способы подключения</summary><p class="entry-note">Для связи через Jabber можно подключить отдельный аккаунт.</p><button id="settingsLogin" class="button button-secondary">Подключить Jabber</button></details></div><div id="settingsIdentity" hidden>
+          <div class="profile-address"><label class="field"><span>Мой логин для друзей</span><input id="profileId" readonly></label><button id="profileCopy" class="button button-secondary">Скопировать логин</button></div>
+          <div class="account-actions"><button id="profileSwitch" class="button button-secondary">Сменить аккаунт</button><button id="profileLogout" class="button button-ghost">Выйти из аккаунта</button><button id="profileDelete" class="button danger-link">Удалить аккаунт…</button></div>
+          <p class="entry-note" id="profileActionHint" hidden></p>
+          <p class="entry-note" id="profileFeedback" role="status"></p><button id="profileHelp" type="button" class="entry-link" hidden>Помощь сервиса ↗</button>
+          <form id="profileForm"><label class="field"><span>Как вас видят в комнате</span><input id="profileName" maxlength="32" required></label>
+            <p class="entry-note">Имя сохраняется на этом компьютере и подставляется при входе в комнату.</p>
+            <button class="button button-primary" type="submit">Сохранить имя</button></form>
+          <div class="card-reminder"><div><strong>Карточка входа</strong><p>Сохраните логин для переустановки. Для входа понадобится пароль.</p></div><button id="profileSaveCard" class="button button-secondary">Сохранить</button></div>
+</div><div class="profile-preferences">
+          <div class="appearance-fields">
+            <label class="field"><span>Тема приложения</span><select id="profileTheme"><option value="default">Классическая</option><option value="light">Светлая</option><option value="dusk">Сумерки</option><option value="forest">Хвойная</option></select></label>
+            <label class="field"><span>Фон чатов</span><select id="chatWallpaper"><option value="plain">Однотонный</option><option value="dots">Точки</option><option value="mesh">Диагонали</option></select></label>
+          </div><p class="field-help">Оформление сохраняется на этом устройстве.</p>
+          <label class="field"><span>Язык интерфейса / Language</span><select id="displayLanguage"><option value="ru">Русский</option><option value="en">English</option></select></label><p id="languageNote" role="status" hidden></p><button id="guideSettings" class="entry-link">Как пользоваться LINK</button></div></section>
+        <section id="pref-voice">
+          <h3>Голос</h3>
+          <div class="voice-device-grid">
+            <div><label class="field" for="micDevice"><span>Микрофон</span><select id="micDevice"><option value="">По умолчанию</option></select></label>
+              <div class="field"><label class="range-label" for="micGain"><span>Громкость вашего голоса</span><output id="micGainValue" for="micGain">100%</output></label><input id="micGain" type="range" min="0" max="400" value="100" step="1"></div></div>
+            <div><label class="field" for="outputDevice"><span>Устройство вывода</span><select id="outputDevice"><option value="">По умолчанию</option></select></label>
+              <div class="field"><label class="range-label" for="roomOutputVolume"><span>Громкость комнаты</span><output id="roomOutputVolumeValue" for="roomOutputVolume">100%</output></label><input id="roomOutputVolume" type="range" min="0" max="100" value="100" step="1"></div></div>
+          </div>
+          <section class="mic-test-box" aria-labelledby="voiceTestHeading">
+            <h4 id="voiceTestHeading">Проверка микрофона</h4>
+            <div class="voice-test-controls"><button type="button" class="button button-secondary" id="testMic" aria-describedby="testHint">Проверить</button>
+              <div class="test-meter" role="meter" aria-label="Громкость при проверке" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="testLevel"></span></div></div>
+            <div class="test-progress" id="testProgress" hidden><strong id="testClock"></strong><progress id="testTimeline" max="4" value="0" aria-label="Ход проверки микрофона"></progress></div>
+            <p id="testHint" role="status">Скажите несколько слов. Через 4 секунды вы услышите запись в выбранных наушниках или колонках.</p>
+          </section>
+          <section class="voice-options"><h4>Обработка голоса</h4>
+            <label class="switch-row" for="noiseSuppression"><span>Подавление шума</span><input id="noiseSuppression" type="checkbox" checked></label>
+            <label class="switch-row" for="echoCancellation"><span>Подавление эха</span><input id="echoCancellation" type="checkbox" checked></label>
+            <label class="switch-row" for="autoGainControl" title="Выравнивает уровень речи до ручного усиления."><span>Автоматическое усиление</span><input id="autoGainControl" type="checkbox" checked></label>
+            <p id="micProcessingNotice" role="status" hidden></p>
+          </section>
+          <section class="voice-options"><h4>В звонке</h4>
+            <label class="switch-row" for="joinWithMic"><span>Запоминать мой микрофон для звонков</span><input id="joinWithMic" type="checkbox" aria-describedby="joinWithMicHint"></label>
+            <p id="joinWithMicHint" class="field-help" role="status"></p>
+            <label class="switch-row" for="focusAudio"><span>Слушать только выбранную трансляцию</span><input type="checkbox" id="focusAudio"></label>
+          </section>
+        </section>
+        <section id="pref-stream" hidden><h3 class="stream-pref-heading">Ваша трансляция</h3>
+          <section class="studio-live" id="studioLive" hidden aria-label="Состояние показа"><div class="studio-source"><i aria-hidden="true"></i><strong id="studioSource" dir="auto"></strong></div>
+            <dl class="capture-readout"><dt>Захват</dt><dd id="studioCapture">—</dd><dt>Системный звук</dt><dd id="studioSound">—</dd></dl>
+            <div id="studioSend" class="studio-send"></div></section>
+          <div class="field"><label class="range-label" for="streamGain"><span>Громкость звука для друзей</span><output id="streamGainValue">100%</output></label><input id="streamGain" type="range" min="0" max="200" value="100"></div><label class="field"><span>Что вы показываете</span><select id="shareContent"><option value="motion">Игры и видео · плавность</option><option value="detail">Текст и документы · чёткость</option></select></label><div class="field-row"><label class="field field-grow" for="qualitySelect"><span>Разрешение / FPS</span><select id="qualitySelect"><option value="720p30">720p · 30 FPS</option><option value="720p60">720p · 60 FPS</option><option value="1080p30" selected>1080p · 30 FPS</option><option value="1080p60">1080p · 60 FPS</option><option value="1440p30">1440p · 30 FPS (QHD)</option><option value="1440p60">1440p · 60 FPS (QHD)</option></select></label><label class="field" for="bitrateSelect"><span>Лимит битрейта</span><select id="bitrateSelect"><option value="2">2 Мбит/с</option><option value="4">4 Мбит/с</option><option value="8" selected>8 Мбит/с</option><option value="12">12 Мбит/с</option><option value="20">20 Мбит/с</option><option value="32">32 Мбит/с</option></select></label></div>
+          <p class="field-help" id="qualityFeedback" role="status">Настройки применяются во время показа.</p><h4>Просмотр трансляций</h4><label class="field"><span>Максимальное разрешение на этом устройстве</span><select id="viewHeight"><option value="0">Авто · до качества источника</option><option value="720">До 720p</option><option value="1080">До 1080p</option><option value="1440">До 1440p (QHD)</option></select></label>
+          <details id="captureBorderInfo" class="graphics-options" hidden><summary>Рамка захвата Windows</summary><p id="captureBorderHint" class="field-help"></p><button id="borderSettings" type="button" class="button button-secondary" hidden>Открыть параметры Windows</button></details>
+          <details id="graphicsDetails" class="graphics-options"><summary>Аппаратное ускорение</summary>
+          <label class="field" for="graphicsAuto"><span>Кодирование вашей трансляции</span><select id="graphicsAuto"><option value="gpu">GPU, если доступен</option><option value="cpu">CPU · процессор</option></select></label>
+          <p class="field-help" id="graphicsState" role="status"></p><p class="field-help" id="graphicsNext" hidden></p>
+          <button type="button" id="graphicsRestart" class="button button-secondary" hidden>Перезапустить приложение</button></details></section>
+        <section id="pref-connection" hidden><h3>Звуки и связь</h3><label class="switch-row"><span><strong>Не беспокоить</strong><small>Отвечать «Занят» на новые вызовы и запросы на вход. Заявки в друзья останутся в списке без звука и всплывающих уведомлений.</small></span><input id="dnd" type="checkbox"></label><label class="switch-row" id="systemNoticesRow"><span><strong>Уведомления Windows</strong><small>Показывать личные сообщения, звонки, заявки и приглашения, когда LINK в фоне.</small></span><input id="systemNotices" type="checkbox" checked></label>
+      <div class="cue-option"><label class="check-line"><input type="checkbox" id="cueEnabled" checked> Звуки звонка</label><button type="button" id="previewCue" class="button button-ghost" aria-label="Прослушать звонок">Послушать</button></div>
+      <div class="cue-option"><label class="check-line"><input type="checkbox" id="cueMessages" checked> Звук личных сообщений</label><button type="button" id="previewMessageCue" class="button button-ghost" aria-label="Прослушать звук сообщения">Послушать</button></div>
+      <div class="cue-row"><label for="cueVolume">Громкость сигналов</label><input type="range" id="cueVolume" min="0" max="100" step="5" value="35"></div>
+      <details class="fallback" id="advancedRouting"><summary>Дополнительные сетевые настройки</summary><label class="check-line"><input type="checkbox" id="publicStun"> Автоматически определять внешний IP через STUN Cloudflare, если аккаунт не предоставил STUN</label><label class="check-line"><input type="checkbox" id="strictProxy"> Только через ретранслятор, без прямого медиасоединения</label>
+      <p class="field-help">Обычный режим использует системный маршрут. Для строгого режима нужен доступный TURN. Бесплатный сервис может ограничивать скорость.</p></details>
+</section>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="directDialog" class="modal direct-dialog" aria-labelledby="directTitle">
+    <header class="modal-header"><h2 id="directTitle">Профиль LINK</h2><button id="directClose" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header>
+    <section id="directReturn" hidden><p id="returnName"></p><button class="button button-primary" id="resumeLink">Войти в сохранённый профиль</button></section>
+    <section id="directWelcome">
+      <p id="nameIntro">Как вас будут видеть друзья?</p>
+      <form id="directCreateForm"><label class="field">Ваше имя<input id="directName" required maxlength="48" autocomplete="nickname"></label><label class="switch-row" id="internetDiscoveryChoice"><span><strong>Поиск друзей через интернет</strong><small>Узлы HyperDHT увидят ваш IP-адрес. Для звонков в одной сети эту опцию можно выключить.</small></span><input id="directAtStart" type="checkbox" checked></label><button class="button button-primary">Создать профиль</button></form>
+      <button id="directRestore" class="entry-link">Перенести профиль с другого ПК</button>
+    </section>
+    <section id="directMain" hidden>
+      <section id="directAdd" hidden><form id="directAddForm">
+        <label class="field"><span>Карточка друга</span><input id="directCode" aria-describedby="directMessage" placeholder="CCF1:…" maxlength="1500" autocomplete="off" spellcheck="false" required></label>
+        <button class="button button-primary" id="sendCardRequest" disabled>Отправить заявку</button>
+      </form></section>
+      <section id="directNearby" hidden><p class="lan-identity"><span>Ваше имя в сети</span> <strong id="lanName" dir="auto"></strong></p><label class="field">Сеть для поиска<select id="directNic"></select></label>
+        <div class="friend-actions"><button id="directScan" class="button button-secondary">Обновить</button></div>
+        <p class="field-help">Выберите на обоих ПК одну сеть Wi-Fi, Ethernet или Radmin VPN. После выбора сети другие пользователи LINK в ней увидят ваше имя.</p><div id="nearbyList"></div></section>
+
+    </section>
+
+    <section id="transferPanel" hidden><form id="directTransferForm"><label class="field"><span id="transferLabel">Пароль файла</span><input id="transferPass" type="password" minlength="12" maxlength="256" required></label>
+        <label id="repeatLabel" class="field">Повторите пароль<input id="transferRepeat" type="password" maxlength="256"></label><p id="transferHint" class="field-help"></p><div class="friend-actions"><button id="transferSubmit" class="button button-primary">Продолжить</button><button type="button" id="transferCancel" class="button button-secondary">Назад</button></div></form></section>
+    <p id="directMessage" role="status" class="field-help"></p>
+  </dialog>
+  <dialog id="linkGuide" class="modal" aria-labelledby="guideTitle" aria-describedby="guideText"><header class="modal-header"><span id="guideStep" class="field-help"></span><button id="guideClose" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div class="guide-illustration" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use id="guideIcon" href="#icon-profile"/></svg></div><h2 id="guideTitle"></h2><p id="guideText"></p><div class="guide-actions"><button id="guideSkip" class="entry-link"></button><div><button id="guideBack" class="button button-secondary">Назад</button><button id="guideNext" class="button button-primary">Далее</button></div></div></dialog>
+  <dialog id="contactActions" class="modal compact-contact" aria-labelledby="contactActionsTitle"><header class="modal-header"><h2 id="contactActionsTitle">Контакт</h2><button class="close-button" id="closeContactActions" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div class="contact-choices" id="contactChoices"></div></dialog>
+  <dialog id="peerCallDialog" class="modal call-prompt" aria-labelledby="peerCaller" aria-describedby="peerCallTitle">
+    <div id="peerAvatar" class="call-avatar" aria-hidden="true"></div>
+    <p id="peerCallTitle" class="call-state" role="status">Входящий звонок</p><h2 id="peerCaller" dir="auto"></h2>
+    <div class="call-actions"><button id="peerAccept" class="button button-primary">Принять</button><button id="peerReject" class="button button-secondary">Отклонить</button></div></dialog>
+  <dialog id="internetDialog" class="modal online-dialog" aria-labelledby="onlineTitle">
+    <div class="modal-header"><div><h2 id="onlineTitle">Друзья</h2><p id="onlineStatus" class="online-status" role="status"></p></div><button id="closeInternet" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <section id="onlineLogin">
+      <div id="entryStart" class="entry-screen">
+        <img src="assets/craftlink.png" width="48" height="48" alt="">
+        <p>Звоните друзьям и делитесь экраном со звуком.</p>
+        <p class="field-help">Для начала выберите имя. Профиль LINK хранится на этом компьютере.</p>
+        <div class="entry-actions">
+          <button id="startDirect" autofocus class="button button-primary">Создать профиль LINK</button><button id="guideIntro" class="button button-secondary">Как это работает</button>
+        </div>
+        <label class="field intro-language"><span>Язык / Language</span><select id="introLanguage"><option value="ru">Русский</option><option value="en">English</option></select></label>
+        <details class="fallback" id="entryFallback"><summary>Другие способы подключения</summary><div class="entry-actions"><button id="startNearby" class="button button-secondary">Локальная сеть или Radmin VPN</button><button id="startCreate" class="button button-secondary">Создать аккаунт Jabber</button><button id="startLogin" class="button button-secondary">Войти в Jabber</button><button id="startIP" class="button button-secondary">IP или код комнаты</button></div></details>
+        <button id="entryLater" class="entry-link">Позже</button>
+      </div>
+      <div id="entrySetup" hidden>
+        <button id="entryBack" class="entry-link" type="button">← Назад</button>
+        <details id="serviceDetails" class="entry-service">
+          <summary id="serviceSummary">Выбрать сервис аккаунта</summary>
+          <label class="field"><span>Сервис аккаунта</span><select id="xmppProvider"><option value="">Выберите сервис</option><optgroup label="Основной сервис"><option value="jabberru">Jabber.ru</option></optgroup><optgroup label="Другие сервисы"><option value="jabberclub">Jabber Club</option><option value="xmppjp">XMPP.JP</option><option value="jix">jix.IM</option><option value="hotchilli">Hot-Chilli</option><option value="jabberes">JabberES</option></optgroup></select></label>
+        </details>
+        <div id="entryCreate" class="entry-screen" hidden>
+          <p id="providerStatus" class="entry-note" role="status"></p>
+          <button id="retryProvider" class="entry-link" type="button" hidden>Проверить ещё раз</button>
+          <ol class="entry-steps"><li id="createEmailTip">Укажите почту для восстановления, если хотите сбрасывать пароль по почте.</li><li>Вернитесь сюда и войдите под выбранным именем.</li></ol>
+          <button id="registerAccount" class="button button-primary" type="button">Открыть регистрацию ↗</button>
+          <button id="alreadyCreated" class="entry-link" type="button">Я уже зарегистрировался</button>
+        </div>
+        <div id="entryLogin" hidden>
+          <p id="loginGuide" class="entry-note"></p>
+          <form id="accountForm">
+            <label class="field"><span>Имя или адрес аккаунта</span><input id="accountJid" autocomplete="username" placeholder="alex или alex@jabber.ru" maxlength="270" required></label>
+            <p id="loginPreview" class="field-help" aria-live="polite"></p>
+            <label class="field"><span>Пароль</span><input type="password" id="accountPass" autocomplete="current-password" maxlength="1024" required></label>
+            <label class="check-line"><input type="checkbox" id="rememberAccount"> Запомнить вход на этом ПК</label>
+            <button id="loginAccount" type="submit" class="button button-primary">Войти</button>
+          </form>
+          <button id="loginCreate" class="entry-link" type="button">Создать новый аккаунт</button>
+          <div class="registration-return" id="registrationReturn" hidden>
+            <button id="reopenRegistration" type="button" class="entry-link">Открыть сайт ещё раз ↗</button>
+            <button id="changeRegistration" type="button" class="entry-link">Выбрать другой сервис</button>
+          </div>
+          <div class="entry-tools"><button id="openCard" class="entry-link" type="button">Открыть карточку входа</button><button id="openRecovery" class="entry-link" type="button">Забыли данные для входа?</button></div>
+        </div>
+        <div id="entryRecovery" class="entry-screen" hidden>
+          <h3>Не помню адрес</h3>
+          <p>Если помните имя, попробуйте войти с ним. Полный адрес можно посмотреть на другом устройстве в разделе «Друзья» или попросить друга скопировать его из вашего контакта.</p>
+          <button id="recoverCard" class="button button-secondary" type="button">Открыть карточку входа</button>
+          <h3>Не помню пароль</h3>
+          <p id="recoveryNote"></p>
+          <button id="resetPassword" class="button button-secondary" type="button">Сбросить пароль ↗</button>
+          <button id="returnLogin" class="entry-link" type="button">Вернуться ко входу</button>
+        </div>
+      </div>
+    </section>
+    <div id="onlineRequests" class="friend-inbox" aria-live="polite"></div><details id="jabberDenied" hidden><summary>Заблокированные контакты</summary><div id="jabberBlockedList"></div></details>
+    <section id="onlineActive" hidden>
+      <div class="account-line"><span id="signedAddress"></span><button id="copyAccount" class="button button-ghost">Скопировать адрес</button></div>
+      <div id="saveCardBox" class="card-reminder"><div><strong>Карточка входа</strong><p id="cardFeedback" aria-live="polite">Сохраните свой адрес на случай переустановки. Пароля в карточке нет.</p></div><button id="saveCard" class="button button-secondary">Сохранить</button></div>
+      <form id="addContactForm" class="online-add"><label class="field"><span>Добавить друга по логину</span><input id="contactJid" maxlength="260" placeholder="alex@jabber.ru" required></label><button class="button button-secondary">Отправить заявку</button></form>
+      <p class="field-help">Введите полный адрес друга. Он увидит вашу заявку в разделе «Заявки».</p>
+      <div id="filterBox" hidden><label class="field"><span>Поиск в ваших контактах</span><input type="search" id="contactFilter" placeholder="Имя или логин"></label><div class="directory-tools"><label class="field">Показать<select id="jabberFilter"><option value="all">Всех</option><option value="online">В сети</option><option value="favorite">Избранных</option><option value="waiting">Ожидают ответа</option></select></label>
+        <label class="field">Порядок<select id="jabberSort"><option value="available">Сначала в сети</option><option value="name">По имени</option><option value="recent">Недавние звонки</option></select></label></div></div>
+      <div id="internetRoster" aria-label="Список друзей"></div>
+    </section>
+    
+    <p id="onlineError" role="status" class="online-error" hidden></p>
+    <details id="accountDataHelp" class="online-options account-help"><summary>Об аккаунте и данных на ПК</summary>
+      <p>Адрес XMPP нужен, чтобы один раз добавить друга и видеть, когда он на связи. Адрес, список друзей и статус обслуживает выбранный сервис. </p>
+      <p>Настройки, кэш и отчёты медиатеста хранятся в локальном профиле. «Запомнить вход» сохраняет адрес и пароль с защитой Windows, чтобы при следующем запуске вы сразу были на связи. «Выйти из аккаунта» удаляет сохранённый вход на этом ПК.</p>
+      <p>Программа передаёт выбранный экран или окно, когда вы включаете показ. Участники видят содержимое выбранного источника. Программа не сканирует личные папки и не отправляет файлы с диска. Текст комнаты показывается на время встречи. В трее включённый показ продолжается.</p>
+      <p id="accountRemovalNote"></p>
+      <button type="button" id="accountHelpLink" class="button button-secondary"></button>
+    </details>
+    <button id="openConnectionSettings" class="entry-link">Настройки звуков и подключения</button>
+    <button id="logoutAccount" class="button button-ghost" hidden>Выйти из аккаунта</button>
+  </dialog>
+  <dialog id="networkDialog" class="modal network-modal" aria-labelledby="networkTitle">
+    <div class="modal-header"><div><span class="eyebrow accent">CRAFTCODE LINK</span><h2 id="networkTitle">Справка LINK</h2></div><button id="closeNetworkDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <section id="helpTopics" class="help-topics">
+      <div class="help-heading"><p id="helpIntro"></p><button type="button" id="helpTutorial" class="button button-primary"></button></div>
+      <details id="helpExamples"><summary id="helpExamplesTitle"></summary><p id="helpExamplesNote"></p><div id="helpVideos" role="group"></div><video id="helpVideo" controls playsinline preload="none" disablepictureinpicture aria-labelledby="helpVideoTitle" aria-describedby="helpVideoDescription"></video><h3 id="helpVideoTitle"></h3><p id="helpVideoDescription"></p><p id="helpVideoError" role="status" hidden></p></details>
+      <input type="search" id="helpSearch" maxlength="150" autocomplete="off">
+      <details id="helpFriendArticle"><summary>Как добавить друга?</summary><p id="helpFriendText"></p><div class="friend-actions"><button id="helpCopyCard" class="button button-secondary">Скопировать мою карточку</button><button id="helpAddCard" class="button button-primary">Вставить карточку друга</button></div><p id="helpCardStatus" class="field-help" role="status"></p></details>
+      <div id="helpArticles"></div><p id="helpNothing" class="field-help" role="status" hidden></p>
+      <details id="updatePanel"><summary id="updateSummary">Обновления</summary><p id="peerVersionHint" class="field-help" hidden></p>
+      <section id="githubUpdates" hidden>
+        <label><input type="checkbox" id="releaseAutomatic"> Проверять обновления на GitHub раз в сутки</label>
+        <p id="githubReleaseStatus" role="status" class="field-help"></p>
+        <div class="friend-actions">
+          <button type="button" id="githubCheck" class="button button-secondary">Проверить на GitHub</button>
+          <button type="button" id="githubDownload" class="button button-primary" hidden>Скачать обновление</button>
+          <button type="button" id="githubCancel" class="button button-secondary" hidden>Отмена</button>
+          <button type="button" id="githubInstall" class="button button-primary" hidden>Установить</button>
+        </div>
+      </section>
+      <p>Друг может прикрепить установщик в файлах комнаты. Для установки скопируйте код обновления из публикации CRAFTCODE.</p>
+      <label for="releaseCode">Код обновления</label><input id="releaseCode" maxlength="110" autocomplete="off" spellcheck="false" placeholder="LINK-UPDATE …">
+      <div class="friend-actions"><button id="downloadRelease" class="button button-primary" hidden></button><button id="chooseRelease" class="button button-secondary">Выбрать установщик на диске</button></div><p id="releaseStatus" role="status" class="field-help"></p></details>
+      <div id="coffeeSupport" class="coffee-support" hidden>
+        <p>Если LINK вам пригодился, можно угостить автора кофе.</p>
+        <button type="button" id="helpDonate" class="button button-secondary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 9h1a3 3 0 0 1 0 6h-1M4 21h14M8 2v3m4-3v3"/></svg><span>Угостить кофе</span></button>
+        <details id="coffeeQR"><summary>QR-код Boosty</summary><img src="assets/boosty-coffee.png" width="150" height="150" alt="QR-код для перехода на Boosty"></details>
+      </div>
+      <button type="button" id="helpConnectivity" class="button button-secondary">Проблемы со связью и диагностика</button>
+    </section>
+<section id="helpNetwork" hidden><button id="helpHome" class="entry-link" type="button">← К разделам справки</button><div class="help-section">
+
+      <div class="connection-line"><span class="connection-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M6 5 4 3 1 6l3 3 2-2m4 2 2 2 3-3-3-3-2 2M5 8h6"/></svg></span><p id="connectionHint">Создатель комнаты принимает звонок на своём компьютере.</p><span id="diagnosticsText" class="mono"></span></div>
+    <div id="routeActions" hidden><p class="entry-note" id="routeSummary"></p><button id="retryMedia" class="button button-secondary">Повторить подключение</button> <button id="useStun" class="button button-secondary">Попробовать STUN Cloudflare</button><p id="stunHint" class="field-help">Бесплатный STUN определит ваш внешний адрес. Голос и видео через него не передаются.</p></div>
+    <details id="vpnHelp" hidden><summary>Связь пропадает при включении VPN</summary>
+      <p class="field-help">Для работы внутри VPN нужен доступный маршрут. Если сервис аккаунта или ваш TURN поддерживает TCP или TLS, приложение попробует его автоматически. При недоступном UDP один STUN не поможет.</p>
+      <p class="field-help">Если хотите провести звонок вне VPN, оставив остальные программы в туннеле, добавьте CRAFTCODE-LINK.exe в исключения вашего VPN-клиента, если он это поддерживает. Тогда участники могут видеть ваш обычный внешний IP. Примените правило по инструкции VPN и повторите подключение.</p>
+      <button id="showLinkExecutable" type="button" class="button button-secondary" hidden>Показать приложение в папке</button></details>
+    <details id="customRelay" hidden><summary>Подключить свой TURN</summary><p class="field-help">Если у вас есть доступ к ретранслятору, введите выданные им данные. Они действуют в этом приложении до выхода из аккаунта или закрытия программы.</p><form id="relayForm" autocomplete="off"><label class="field">Адрес TURN<input id="relayAddress" maxlength="330" placeholder="turns:relay.example.org:443?transport=tcp" required></label><label class="field">Имя TURN<input id="relayUser" maxlength="512" required></label><label class="field">Пароль TURN<input id="relaySecret" type="password" maxlength="1024" required></label><button class="button button-secondary">Применить</button></form><button id="clearRelay" class="entry-link" hidden>Отключить свой TURN</button><p id="relayFeedback" role="status"></p></details>
+    <details id="technicalReport"><summary>Технический отчёт звонка</summary>      <p>На принимающем ПК сравните два замера во время разговора и трансляции. Счётчики показывают накопленные байты RTP и декодированные кадры по слотам соединения.</p><pre id="mediaDiagnostics"></pre><button type="button" class="button button-secondary" id="copyDiagnosticsBtn">Скопировать отчёт</button></details>
+    </div>
+    <details class="help-section"><summary>Одна домашняя сеть</summary><p>На обоих ПК откройте «Другие способы подключения → Локальная сеть или Radmin VPN». Выберите одну сеть, найдите имя друга и нажмите «Добавить». Друг сможет принять заявку в уведомлении.</p></details>
+    <details class="help-section"><summary>Ручная комната через интернет</summary><ol><li>У создателя должен быть доступный публичный IPv4. Уточните у провайдера, не используется ли CGNAT.</li><li>Закрепите локальный IP компьютера в настройках роутера.</li><li>Направьте <strong>TCP 45831</strong> и <strong>UDP 45832–45863</strong> на этот компьютер. Внешние и внутренние UDP-порты должны совпадать. Для изменённого TCP-порта используйте своё значение.</li><li>При создании комнаты укажите публичный IPv4 или DNS-имя. Отправьте приглашение другу.</li></ol></details>
+    <details class="help-section"><summary>Если у обоих CGNAT</summary><p>Локальные профили могут находить друг друга через HyperDHT, а контакты Jabber — через сервис аккаунта. Для голоса и экрана нужен доступный медиамаршрут. Ручное приглашение через интернет требует доступного входящего адреса. Нужен публичный IPv4 хотя бы у создателя. Приложение не меняет настройки роутера самостоятельно.</p></details>
+    <details class="help-section"><summary>Что происходит с данными</summary><p>В ручном режиме внешние STUN/TURN не используются. При входе через Jabber вызовы доставляет выбранный XMPP-сервис. При необходимости его TURN пересылает зашифрованный медиатрафик. Связь с создателем шифруется. В групповой комнате создатель пересылает медиа между гостями и имеет к ним доступ. Выход создателя завершает встречу.</p><p>Основной сценарий — двое или трое друзей. До 8 участников подключаются в экспериментальном режиме: нагрузка на компьютер и интернет создателя быстро растёт. Уменьшайте качество и число одновременных трансляций.</p></details>
+    <details class="help-section"><summary>Звук экрана и игры</summary><p>Захватывается системный звук, не изолированный звук одного окна. Windows получает запрос на захват с исключением CRAFTCODE LINK и его дочерних процессов. Если такой захват недоступен, показывается только изображение. Микрофон включается отдельно. Если при выключенном звуке трансляции друг всё ещё слышит себя, проверьте микрофон и колонки.</p><p>Для игр предпочтителен оконный режим без рамки. Защищённые DRM-окна, отдельные игры и аппаратные оверлеи могут не захватываться.</p></details>
+    </section>
+  </dialog>
+  <aside id="requestNotice" hidden aria-labelledby="noticeHeading">
+    <header><strong id="noticeHeading">Заявка в друзья</strong><button id="noticeDismiss" type="button" class="close-button" aria-label="Скрыть уведомление"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header>
+    <p id="noticeSender" role="status" dir="auto"></p>
+    <div class="friend-actions"><button type="button" class="button button-primary" id="noticeAccept">Принять</button><button type="button" class="button button-secondary" id="noticeDecline">Отклонить</button></div>
+  </aside>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="app.mjs"></script>
+<dialog id="clipDialog" aria-labelledby="clipTitle"><section class="dialog-content clip-content"><header><h2 id="clipTitle"></h2><button id="clipClose" class="button button-secondary" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div id="clipDisplay"></div><p id="clipStatus" role="status"></p><footer><button id="clipStop" class="button button-secondary" hidden>Остановить запись</button><button id="clipSend" class="button button-primary" hidden>Отправить в чат</button></footer></section></dialog>
+<dialog id="attachmentDraft" aria-labelledby="attachmentDraftTitle">
+  <h2 id="attachmentDraftTitle">Отправить вложения</h2>
+  <div id="attachmentDraftItems"></div>
+  <label for="attachmentCaption">Подпись</label><textarea id="attachmentCaption" rows="2" maxlength="1024" placeholder="Добавить подпись…"></textarea>
+  <p id="attachmentDraftStatus" role="status"></p>
+  <div class="dialog-actions"><button id="attachmentDraftCancel" type="button" class="button button-secondary">Отмена</button><button id="attachmentDraftSend" type="button" class="button button-primary">Отправить</button></div>
+</dialog>
+</body>
+</html>

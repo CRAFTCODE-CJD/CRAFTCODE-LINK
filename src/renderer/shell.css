@@ -1,0 +1,209 @@
+/* Each sidebar has one job. The space rail stays put as the user changes the current conversation. */
+.app-shell {
+  --space-width:62px;
+  --context-width:clamp(212px,19.5vw,294px);
+  position:relative;
+  grid-template-columns:var(--space-width) var(--context-width) minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"spaces sections main" "spaces context main" "spaces profile dock";
+}
+.app-shell[data-scope="group"] {
+  --context-width:clamp(205px,18.5vw,282px);
+  grid-template-columns:var(--space-width) var(--context-width) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr) auto;
+  grid-template-areas:"spaces context main" "spaces profile dock";
+}
+.app-shell:not(.in-call) :is(#directoryPage,#groupsPage,#messagesPage,#roomPage) {grid-row:1/-1}
+#groupRail,#navRail,#friendsContext,#groupContext,#dmContext,#profileDock {min-width:0;min-height:0;box-sizing:border-box}
+#groupRail {
+  grid-area:spaces;display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:12px 5px 8px;background:color-mix(in srgb,var(--nav) 88%,black);border-right:1px solid var(--border-soft);
+}
+#groupRail button {position:relative;flex:none;display:grid;place-items:center;width:44px;height:44px;min-height:0;padding:0;border:0;cursor:pointer}
+#groupRail .space-button {border-radius:15px;color:var(--muted);background:var(--surface);transition:background .12s,border-radius .12s}
+#groupRail .space-button:hover,#groupRail .space-button:focus-visible {color:var(--text);background:var(--surface-hover)}
+#groupRail .home-space {background:transparent}
+#groupRail .home-space img {width:34px;height:34px;object-fit:contain}
+#groupRail .space-button[data-home-active]::before,#groupRail .group-shortcut[aria-current]::before {
+  content:"";position:absolute;inset-inline-start:calc((44px - var(--space-width))/2);width:3px;height:20px;border-radius:0 4px 4px 0;background:var(--accent);
+}
+#groupRail .create-space {color:var(--accent);background:transparent;border:1px dashed var(--border)}
+#groupRail #navGroups {background:transparent;color:var(--muted)}
+#groupRail .request-count {position:absolute;right:-2px;top:-2px;min-width:16px;line-height:16px;font-size:10px}
+#groupRail #spaceList {flex:0 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:8px;width:var(--space-width);padding-top:10px;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin}
+#groupRail #spaceList::before {content:"";height:1px;width:26px;flex:none;background:var(--border);margin:-3px 0 3px}
+#groupRail .group-mark {display:grid;place-items:center;width:100%;height:100%;border-radius:50%;font-size:14px;font-weight:700;transition:border-radius .12s}
+#groupRail .group-shortcut {background:transparent}
+#groupRail .group-shortcut:hover .group-mark,#groupRail .group-shortcut:focus-visible .group-mark,#groupRail .group-shortcut[aria-current] .group-mark {border-radius:13px}
+#groupRail .space-utilities {margin-top:auto}
+#groupRail #networkHelpBtn {color:var(--muted);background:transparent}
+#groupRail #networkHelpBtn:hover {background:var(--surface-hover)}
+#groupRail #networkHelpBtn .release-hint {position:absolute;top:0;right:-1px;font-size:8px}
+#navRail {grid-area:sections;align-items:stretch;gap:8px;padding:10px 9px 8px;max-height:45vh;overflow:auto;scrollbar-width:thin;border-bottom:1px solid var(--border-soft)}
+#sidebarSearch .dm-search {margin:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:7px;min-height:32px}
+#sidebarSearch .icon {flex:none;width:15px;height:15px}
+#navRail nav {gap:2px}
+#navRail .nav-item {padding:8px;min-height:36px;gap:9px}
+#navRail .nav-item>span {display:inline;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#navRail nav button {justify-content:flex-start}
+#navRail #homeDirectory[data-active] {color:var(--accent);background:var(--soft)}
+.app-shell[data-scope="group"] #navRail {display:none}
+:is(#friendsContext,#dmContext,#groupContext) {
+  grid-area:context;overflow:auto;scrollbar-width:thin;
+  border-inline-end:1px solid var(--border-soft);background:var(--nav);
+}
+:is(#friendsContext,#dmContext,#groupContext)[hidden],#profileDock [hidden],#contextScrim[hidden] {display:none!important}
+#friendsContext {display:flex;flex-direction:column;padding:0 8px}
+.context-heading {flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 5px 10px}
+.context-heading h2,#dmContext .dm-index-head h1 {font-size:12px;line-height:22px;font-weight:650;color:var(--muted);margin:0}
+.context-heading .icon-button {width:28px;height:28px}
+#friendsContext .dm-search {margin:0 2px 12px}
+#friendsContext .dm-search .icon {flex:none;width:15px;height:15px}
+.friend-context-scroll {min-height:0;overflow-y:auto;scrollbar-width:thin;padding-bottom:12px}
+#quickOnline {display:block;overflow:visible}
+#quickRoomSection {border-top:1px solid var(--border-soft);margin-top:14px;padding-top:12px}
+#quickRoomSection h3 {font-size:12px;margin:0 6px 7px;color:var(--muted)}
+#friendContextEmpty {margin:6px;line-height:1.5}
+.context-contact {display:flex;align-items:center;gap:9px;width:100%;min-width:0;padding:7px 6px;color:var(--text);background:none;border:0;text-align:start;border-radius:7px;cursor:pointer}
+.context-contact:hover,#quickRoomSection button:hover {background:var(--surface-hover)}
+.context-contact .dm-avatar {width:32px;height:32px;font-size:11px}
+.context-contact-label {flex:1;min-width:0;display:grid;gap:2px}
+.context-contact-label strong,.context-contact-label small {white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.context-contact-label strong {font-size:13px;font-weight:600}
+.context-contact-label small {font-size:11px;color:var(--muted)}
+#quickRoomSection .rail-room {padding:6px;font:inherit}
+#quickRoomSection .rail-room[data-return-room] {display:grid;gap:3px;text-align:start}
+#dmContext {padding:14px 6px 8px;overflow:visible}
+#dmContext .dm-index-head {padding:0 6px 11px}
+#dmContext .dm-search {margin:0 3px 6px}
+#dmContext .dm-entry {grid-template-columns:34px minmax(0,1fr) auto;gap:7px;padding:8px 5px}
+#dmContext .dm-entry-name {font-size:13px}
+#dmContext .dm-avatar {width:32px;height:32px}
+#dmContext .dm-pop {z-index:9;max-width:var(--context-width)}
+#messagesPage {grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);border:0}
+#profileDock {grid-area:profile;display:flex;flex-direction:column;justify-content:center;background:var(--nav);border-top:1px solid var(--border-soft);border-right:1px solid var(--border-soft)}
+.profile-tools {display:flex;align-items:center;min-height:50px;min-width:0;gap:3px;padding:5px 6px}
+.profile-tools button {border:0;background:transparent}
+.profile-tools :is(button:hover,button:focus-visible) {background:var(--surface-hover)}
+#profileDock #profileBtn {display:flex;align-items:center;gap:8px;text-align:start;flex:1;min-width:0;max-width:none;height:38px;padding:3px 4px;border:0;border-radius:6px;color:var(--text)}
+#profileBtn>span:not(.local-avatar) {min-width:0;display:grid}
+#profileBtn strong,#profileBtn small {line-height:1.3}
+#profileDock #profileAvatar {display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:var(--soft);color:var(--accent)}
+#voiceQuickControls {display:flex;align-items:center;gap:1px}
+#voiceQuickControls button,#profileDock #settingsBtn {display:grid;place-items:center;position:relative;min-width:29px;min-height:29px;width:29px;height:29px;padding:0;color:var(--muted);border-radius:6px}
+#voiceQuickControls button.is-muted {color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+#voiceQuickControls .control-button>span {display:none}
+#voiceQuickControls .control-button>svg,#profileDock #settingsBtn svg {width:16px;height:16px}
+#voiceDockStatus {display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border-soft)}
+#voiceDockStatus #statusBadge {min-width:0;margin-right:auto;font-size:10px;overflow:hidden;text-overflow:ellipsis}
+#voiceDockStatus button {padding:3px 5px;min-height:25px;height:auto;font-size:10px}
+.app-shell>.app-header,#contextScrim {display:none}
+:is(#groupRail,#navRail,#profileDock,#friendsContext,#dmContext) button:focus-visible {outline:2px solid var(--accent);outline-offset:-1px}
+@media (max-width:880px) {
+  .app-shell {--section-width:53px;--space-width:54px}
+  #navRail {align-items:center;padding:12px 5px;max-height:none}
+  #navRail .nav-item {justify-content:center}
+  #sidebarSearch,#navRail .nav-item>span {display:none}
+  #navRail .request-count {position:absolute;right:0;top:0}
+}
+@media (max-width:880px) {
+  .app-shell,.app-shell[data-scope="group"] {
+    --space-width:48px;--section-width:48px;
+    grid-template-columns:var(--space-width) var(--section-width) minmax(94px,125px) minmax(0,1fr);
+    grid-template-rows:38px minmax(0,1fr) auto;
+    grid-template-areas:"spaces sections header header" "spaces sections main main" "profile profile profile dock";
+  }
+  .app-shell[data-scope="group"] {--section-width:0px}
+  .app-shell:not(.in-call) :is(#directoryPage,#groupsPage,#messagesPage,#roomPage) {grid-row:2}
+  .app-shell>.app-header {display:flex;gap:8px;padding:0 8px;background:var(--bg);border-block-end:1px solid var(--border-soft);align-items:center}
+  #contextToggle {width:29px;height:29px}
+  #crumb {font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .app-shell:not(.context-open)>:is(#friendsContext,#groupContext,#dmContext) {display:none}
+  .app-shell.context-open>:is(#friendsContext,#groupContext,#dmContext):not([hidden]) {
+    position:absolute;z-index:16;inset-block:38px 0;inset-inline-start:calc(var(--space-width) + var(--section-width));
+    width:min(285px,calc(100% - var(--space-width) - var(--section-width) - 20px));height:auto;max-height:none;
+    box-shadow:5px 0 18px #0004;
+  }
+  #contextScrim:not([hidden]) {display:block;position:absolute;z-index:15;inset-block:38px 0;inset-inline:calc(var(--space-width) + var(--section-width)) 0;background:#0005;border:0;border-radius:0}
+  #groupRail button {width:36px;height:36px}
+  #groupRail {gap:7px;padding:6px 3px}
+  #groupRail .space-button[data-home-active]::before,#groupRail .group-shortcut[aria-current]::before {inset-inline-start:-6px}
+  #dmBack {display:grid}
+  #messagesPage:not(.has-dialog) .dm-idle {display:grid}
+  #groupContext {align-content:start}
+  #profileDock {z-index:2}
+  #voiceDockStatus {max-height:62px;overflow-y:auto}
+  .app-shell[data-scope="group"] .profile-tools {gap:1px;padding-inline:3px}
+  .app-shell.in-call[data-scope="group"] #profileBtn>span:not(.local-avatar) {display:none}
+}
+.app-shell.cinema {grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"main" "dock"}
+.app-shell.cinema>:is(#groupRail,#navRail,#friendsContext,#groupContext,#dmContext,#profileDock,.app-header) {display:none}
+
+/* Directory lists, their toolbar and current activity share the same main surface. */
+.app-shell[data-view="friends"] #directoryPage,.app-shell[data-view="requests"] #directoryPage {
+  container-type:inline-size;padding:0;scrollbar-gutter:auto;
+}
+#directoryPage .directory-heading,#peopleDirectory {max-width:none}
+:is([data-view="friends"],[data-view="requests"]) .directory-heading {
+  gap:15px;min-height:57px;margin:0;padding:10px 20px;justify-content:flex-start;
+  border-bottom:1px solid var(--border-soft);flex-wrap:wrap;
+}
+:is([data-view="friends"],[data-view="requests"]) .directory-heading>div:first-child {display:flex;align-items:center;gap:8px;flex:none}
+:is([data-view="friends"],[data-view="requests"]) .directory-heading h1 {font-size:17px;letter-spacing:-.02em;margin:0}
+#directoryCount {color:var(--muted);font-size:11px}
+.app-shell #bookFilters {margin:0;gap:2px}
+.app-shell #bookFilters[hidden] {display:none}
+#bookFilters button {font-size:13px;min-height:30px;padding:3px 9px}
+#bookFilters button[aria-pressed="true"] {background:var(--surface);color:var(--text)}
+.directory-heading #linkFriends {min-height:30px;padding:4px 10px;font-size:12px}
+#peopleDirectory {align-items:stretch;gap:0;grid-template-columns:minmax(0,1fr) minmax(190px,26%);min-height:calc(100% - 60px)}
+#workspaceBook,#workspaceRequests {padding:16px clamp(13px,2.1cqw,28px);background:transparent;border:0;border-radius:0}
+#workspaceRequests {align-content:start}
+#workspaceRequests .surface {border:0;background:transparent;padding:0}
+#workspaceBook .book-tools {padding-bottom:16px;align-items:center}
+#workspaceBook .book-tools input,#workspaceBook .book-tools select {border-color:var(--border-soft);height:34px;font-size:13px;background:var(--nav)}
+#workspaceBook .book-tools select {max-width:40%;color:var(--muted)}
+#workspaceContacts .contact-card {flex-wrap:nowrap;gap:6px;border:0;border-top:1px solid var(--border-soft);padding:7px 3px;min-height:58px}
+#workspaceContacts .contact-card:hover,#workspaceContacts .contact-card:focus-within {background:color-mix(in srgb,var(--surface) 60%,transparent)}
+#workspaceContacts .contact-copy {text-align:start}
+#workspaceContacts .contact-avatar {position:relative;width:37px;flex:0 0 37px;height:37px;border-radius:50%;overflow:visible;background:var(--soft);color:var(--accent)}
+#workspaceContacts .contact-avatar canvas {border-radius:inherit}
+#workspaceContacts [data-online] .contact-avatar::after {content:"";position:absolute;bottom:0;right:0;background:var(--dim);width:9px;height:9px;border:2px solid var(--bg);border-radius:50%}
+#workspaceContacts [data-online="true"] .contact-avatar::after {background:var(--accent)}
+#workspaceContacts .open-person-chat {padding:3px 6px 3px 1px;gap:11px}
+#workspaceContacts .open-person-chat:hover {background:transparent}
+#workspaceContacts .contact-copy strong {font-size:14px}
+#workspaceContacts .contact-copy small {font-size:12px;color:var(--muted)}
+#workspaceContacts .contact-card>.button {min-height:30px;padding:3px 8px;border:0;border-radius:7px;background:var(--surface);color:var(--muted)}
+#workspaceContacts .contact-card>.button:not(:disabled):hover {background:var(--surface-hover);color:var(--text)}
+#workspaceContacts .contact-card>.directory-icon {width:31px;height:31px;padding:0;border-radius:50%}
+#workspaceContacts .contact-card>.directory-icon svg {width:16px;height:16px}
+#workspaceContacts [aria-pressed="true"] {color:var(--accent)}
+#peopleDirectory .directory-side {border-left:1px solid var(--border-soft);padding:19px 14px;display:flex;flex-direction:column;gap:7px}
+.home-activity {padding:0 0 16px;margin:0 0 6px;border-bottom:1px solid var(--border-soft)}
+.home-activity h2 {font-size:16px;letter-spacing:-.02em;margin:0 4px 10px}
+#homeActivities .context-contact {padding:10px 7px;background:var(--panel);margin-top:5px}
+#homeActivities .context-contact:hover {background:var(--surface-hover)}
+#homeActivities .collection-empty {padding:4px 2px;margin:0;font-size:12px}
+#peopleDirectory .directory-side .fallback {margin:9px 0 0;padding:9px 3px;border:0;border-radius:0;border-top:1px solid var(--border-soft);background:transparent}
+#peopleDirectory .directory-side .fallback summary {font-size:12px;color:var(--muted)}
+.directory-side :is(.home-card-action,.home-room-action) .button {min-height:30px;background:transparent;border:0;padding:5px 7px;justify-content:flex-start;color:var(--muted)}
+.directory-side :is(.home-card-action,.home-room-action) .button:hover {color:var(--text);background:var(--surface-hover)}
+.directory-side .home-card-action span {display:block;overflow-wrap:anywhere}
+@container (max-width:670px) {
+  #peopleDirectory {display:flex;flex-direction:column;min-height:0}
+  #peopleDirectory .directory-side {border-left:0;border-top:1px solid var(--border-soft);padding:14px}
+  #workspaceBook,#workspaceRequests {padding:12px 14px}
+  :is([data-view="friends"],[data-view="requests"]) .directory-heading {gap:6px 10px;padding:8px 14px}
+}
+@media (min-width:881px) {
+  #navRail nav button.nav-item {justify-content:flex-start}
+  #navRail nav .nav-item>span {display:inline}
+  #navRail .request-count {position:static}
+}
+
+#profileAvatar[data-status] {position:relative;overflow:visible}
+#profileAvatar[data-status]::after {content:"";position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;background:var(--accent);border:2px solid var(--nav);border-radius:50%}
+#profileAvatar[data-status="away"]::after,.dm-avatar[data-status="away"]::after,#workspaceContacts [data-status="away"] .contact-avatar::after,.feed-presence.away {background:#e6b854}
+#profileAvatar[data-status="busy"]::after,.dm-avatar[data-status="busy"]::after,#workspaceContacts [data-status="busy"] .contact-avatar::after,.feed-presence.busy {background:#ed777b}
+#profileAvatar[data-status="invisible"]::after {background:var(--dim)}

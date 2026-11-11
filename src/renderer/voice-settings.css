@@ -1,0 +1,37 @@
+#pref-voice {container-type:inline-size}
+#pref-voice h3 {margin:0 0 22px;font-size:21px}
+#pref-voice h4 {font-size:14px;margin:0 0 10px}
+.voice-device-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#pref-voice .voice-device-grid .field {display:grid;min-width:0;gap:7px;margin:0 0 14px}
+#pref-voice .field span,#pref-voice h4 {font-weight:600;color:var(--text)}
+#pref-voice .field select {width:100%;min-width:0;height:36px;max-width:100%;text-overflow:ellipsis;color:var(--text);background:var(--nav);border:1px solid var(--border);border-radius:7px}
+#pref-voice .range-label {display:flex;align-items:center;justify-content:space-between;gap:5px}
+#pref-voice .range-label output {font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+#pref-voice input[type="range"] {width:100%;margin:0;height:20px;padding:0;background:transparent;accent-color:var(--accent)}
+#pref-voice input[type="range"]::-webkit-slider-runnable-track {height:4px;border-radius:3px;background:linear-gradient(to right,var(--accent) var(--filled),var(--border) var(--filled))}
+#pref-voice input[type="range"]::-webkit-slider-thumb {width:14px;height:14px;margin-top:-5px;background:var(--text);box-shadow:0 0 0 1px var(--border-soft)}
+#pref-voice .mic-test-box {margin:2px 0 0;padding:4px 0 16px;background:transparent;border:0;border-radius:0}
+.voice-test-controls {display:flex;align-items:center;gap:14px}
+.voice-test-controls #testMic {min-width:88px;min-height:33px;padding:5px 12px}
+.voice-test-controls .test-meter {
+  flex:1;margin:0;height:16px;background:var(--border);border-radius:0;
+  mask-image:repeating-linear-gradient(90deg,#000 0 4px,transparent 4px 7px);
+}
+.voice-test-controls #testLevel {background:var(--accent)}
+#pref-voice #testHint,#pref-voice #joinWithMicHint {margin:8px 0 0;line-height:1.4;color:var(--muted);font-size:12px}
+#pref-voice .voice-options {border-top:1px solid var(--border-soft);padding:17px 0 8px}
+#pref-voice .voice-options .switch-row {min-height:35px;margin:0;padding:5px 0;display:flex;justify-content:space-between;align-items:center;gap:14px;border:0;background:transparent}
+#pref-voice .voice-options input[type="checkbox"] {appearance:none;position:relative;flex:none;width:32px;height:18px;min-height:0;margin:0;padding:0;border:1px solid var(--border);border-radius:15px;background:var(--surface);cursor:pointer}
+#pref-voice .voice-options input[type="checkbox"]::before {content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;transform:none;border-radius:50%;background:var(--muted)}
+#pref-voice .voice-options input[type="checkbox"]:checked {background:var(--accent);border-color:var(--accent)}
+#pref-voice .voice-options input[type="checkbox"]:checked::before {left:16px;transform:none;background:var(--accent-ink)}
+#pref-voice .voice-options input[type="checkbox"]:disabled {opacity:.5;cursor:default}
+#pref-voice #joinWithMicHint {margin:0 35px 7px 0}
+#pref-voice :is(select,input,button):focus-visible {outline:2px solid var(--accent);outline-offset:2px}
+@container (max-width:520px) {
+  .voice-device-grid {grid-template-columns:minmax(0,1fr);gap:0}
+}
+@media (forced-colors:active) {
+  #pref-voice .voice-options input[type="checkbox"] {appearance:auto}
+  #pref-voice .voice-options input[type="checkbox"]::before {display:none}
+}

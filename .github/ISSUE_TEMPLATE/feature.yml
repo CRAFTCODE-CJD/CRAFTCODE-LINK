@@ -1,0 +1,15 @@
+name: Предложение / Feature request
+description: Какой пользовательский сценарий стоит улучшить / Suggest a user-facing improvement
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Что вы хотите сделать / What are you trying to do
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Как это должно работать / Desired behavior
+    validations:
+      required: true

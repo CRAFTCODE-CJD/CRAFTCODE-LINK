@@ -1,0 +1,33 @@
+#networkDialog{width:min(860px,calc(100vw - 56px))}
+.help-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}
+.help-heading p{max-width:58ch;margin:0;color:var(--muted);line-height:1.6;font-size:14px}
+#helpSearch{width:100%;padding:12px 14px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;font:inherit;margin-bottom:16px}
+#helpSearch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#helpTopics details{border:1px solid var(--border-soft);border-radius:11px;padding:0 16px;margin:9px 0;background:color-mix(in srgb,var(--surface) 40%,transparent)}
+#helpTopics details>summary{cursor:pointer;padding:14px 0;color:var(--text);font-weight:600;line-height:1.4;list-style-position:inside}
+#helpTopics details[open]>summary{color:var(--accent)}
+#helpTopics details>p{font-size:13px;line-height:1.65;margin:0 0 14px;color:var(--muted);max-width:78ch}
+#helpTopics details .friend-actions{margin-bottom:14px}
+#helpTopics details[hidden]{display:none}
+#helpTopics #helpExamples{margin:0 0 18px;background:linear-gradient(115deg,color-mix(in srgb,var(--accent) 6%,var(--surface)),var(--panel))}
+#helpVideos{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px}
+#helpVideos button{flex:1;font-size:12px}
+#helpVideos button[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
+#helpVideo{display:block;width:100%;max-height:440px;aspect-ratio:16/10;object-fit:contain;background:#10151b;border-radius:10px;border:1px solid var(--border);margin-bottom:12px}
+#helpVideo::cue{background:#10151be8;color:#fff;font-size:17px}
+#helpVideoTitle{font-size:14px;margin:14px 0 6px}
+#helpVideoDescription,#helpVideoError{font-size:13px;line-height:1.55;margin:0 0 14px;color:var(--muted)}
+#helpVideoError{color:var(--warning)}
+#helpTopics #coffeeSupport{border-top:1px solid var(--border-soft);margin-top:20px;padding-top:16px}
+#helpTopics #coffeeQR{border:0;background:none;margin:0;padding:0}
+#helpTopics #helpConnectivity{margin-top:14px}
+#firstSteps:not([hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+#firstSteps>div:first-child{flex:1;min-width:180px}#firstSteps h2{font-size:17px;margin:0 0 6px}#firstSteps p{font-size:13px;line-height:1.5;color:var(--muted);margin:0;max-width:58ch}
+#firstSteps .welcome-actions{display:flex;gap:10px;flex-wrap:wrap}
+#linkGuide{width:min(550px,calc(100vw - 56px));padding:30px}
+.guide-illustration{width:64px;height:64px;border-radius:20px;background:color-mix(in srgb,var(--accent) 12%,var(--panel));color:var(--accent);display:grid;place-items:center;margin:14px 0 22px}
+.guide-illustration .icon{width:32px;height:32px}
+#linkGuide #guideText{font-size:14px;line-height:1.7;color:var(--muted);margin:16px 0 24px;min-height:150px}
+#linkGuide .guide-actions{justify-content:space-between}
+#linkGuide .guide-actions>div{display:flex;gap:8px}
+@media(max-width:640px){#networkDialog{padding:20px;width:calc(100vw - 32px)}.help-heading{align-items:flex-start;flex-direction:column;gap:12px}#helpVideos{flex-direction:column}#helpVideo::cue{font-size:14px}#linkGuide{padding:22px}#linkGuide #guideText{min-height:0}}

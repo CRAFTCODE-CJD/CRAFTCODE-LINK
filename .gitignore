@@ -1,0 +1,16 @@
+node_modules/
+/out/
+__pycache__/
+*.log
+.env
+.env.*
+!.env.example
+*.cclprofile
+link-direct-v1.bin*
+link-personal-chats*.sqlite*
+*.part
+*.jks
+*.keystore
+*.pfx
+*.p12
+local.properties

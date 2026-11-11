@@ -1,0 +1,106 @@
+/* The roster is one set of live participant cards in both the call and screen layouts. */
+#roomPage {position:relative}
+.app-shell.in-call #roomPage {padding:0;gap:0;grid-template-rows:minmax(0,1fr)}
+.app-shell.in-call:not(.cinema) #roomPage:has(#roomSidebar:not([hidden])):not(:has(#studioDock:not([hidden]))) {
+  grid-template-columns:minmax(0,1fr) clamp(248px,21vw,340px);
+}
+.app-shell.in-call #roomPage .stage-column {min-height:0;padding:0 14px 12px;overflow:hidden}
+#roomPage .room-bar {justify-content:flex-start;min-height:56px;flex-shrink:0;gap:10px;margin:0;border-bottom:1px solid var(--border-soft)}
+.room-title {align-items:center;gap:9px;flex:1}
+.room-title-lines {min-width:0}
+.room-title h1 {font-size:clamp(15px,1.6vw,21px)}
+.room-symbol {display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:10px;color:var(--accent);background:var(--soft)}
+.room-meta,.room-member-count {display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11px;line-height:1.4;font-variant-numeric:tabular-nums}
+.room-meta {gap:9px}
+.room-meta time {margin:0;border-left:1px solid var(--border);padding-left:9px}
+.room-meta .icon {width:13px;height:13px}
+.room-toolbar {display:flex;align-items:center;gap:3px}
+.room-toolbar .button,.room-toolbar .icon-button {display:inline-flex;align-items:center;justify-content:center;min-height:32px;gap:5px;color:var(--muted);background:transparent;border:1px solid transparent;border-radius:7px}
+.room-toolbar .icon-button,.room-toolbar #studioBtn,.room-toolbar #cinemaBtn {width:32px;height:32px;padding:0;flex:none}
+.room-toolbar #roomConversation,.room-toolbar #togglePanelBtn {padding:4px 8px;font-size:12px}
+.room-toolbar .button:hover,.room-toolbar .icon-button:hover {background:var(--surface);color:var(--text)}
+.room-toolbar #togglePanelBtn[aria-expanded=true],.room-toolbar #cinemaBtn[aria-pressed=true] {background:var(--soft);color:var(--accent)}
+.room-toolbar #studioBtn span {display:none}
+.room-toolbar #cinemaBtn {font-size:0}
+.room-toolbar #cinemaBtn::before {content:"";width:17px;height:13px;border:1.7px solid currentColor;border-top-width:4px;border-bottom-width:4px;border-radius:2px;box-sizing:border-box}
+#roomOptionsBtn .icon {stroke-linecap:round;stroke-width:3}
+#roomPage .room-stream-heading {height:auto;min-height:36px;margin:0;gap:8px}
+.room-stream-heading h2 {font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-stream-heading .stage-tools {flex-shrink:1}
+.room-stream-heading .stage-badge {display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border:0;border-radius:4px;background:#a72d42;color:white;font:650 10px/1 sans-serif;letter-spacing:.02em;white-space:nowrap}
+.room-stream-heading .stage-badge::before {content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+#roomPage :is(button,select,summary,input):focus-visible,#participantSoundMenu :is(button,input):focus-visible {outline:2px solid var(--accent);outline-offset:2px}
+#roomPage :is(button,select,summary):not(:disabled) {cursor:pointer}
+#roomPage .stage-column .stream-stage {min-height:0}
+#roomPage .voice-stage {border:0;border-radius:0;background:var(--bg)}
+#streamStage.voice-stage .stage-caption {display:none}
+#streamStage .voice-grid {
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr));padding:12px 0;gap:10px;
+  align-content:safe center;box-sizing:border-box;scrollbar-width:thin;
+}
+#streamStage .voice-grid:has(>:only-child) {grid-template-columns:minmax(0,490px)}
+#streamStage .voice-grid:has(>:nth-child(2)):not(:has(>:nth-child(3))) {grid-template-columns:repeat(2,minmax(0,1fr))}
+.voice-tile {border-radius:12px;background:var(--surface);overflow:hidden;transition:border-color 160ms ease}
+@media(prefers-reduced-motion:reduce){.voice-tile {transition:none}}
+#streamStage .voice-tile {min-height:clamp(125px,23vh,240px);padding:30px 10px 42px}
+.voice-tile.is-speaking {border-color:color-mix(in srgb,var(--accent) 50%,var(--border-soft))}
+.tile-caption {text-align:left;min-width:0}
+#streamStage .tile-caption {position:absolute;bottom:10px;left:12px;right:10px}
+.tile-caption .voice-name,.tile-caption .voice-state {display:block;line-height:1.45;min-height:0}
+.tile-caption .voice-name {font-size:13px}
+.tile-caption .voice-state:empty {display:none}
+.tile-actions .tile-sound-button {border-color:transparent;background:color-mix(in srgb,var(--bg) 70%,transparent)}
+.tile-actions .tile-sound-button:is(:hover,:focus-visible) {border-color:var(--accent)}
+#participantSoundMenu .own-row {grid-template-columns:42px minmax(30px,1fr) 41px}
+#participantSoundMenu .speaker-permission {width:100%;margin-top:7px}
+#roomFilmstrip {min-width:0;flex:none;margin-top:8px}
+#roomFilmstrip .voice-grid {
+  position:static;display:flex;justify-content:flex-start;align-items:stretch;overflow:auto;
+  padding:2px;gap:6px;background:transparent;scrollbar-width:thin;
+}
+#roomFilmstrip .voice-tile {flex:0 0 clamp(147px,15vw,200px);min-height:54px;padding:6px 32px 6px 8px;flex-direction:row;gap:8px;justify-content:flex-start}
+#roomFilmstrip .room-avatar {width:30px;height:30px;font-size:12px;margin:0;flex:none}
+#roomFilmstrip .tile-caption {flex:1}
+#roomFilmstrip .voice-name {font-size:12px}
+#roomFilmstrip .voice-state {overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#roomFilmstrip .tile-actions {top:50%;right:3px;transform:translateY(-50%);gap:1px;flex-direction:column}
+#roomFilmstrip .tile-sound-button {width:24px;height:24px;padding:4px}
+#roomFilmstrip .tile-sound-button svg {width:15px;height:15px}
+#roomFilmstrip .voice-tile.selected-screen {border-color:var(--accent)}
+#roomFilmstrip .tile-watch {position:absolute;inset:0;z-index:1;border:0;border-radius:inherit;background:transparent;cursor:pointer}
+#roomFilmstrip .tile-watch:hover {box-shadow:inset 0 0 0 1px var(--accent);background:color-mix(in srgb,var(--text) 7%,transparent)}
+#roomFilmstrip .tile-watch:focus-visible {outline-offset:-3px}
+#roomFilmstrip .tile-actions {z-index:2}
+#roomFilmstrip .tile-screen-image {background:#101419;border-radius:4px;width:43px;height:29px;flex:none}
+#roomFilmstrip .voice-tile:has(.tile-screen-image) .room-avatar {position:absolute;left:37px;bottom:5px;width:17px;height:17px;font-size:8px}
+#roomSidebar {padding:0 12px 12px;gap:5px;overflow:hidden;background:var(--bg);border-left:1px solid var(--border-soft)}
+.room-chat-heading {display:flex;align-items:center;gap:8px;min-height:56px;flex:none;border-bottom:1px solid var(--border-soft)}
+.room-chat-heading h2 {font-size:15px;font-weight:650;margin:0;flex:1}
+.room-chat-heading>.icon {color:var(--muted);width:17px;height:17px}
+.room-chat-heading .icon-button,#hostAccess .icon-button {display:grid;place-items:center;width:29px;height:29px;padding:5px;color:var(--muted)}
+#roomChat .empty-chat p {font-weight:600}
+#roomChat #chatForm {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:3px;align-items:end;padding:4px 5px}
+#roomChat #chatInput {grid-column:2;width:100%;min-width:0;box-sizing:border-box;line-height:18px;padding:8px 3px}
+#roomChat #chatInput:placeholder-shown {height:34px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#roomChat #chatForm :is(.send-button,.quick-record) {grid-column:3}
+#hostAccess {box-sizing:border-box;position:fixed;inset:auto;margin:0;top:anchor(bottom);right:anchor(right);position-anchor:--host-menu;position-try-fallbacks:flip-inline,flip-block;
+  width:min(290px,calc(100vw - 16px));max-height:calc(100dvh - 100px);overflow-y:auto;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text);box-shadow:0 7px 25px #0005}
+#roomOptionsBtn {anchor-name:--host-menu}
+#hostAccess label {display:flex;align-items:center;gap:7px;margin:10px 0 4px;font-size:13px}
+#hostAccess p {margin:5px 0 12px;color:var(--muted);font-size:12px;line-height:1.4}
+#hostAccess select {max-width:100%;width:100%}
+#roomPage #studioDock {padding:8px}
+.app-shell.in-call:not(.cinema) #roomPage.compact-room:has(#roomSidebar:not([hidden])):not(:has(#studioDock:not([hidden]))) {
+  grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:visible;
+}
+#roomPage.compact-room #roomSidebar:not([hidden]) {position:absolute;top:0;right:0;bottom:0;z-index:5;width:min(310px,100%);box-sizing:border-box;box-shadow:-8px 0 24px #0003;border-top:0;border-left:1px solid var(--border)}
+#roomPage.compact-room .room-toolbar {gap:1px}
+#roomPage.compact-room .room-bar {gap:3px}
+#roomPage.compact-room .stage-column {padding-inline:8px}
+#roomPage.compact-room .room-title {gap:5px}
+#roomPage.compact-room .room-symbol {width:28px;height:28px}
+@media(max-width:900px){
+  #roomPage .room-toolbar #togglePanelBtn span {display:none}
+  #roomPage .room-toolbar #togglePanelBtn {width:32px;padding:0}
+  #roomPage .room-toolbar #roomConversation {max-width:85px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}

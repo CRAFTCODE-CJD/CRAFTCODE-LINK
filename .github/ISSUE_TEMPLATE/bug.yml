@@ -1,0 +1,34 @@
+name: Ошибка / Bug
+description: Опишите воспроизводимую проблему в LINK / Report a reproducible problem
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Для уязвимости используйте приватное сообщение в разделе Security → Report a vulnerability.
+        Удалите из отчёта пароли, карточки профиля, содержимое личной переписки и личные пути.
+        Use Security → Report a vulnerability for security issues. Remove secrets and personal content from diagnostics.
+  - type: input
+    id: version
+    attributes:
+      label: Версия LINK и Windows / LINK and Windows version
+      placeholder: 0.7.14, Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить / Steps to reproduce
+      description: Укажите действия обоих участников, если проблема связана с подключением.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Ожидаемый и фактический результат / Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Диагностика и снимки / Diagnostics and screenshots
+      description: Достаточно относящегося к ошибке фрагмента с удалёнными личными данными.
