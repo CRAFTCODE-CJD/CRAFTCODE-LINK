@@ -10,7 +10,7 @@ function fileIdentity(stat){
 // publish or remove a name that no longer identifies that handle's file.
 function ownedFile(filename,physicalDir,identity){
   try{
-    if(!identity||path.relative(physicalDir,fs.realpathSync(path.dirname(filename)))!=='')return;
+    if(!identity||path.relative(physicalDir,fs.realpathSync.native(path.dirname(filename)))!=='')return;
     const stat=fs.lstatSync(filename,{bigint:true});
     if(stat.isFile()&&fileIdentity(stat)===identity)return stat;
   }catch(error){if(error.code!=='ENOENT'&&error.code!=='ENOTDIR')throw error;}
@@ -26,18 +26,21 @@ async function removeSavedDownload(downloads,receipt,allow){
   const {person,filename,size,sha,identity}=receipt;
   const lan=receipt.room;
   if(!path.isAbsolute(filename)||(lan!==undefined?!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(lan):!/^[a-f0-9]{64}$/.test(person)))return 'kept';
-  const base=path.join(downloads,'CRAFTCODE LINK'),room=path.join(base,lan!==undefined?'LAN-'+lan:'DM-'+person.slice(0,12));
-  if(path.relative(room,path.dirname(filename))!=='')throw Error('Download directory changed');
   if(path.basename(filename).startsWith('.'))return 'kept';
-  function checkedFile(){
-    const expected=path.relative(downloads,filename);
-    if(fs.lstatSync(base).isSymbolicLink() || fs.lstatSync(room).isSymbolicLink() ||
-       path.relative(fs.realpathSync(downloads),fs.realpathSync(filename))!==expected)return;
-    const st=fs.lstatSync(filename,{bigint:true});
-    if(st.isFile() && st.size===BigInt(size) && (!identity||fileIdentity(st)===identity))return st;
-  }
   let handle;
   try{
+    // Downloads may use a Windows 8.3 alias (for example RUNNER~1).
+    // Match the native canonical path used when ShelfStorage committed it.
+    downloads=fs.realpathSync.native(downloads);
+    const base=path.join(downloads,'CRAFTCODE LINK'),room=path.join(base,lan!==undefined?'LAN-'+lan:'DM-'+person.slice(0,12));
+    if(path.relative(room,path.dirname(filename))!=='')throw Error('Download directory changed');
+    function checkedFile(){
+      const expected=path.relative(downloads,filename);
+      if(fs.lstatSync(base).isSymbolicLink() || fs.lstatSync(room).isSymbolicLink() ||
+         path.relative(downloads,fs.realpathSync.native(filename))!==expected)return;
+      const st=fs.lstatSync(filename,{bigint:true});
+      if(st.isFile() && st.size===BigInt(size) && (!identity||fileIdentity(st)===identity))return st;
+    }
     const before=checkedFile();
     if(!before)return 'kept';
     handle=await fs.promises.open(filename,'r');

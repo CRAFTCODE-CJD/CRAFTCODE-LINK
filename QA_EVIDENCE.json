@@ -712,10 +712,10 @@
     }
   },
   "unit": {
-    "passed": 235,
+    "passed": 237,
     "failed": 0,
     "skipped": 0,
-    "log": "0714-publication-tests.log"
+    "log": "0714-native-download-paths-full.log"
   },
   "previousRelease": {
     "version": "0.7.13",
@@ -1842,7 +1842,15 @@
       "0714-ci-tests.log",
       "0714-ci-go.log"
     ],
-    "scope": "Clean independent Windows source checkout and official checksum-verified toolchains"
+    "scope": "Clean independent Windows source checkout and official checksum-verified toolchains",
+    "windowsShortPaths": {
+      "status": "PASS",
+      "reproducedBeforeFix": true,
+      "regressions": 2,
+      "syntaxFiles": 249,
+      "tests": 237,
+      "log": "0714-native-download-paths-full.log"
+    }
   },
   "help": {
     "status": "PASS",
