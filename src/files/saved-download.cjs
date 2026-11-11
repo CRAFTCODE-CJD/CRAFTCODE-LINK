@@ -20,6 +20,22 @@ function unlinkOwned(filename,physicalDir,identity){
   if(ownedFile(filename,physicalDir,identity))fs.unlinkSync(filename);
 }
 
+function resolveDownloadRoot(downloads,receiptRoot){
+  // A disconnected volume is unavailable, so retain its receipt for a retry.
+  // Only a missing file under an accessible, approved root counts as missing.
+  const physical=fs.realpathSync.native(receiptRoot);
+  const roots=Array.isArray(downloads)?downloads:[downloads];
+  for(const root of roots){
+    try{
+      if(path.relative(fs.realpathSync.native(root),physical)==='')return physical;
+    }catch{
+      // Another approved disk may be disconnected. Continue looking for the
+      // matching root, and fail closed if none of the available roots match.
+    }
+  }
+  throw Error('Download directory changed or unavailable');
+}
+
 // Only remove an exact copy that LINK committed. A user can add, edit, move
 // or replace files here between downloading and clearing a conversation.
 async function removeSavedDownload(downloads,receipt,allow){
@@ -27,17 +43,19 @@ async function removeSavedDownload(downloads,receipt,allow){
   const lan=receipt.room;
   if(!path.isAbsolute(filename)||(lan!==undefined?!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(lan):!/^[a-f0-9]{64}$/.test(person)))return 'kept';
   if(path.basename(filename).startsWith('.'))return 'kept';
+  // The configured root and an older receipt can spell the same Windows
+  // directory differently, including its 8.3 alias. Check the root before
+  // resolving any conversation directory or file through it.
+  const receiptRoot=path.dirname(path.dirname(path.dirname(filename)));
+  const base=path.join(receiptRoot,'CRAFTCODE LINK'),room=path.join(base,lan!==undefined?'LAN-'+lan:'DM-'+person.slice(0,12));
+  if(path.relative(room,path.dirname(filename))!=='')throw Error('Download directory changed');
+  const physicalDownloads=resolveDownloadRoot(downloads,receiptRoot);
   let handle;
   try{
-    // Downloads may use a Windows 8.3 alias (for example RUNNER~1).
-    // Match the native canonical path used when ShelfStorage committed it.
-    downloads=fs.realpathSync.native(downloads);
-    const base=path.join(downloads,'CRAFTCODE LINK'),room=path.join(base,lan!==undefined?'LAN-'+lan:'DM-'+person.slice(0,12));
-    if(path.relative(room,path.dirname(filename))!=='')throw Error('Download directory changed');
     function checkedFile(){
-      const expected=path.relative(downloads,filename);
+      const expected=path.relative(receiptRoot,filename);
       if(fs.lstatSync(base).isSymbolicLink() || fs.lstatSync(room).isSymbolicLink() ||
-         path.relative(downloads,fs.realpathSync.native(filename))!==expected)return;
+         path.relative(physicalDownloads,fs.realpathSync.native(filename))!==expected)return;
       const st=fs.lstatSync(filename,{bigint:true});
       if(st.isFile() && st.size===BigInt(size) && (!identity||fileIdentity(st)===identity))return st;
     }
@@ -61,7 +79,10 @@ async function removeSavedDownload(downloads,receipt,allow){
     fs.unlinkSync(filename);
     return 'removed';
   }catch(e){
-    if(e.code==='ENOENT')return 'missing';
+    if(e.code==='ENOENT'){
+      if(path.relative(physicalDownloads,resolveDownloadRoot(downloads,receiptRoot))!=='')throw Error('Download directory changed');
+      return 'missing';
+    }
     throw e;
   }finally{await handle?.close();}
 }
