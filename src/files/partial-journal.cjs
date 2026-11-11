@@ -52,6 +52,10 @@ class PartialJournal{
           // distinguish a remaining partial from a user's replacement.
           unlinkOwned(part,path.join(await fs.realpath(downloads),'CRAFTCODE LINK',data.room),data.identity);
         }catch(e){if(e.code!=='ENOENT')continue;}
+        // A disk can disappear after the first root check. Retain the receipt
+        // until its approved root is available again, even when a lookup of
+        // the partial file just returned ENOENT.
+        if(fingerprint(await fs.realpath(downloads))!==root)continue;
         await this.forget(id);
       }catch{ /* Keep the record for a later launch if the volume is temporarily unavailable. */ }
     }

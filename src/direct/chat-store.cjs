@@ -22,6 +22,7 @@ const schema=`
 class ChatStore {
   constructor(dir,storage){
     this.file=path.join(dir,'link-personal-chats-v1.sqlite');this.storage=storage;
+    this.relocatedPath=require('../profile-relocations.cjs').createPathResolver(dir);
   }
   open(me){
     this.close();this.owner={id:me.id,device:me.device};
@@ -171,7 +172,8 @@ class ChatStore {
   }
   downloadReceipt(n){
     const r=this.db?.prepare('SELECT person,payload FROM downloads WHERE n=?').get(n);
-    if(r)return JSON.parse(this.decryptBlob('download/'+r.person+'/'+n,r.payload).toString('utf8'));
+    if(r){const receipt=JSON.parse(this.decryptBlob('download/'+r.person+'/'+n,r.payload).toString('utf8'));
+      return {...receipt,...this.relocatedPath(receipt.filename)};}
   }
   forgetDownload(n){this.db.prepare('DELETE FROM downloads WHERE n=?').run(n);}
   referencesPath(filename){
@@ -257,7 +259,11 @@ class ChatStore {
   attachmentData(n){
     const row=this.db?.prepare('SELECT kind,payload FROM attachment_data WHERE n=?').get(n);
     if(!row)return;
-    return {kind:row.kind,bytes:this.decryptBlob('attachment/'+n+'/'+row.kind,row.payload)};
+    let bytes=this.decryptBlob('attachment/'+n+'/'+row.kind,row.payload);
+    if(row.kind==='path'||row.kind==='saved'){
+      const next=this.relocatedPath(bytes.toString('utf8'));if(next)bytes=Buffer.from(next.filename);
+    }
+    return {kind:row.kind,bytes};
   }
   enqueue(person,epoch,id,text,attachment,source){
     const db=this.database(),[p,e,uid,payload]=this.pack(person,epoch,id,text,Date.now(),true,attachment);

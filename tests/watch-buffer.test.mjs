@@ -38,6 +38,33 @@ test('no receiver preference on an unsupported engine or own preview',()=>{
   buffers.select('g2',500);assert.equal(buffers.update(room).available,false);
 });
 
+test('switching to a camera immediately releases screen buffering and pending alignment', async t => {
+  const {room, buffers, ts, values} = fixture();
+  t.after(() => buffers.close());
+  let source = 'screen';
+  room.videoSource = () => source;
+  buffers.select('g1', 2000);
+  buffers.update(room);
+  assert.equal(values()[4], 2000);
+  let finishStats;
+  ts[5].receiver.getStats = () => new Promise(resolve => {finishStats = resolve;});
+  buffers.select('g1', 500);
+  buffers.update(room);
+  assert(buffers.timing);
+  source = 'camera';
+  assert.deepEqual(buffers.update(room), {requested: 0, forwarding: false, available: false, camera: true});
+  assert.equal(buffers.timing, null);
+  assert.equal(buffers.alignment, null);
+  assert.deepEqual(values().slice(3, 6), [60, null, null]);
+  finishStats(new Map());
+  await Promise.resolve();
+  assert.equal(values()[4], null);
+  source = 'screen';
+  delete ts[5].receiver.getStats;
+  buffers.update(room);
+  assert.equal(values()[4], 500, 'returning to screen restores the viewer preference');
+});
+
 test('picture follows emitted stream sound while a buffer fills and drains, without changing voice',async t=>{
   const {room,buffers,ts,values}=fixture();
   t.mock.timers.enable({apis:['setTimeout']});

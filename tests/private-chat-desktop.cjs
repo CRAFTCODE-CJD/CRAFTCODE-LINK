@@ -58,7 +58,12 @@ async function run(){
       };
       dialog.showErrorBox=(title,message)=>console.error(title,message);
       if(process.env.LINK_QA_GROUPS==='1')dialog.showOpenDialog=async()=>({canceled:!globalThis.testChosenFile,filePaths:globalThis.testChosenFile?[globalThis.testChosenFile]:[]});
-      if(process.env.LINK_QA_GROUP_VOICE==='1'){
+      if(process.env.LINK_QA_LIVE_CAMERA==='1'){
+        globalThis.qaCameraAllow=false;globalThis.qaCameraPrompts=[];
+        dialog.showMessageBox=async(_win,options)=>{globalThis.qaCameraPrompts.push(options);return {response:globalThis.qaCameraAllow?1:0};};
+        app.on('browser-window-created',(_,win)=>{win.isVisible=()=>true;win.isMinimized=()=>false;});
+      }
+      if(process.env.LINK_QA_GROUP_VOICE==='1'||process.env.LINK_QA_LIVE_CAMERA==='1'){
         const {desktopCapturer,nativeImage}=require('electron');
         desktopCapturer.getSources=async()=>[{id:'screen:0:0',name:'Test screen',display_id:'0',thumbnail:nativeImage.createEmpty()}];
       }
@@ -97,9 +102,10 @@ async function run(){
       assert(address,'unknown isolated test profile');
       const base=path.join(temp,id); await fs.mkdir(base,{recursive:true});
       const app=await _electron.launch({executablePath:process.env.LINK_QA_ELECTRON||require('electron'),
-        args:[launcher,'--mute-audio','--no-error-dialogs','--allow-loopback-in-peer-connection','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--craftlink-profile='+id],
+        args:[launcher,'--mute-audio','--no-error-dialogs','--allow-loopback-in-peer-connection','--use-fake-device-for-media-stream',...(process.env.LINK_QA_LIVE_CAMERA==='1'?[]:['--use-fake-ui-for-media-stream']),'--craftlink-profile='+id],
         env:{...process.env,LINK_CHAT_TEST_DATA:base,LINK_CHAT_TEST_IP:address,XDG_CONFIG_HOME:base}});
       apps.add(app);
+      if(process.env.LINK_QA_LIVE_CAMERA==='1')app.process().stderr?.on('data',chunk=>process.stderr.write(chunk));
       const page=await app.firstWindow(); page.setDefaultTimeout(25000);
       page.on('pageerror',err=>errors.push(String(err)));
       const data=await app.evaluate(({app})=>app.getPath('userData'));
@@ -107,9 +113,10 @@ async function run(){
       const cdp=await page.context().newCDPSession(page);
       await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:true});
       await page.setViewportSize({width:1440,height:900});
-      if(process.env.LINK_QA_ROOM_CONTROLS==='1'||process.env.LINK_QA_GROUP_VOICE==='1'){
+      if(process.env.LINK_QA_ROOM_CONTROLS==='1'||process.env.LINK_QA_GROUP_VOICE==='1'||process.env.LINK_QA_LIVE_CAMERA==='1'){
         await page.waitForFunction(()=>!!document.querySelector('#bookQuery')?.oninput);
-        await page.addInitScript(require('./room-controls-desktop.cjs').instrument);
+        await page.waitForLoadState('load');
+        await page.addInitScript(process.env.LINK_QA_LIVE_CAMERA==='1'?require('./live-camera-desktop.cjs').instrument:require('./room-controls-desktop.cjs').instrument);
         if(process.env.LINK_QA_GROUP_VOICE==='1')await page.addInitScript(require('./group-voice-desktop.cjs').screen);
         await page.reload();
       }
@@ -138,6 +145,9 @@ async function run(){
     if(process.env.LINK_QA_HELP==='1'){
       await require('./help-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;
     }
+    if(process.env.LINK_QA_LIVE_CAMERA==='1'){
+      await require('./live-camera-desktop.cjs').run({a,b,open,create});assert.deepEqual(errors,[]);return;
+    }
     if(process.env.LINK_QA_GROUPS==='1'||process.env.LINK_QA_GROUP_VOICE==='1'){
       const suite=process.env.LINK_QA_GROUPS==='1'?'./group-desktop.cjs':'./group-voice-desktop.cjs';
       await require(suite).run({a,b,open,create,apps});
@@ -160,6 +170,9 @@ async function run(){
     }
     if(process.env.LINK_QA_LAN_CHAT==='1'){
       await require('./lan-chat-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;
+    }
+    if(process.env.LINK_QA_STORAGE_DOWNLOADS==='1'){
+      await require('./storage-download-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;
     }
     if(process.env.LINK_QA_DM_ATTACHMENTS==='1'){
       await require('./private-attachment-desktop.cjs')({a,b});

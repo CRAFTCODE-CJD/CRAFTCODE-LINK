@@ -133,3 +133,34 @@ test('a simulated disk disconnect during hashing preserves the receipt for retry
   }finally{realpathMock.mock.restore();lstatMock.mock.restore();}
   assert.deepEqual(await fs.readFile(saved.path),bytes);
 });
+
+test('partial cleanup retries after a simulated disconnect during directory lookup',async t=>{
+  const temp=await fs.mkdtemp(path.join(os.tmpdir(),'link-partial-disconnect-'));
+  t.after(()=>fs.rm(temp,{recursive:true,force:true}));
+  const profile=path.join(temp,'profile'),downloads=path.join(temp,'downloads');
+  const base=path.join(downloads,'CRAFTCODE LINK'),room='DM-'+('d'.repeat(12));
+  await fs.mkdir(profile);await fs.mkdir(path.join(base,room),{recursive:true});
+  const id=randomUUID(),part=path.join(base,room,'.link-'+id+'.part');
+  await fs.writeFile(part,'unfinished bytes');
+  const journal=new PartialJournal(profile);
+  await journal.track(id,downloads,room,fileIdentity(await fs.stat(part,{bigint:true})));
+  let disconnected=false;
+  const realpath=fs.realpath,lstat=fs.lstat;
+  const offline=()=>Object.assign(Error('Fixture disk disconnected'),{code:'ENOENT'});
+  const rootMock=t.mock.method(fs,'realpath',async(...args)=>{
+    if(disconnected&&args[0]===downloads)throw offline();
+    return realpath(...args);
+  });
+  const lookupMock=t.mock.method(fs,'lstat',async(...args)=>{
+    if(args[0]===base){disconnected=true;throw offline();}
+    return lstat(...args);
+  });
+  try{await journal.recover(downloads);}
+  finally{rootMock.mock.restore();lookupMock.mock.restore();}
+  const receipt=path.join(profile,'pending-downloads-v1',id+'.json');
+  assert.equal((await fs.stat(receipt)).isFile(),true);
+  assert.equal(await fs.readFile(part,'utf8'),'unfinished bytes');
+  await journal.recover(downloads);
+  await assert.rejects(fs.stat(part),{code:'ENOENT'});
+  await assert.rejects(fs.stat(receipt),{code:'ENOENT'});
+});

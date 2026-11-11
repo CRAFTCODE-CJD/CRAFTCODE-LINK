@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from payload_privacy import verify_payload_privacy
 
 root = pathlib.Path(__file__).resolve().parents[1]
 version = json.loads((root / 'package.json').read_text(encoding='utf-8'))['version']
@@ -15,6 +16,10 @@ payload = out / f'CRAFTCODE-LINK-{version}-win-x64'
 dest = out / f'CRAFTCODE-LINK-{version}-Setup-x64.exe'
 if dest.exists():
     raise SystemExit(f'Output already exists: {dest}')
+try:
+    verify_payload_privacy(payload)
+except ValueError as error:
+    raise SystemExit(str(error)) from None
 metadata = json.loads((payload / 'BUILD-INFO.json').read_text(encoding='utf-8'))
 if (metadata['version'], metadata['platform'], metadata['arch']) != (version,'win32','x64'):
     raise SystemExit('Build the matching portable x64 payload first.')

@@ -1,0 +1,11 @@
+#pref-storage {container-type:inline-size}
+#pref-storage h4 {margin:24px 0 8px;font-size:14px}
+.storage-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:22px 0}
+.storage-summary>div {display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.storage-summary span {font-size:12px;color:var(--muted)}
+.storage-summary strong {font-size:18px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.storage-path {padding:12px 14px;border:1px solid var(--border);background:var(--nav);border-radius:8px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;user-select:text}
+.storage-move {margin-top:16px;padding:0 14px 14px;border:1px solid var(--accent);border-radius:10px}
+.storage-actions {display:flex;flex-wrap:wrap;gap:8px}
+#storageStatus {min-height:20px;overflow-wrap:anywhere}
+@container (max-width:480px) {.storage-summary {grid-template-columns:1fr}.storage-summary>div {flex-direction:row;align-items:center;justify-content:space-between}}

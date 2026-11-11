@@ -31,6 +31,8 @@ const CAPTURE_SELECTION_TTL_MS = 15_000;
 let mainWindow = null;
 let currentRoom = null;
 const {CameraConsent,promptCamera}=require('./files/camera-consent.cjs');
+const {LiveCameraConsent}=require('./files/live-camera-consent.cjs');
+const liveCamera=new LiveCameraConsent();
 let shelf=null, partialJournal=null;
 function clearShelf(){const old=shelf;shelf=null;return old?.store.close();}
 let roomTransition = false;
@@ -40,7 +42,7 @@ const {ProtectedAudio}=require('./protected-audio.cjs');
 const streamAudio=new ProtectedAudio();
 let captureSelection = null, audioGrant=null;
 function clearCapture() {
-  captureSelection=null;audioGrant=null;streamAudio.stop();
+  captureSelection=null;audioGrant=null;streamAudio.stop();liveCamera.reset();
 }
 let lastSources = new Set();
 let lastSourcesAt = 0;
@@ -57,11 +59,23 @@ if (process.platform === 'win32') app.setAppUserModelId(windowsAppId);
 const profile = profileArg?.slice('--craftlink-profile='.length);
 const profileRoot = path.join(app.getPath('appData'), 'CRAFTCODE LINK');
 const named = profile && /^[a-zA-Z0-9_-]{1,48}$/.test(profile);
-if (process.platform === 'win32' || named) {
-  const directory = named ? path.join(profileRoot, 'profiles', profile) : profileRoot;
-  require('./profile-paths.cjs').useProfile(app, directory);
+let storageLocationController;
+{
+  // Lock identity must survive moving userData to another disk. No session or
+  // database is opened until the verified migration has fully completed.
+  const anchor = named ? path.join(profileRoot, 'profiles', profile) : process.platform==='win32'?profileRoot:app.getPath('userData');
+  try{
+    const {StorageLocation}=require('./storage-location.cjs');
+    const installDirectory=app.isPackaged?path.dirname(process.execPath):app.getAppPath();
+    storageLocationController=new StorageLocation({anchor,downloads:app.getPath('downloads'),installDirectory,
+      freshDirectory:app.isPackaged&&!named?path.join(installDirectory,'CRAFTCODE LINK Data'):undefined,
+      dialog,window:()=>mainWindow,guardOwner:true,maintenanceDirectory:app.getPath('appData')});
+    storageLocationController.checkMaintenance();
+    require('node:fs').mkdirSync(anchor,{recursive:true,mode:0o700});app.setPath('userData',anchor);
+    if(!app.requestSingleInstanceLock()){app.exit(0);return;}
+    require('./profile-paths.cjs').useProfile(app,storageLocationController.bootstrap());
+  }catch(error){dialog.showErrorBox(tr('Не удалось открыть данные LINK'),require('./storage-location.cjs').storageError(error).message);app.exit(1);return;}
 }
-if (process.platform === 'win32' && !app.requestSingleInstanceLock()) { app.exit(0); return; }
 const graphics=require('./graphics.cjs').createGraphics(app);
 app.on('gpu-info-update',()=>sendEvent({type:'graphics-updated'}));
 app.on('second-instance', () => reveal(mainWindow));
@@ -233,10 +247,18 @@ function registerIPC() {
   };
   handle('flush-local-preferences',()=>mainWindow.webContents.session.flushStorageData());
 
-  direct=require('./direct/ipc.cjs').directIPC({handle,window:()=>mainWindow,journal:()=>partialJournal,emit:e=>{if(e.type==='game-invited')trayController?.ring('game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
+  direct=require('./direct/ipc.cjs').directIPC({handle,window:()=>mainWindow,journal:()=>partialJournal,
+    downloads:()=>storageLocationController.downloads(),downloadRoots:()=>storageLocationController.downloadRoots(),
+    emit:e=>{if(e.type==='game-invited')trayController?.ring('game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
   updates=require('./release-update.cjs').registerUpdates({handle,app,dialog,window:()=>mainWindow,completed:token=>shelf?.store.completed.get(token),
     allowed:()=>direct?.allowsPublicLookup()===true,sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive()),
     changed:state=>sendEvent({type:'release-updated',state}),openExternal:url=>shell.openExternal(url)});
+  if(storageLocationController){
+    const storageControls=require('./storage-controls.cjs').createStorageControls({location:storageLocationController,session:()=>mainWindow.webContents.session,updates,
+      restart:async()=>{mainWindow.webContents.session.flushStorageData();app.relaunch();app.quit();},
+      sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive())});
+    handle('storage',raw=>storageControls.command(raw));
+  }
   const publicLookups=()=>direct?.allowsPublicLookup()===true;
   const player=require('./youtube-player.cjs').createYouTubePlayer({BrowserWindow,session,parent:()=>mainWindow,allowed:publicLookups,appId:windowsAppId});
   chatLinks=require('./chat-links.cjs').registerChatLinks({handle,allowed:publicLookups,player,openExternal:url=>shell.openExternal(url)});
@@ -259,7 +281,7 @@ function registerIPC() {
     if(op==='open'){
       await clearShelf();if(currentRoom!==room)throw Error(tr('Комната закрыта.'));
       const {ShelfStorage,safe}=require('./files/storage.cjs');
-      shelf={id:randomUUID(),room,camera:new CameraConsent(),name:safe(raw.label||'LINK'),store:new ShelfStorage(app.getPath('downloads'),partialJournal)};
+      shelf={id:randomUUID(),room,camera:new CameraConsent(),name:safe(raw.label||'LINK'),store:new ShelfStorage(storageLocationController?.downloads()||app.getPath('downloads'),partialJournal)};
       return shelf.id;
     }
     const x=shelf;if(!x||x.room!==room||x.id!==raw.scope)throw Error(tr('Комната закрыта.'));
@@ -276,7 +298,7 @@ function registerIPC() {
     if(op==='read-range')return store.readBytes(raw.id,raw.pos,raw.length);
     if(op==='put-range')return store.putBytes(raw.id,raw.pos,raw.bytes);
     if(op==='read')return store.read(raw.id,raw.pos);
-    if(op==='begin')return store.begin(raw.meta,x.name);
+    if(op==='begin'){store.downloads=storageLocationController?.downloads()||app.getPath('downloads');return store.begin(raw.meta,x.name);}
     if(op==='put')return store.put(raw.id,raw.pos,raw.data);
     if(op==='cancel')return store.cancel(raw.id);
     if(op==='remove')return store.remove(raw.id);
@@ -412,6 +434,14 @@ function registerIPC() {
     });
     return { ok: true };
   });
+  handle('live-camera', async raw=>{
+    const options=objectArgument(raw);
+    if(Object.keys(options).some(key=>!['action','requestId'].includes(key)) || !['ask','cancel'].includes(options.action) ||
+      typeof options.requestId!=='string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(options.requestId))throw Error(tr('Некорректный запрос камеры.'));
+    if(options.action==='cancel'){liveCamera.cancel(options.requestId);return false;}
+    const room=roomRequired(),generation=roomGeneration;
+    return liveCamera.authorize(options.requestId,{window:()=>mainWindow,dialog,current:()=>currentRoom===room && roomGeneration===generation});
+  });
   handle('sources', async type => {
     const room = roomRequired();
     if (type !== 'screen' && type !== 'window') throw new Error(tr('Выберите экран или окно.'));
@@ -469,7 +499,7 @@ function registerIPC() {
 }
 
 function configurePermissions(appSession) {
-  const permittedCamera=()=>[shelf?.camera,direct?.camera,direct?.lanCamera].find(camera=>camera?.allowed());
+  const permittedCamera=()=>[liveCamera,shelf?.camera,direct?.camera,direct?.lanCamera].find(camera=>camera?.allowed());
   const otherAllowedPermissions = new Set([
     'speaker-selection', 'fullscreen', 'screen-wake-lock',
     'local-network', 'local-network-access', 'loopback-network',
@@ -492,7 +522,7 @@ function configurePermissions(appSession) {
       const types = details.mediaTypes ?? [];
       const video=types.includes('video');
       const camera=permittedCamera();
-      const allowed=types.length>0 && types.every(type=>type==='audio'||(type==='video' && camera?.allowed()===true));
+      const allowed=types.length>0 && types.every(type=>type==='audio'?(!video||camera?.audioAllowed!==false):(type==='video' && camera?.allowed()===true));
       if(video && allowed)camera?.consume();callback(allowed);
       return;
     }
@@ -568,7 +598,7 @@ async function createWindow() {
       session: appSession,
     },
   });
-  const stopNote=()=>{shelf?.camera.reset();direct?.camera?.reset();direct?.lanCamera.reset();sendEvent({type:'window-hidden'});};
+  const stopNote=()=>{liveCamera.reset();shelf?.camera.reset();direct?.camera?.reset();direct?.lanCamera.reset();sendEvent({type:'window-hidden'});};
   mainWindow.on('hide',stopNote);
   mainWindow.on('focus',()=>sendEvent({type:'window-focused'}));
   mainWindow.on('minimize',stopNote);
@@ -611,7 +641,7 @@ app.whenReady().then(async () => {
   if(process.platform==='win32'){
     const {PartialJournal}=require('./files/partial-journal.cjs');
     partialJournal=new PartialJournal(app.getPath('userData'));
-    await partialJournal.recover(app.getPath('downloads')).catch(()=>{});
+    for(const downloads of storageLocationController.downloadRoots())await partialJournal.recover(downloads).catch(()=>{});
   }
   Menu.setApplicationMenu(null);
   accountProfile = new AccountProfile(app.getPath('userData'), safeStorage);

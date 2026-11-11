@@ -71,6 +71,10 @@ test('three admitted LAN clients transfer consented files and clips through the 
   await assert.rejects(command(host,'download',id));
   const last=bob.game.active.messages.at(-1).id;
   bob.game.clearChat(room,last);assert.equal(bob.game.state().room.hasDownloads,true);
+  const previousDownloads=bob.game.files.io.downloads();
+  const selectedDownloads=path.join(base,'new download location');await fs.mkdir(selectedDownloads);
+  bob.game.files.io.downloads=()=>selectedDownloads;
+  bob.game.files.io.downloadRoots=()=>[selectedDownloads,previousDownloads];
   assert.equal((await bob.game.files.clearDownloads(room,null)).removed,1);
   await assert.rejects(fs.stat(bob.revealed),{code:'ENOENT'});
   assert.deepEqual(await fs.readFile(filename),bytes,'selected original retained');
@@ -80,7 +84,9 @@ test('three admitted LAN clients transfer consented files and clips through the 
   const photo=host.game.active.messages.at(-1).id;
   await until(()=>bob.game.files.items.has(photo));await command(bob,'download',photo);
   assert.deepEqual(Buffer.from((await command(bob,'preview',photo)).bytes),png);
-  await command(bob,'reveal',photo);await fs.writeFile(bob.revealed,'my edited file');
+  await command(bob,'reveal',photo);
+  assert.equal(path.relative(await fs.realpath(selectedDownloads),bob.revealed).startsWith('..'),false,'new downloads use the selected location in the current LAN');
+  await fs.writeFile(bob.revealed,'my edited file');
   const result=await bob.game.files.clearDownloads(room,photo);assert.equal(result.kept,1);
   assert.equal(await fs.readFile(bob.revealed,'utf8'),'my edited file');
   for(const kind of ['voice','circle']){
@@ -120,7 +126,7 @@ test('three admitted LAN clients transfer consented files and clips through the 
   assert.equal(bob.game.files.room,null);
   assert.equal(host.game.files.shelf.incoming.size,0);
   await until(()=>bob.game.files.work.size===0);
-  assert.equal((await fs.readdir(path.join(base,'Bob','CRAFTCODE LINK','LAN-'+room))).some(n=>n.endsWith('.part')),false);
+  assert.equal((await fs.readdir(path.join(selectedDownloads,'CRAFTCODE LINK','LAN-'+room))).some(n=>n.endsWith('.part')),false);
   await until(()=>!host.game.active.roster.some(p=>p.device===bob.me.device));
   await invite(bob);
   const peer=host.linksTo(bob.me.id)[0];

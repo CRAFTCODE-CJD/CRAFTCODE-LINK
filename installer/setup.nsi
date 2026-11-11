@@ -189,9 +189,9 @@ FunctionEnd
  ${NSD_CreateCheckbox} 0 32u 100% 16u "Удалить также мой локальный профиль"
  Pop $PurgeCheck
  ${NSD_SetState} $PurgeCheck $PurgeProfile
- ${NSD_CreateLabel} 12u 55u 95% 48u "С отметкой будут удалены ключи профиля, локальные контакты, сохранённый вход Jabber, настройки, кэш и отчёты. Без отметки эти данные сохранятся."
+ ${NSD_CreateLabel} 12u 55u 95% 48u "С отметкой будут удалены профили, ключи, контакты, личная история и данные групп на этом ПК, включая выбранное хранилище на другом диске. Кэш, временные файлы и отчёты очищаются при любом выборе."
  Pop $0
- ${NSD_CreateLabel} 0 102u 100% 44u "Чтобы вернуть локальные контакты после очистки, заранее сохраните файл переноса профиля. Аккаунт Jabber и его контакты останутся у провайдера."
+ ${NSD_CreateLabel} 0 108u 100% 44u "Сохранённые вложения в папке загрузок остаются у вас. Перед удалением профиля можно сохранить файл переноса. Аккаунт Jabber остаётся у провайдера."
  Pop $0
 !macroend
 Function MaintenanceDetailsShow
@@ -321,7 +321,7 @@ Function DirectoryLeave
   MessageBox MB_OK|MB_ICONEXCLAMATION "На выбранном диске недостаточно свободного места. Выберите другой диск или освободите место."
   Abort
  ${ElseIf} $0 != 0
-  MessageBox MB_OK|MB_ICONEXCLAMATION "Выберите новую или пустую папку на локальном диске. Проверьте путь и права доступа. Системные папки и ссылки на другие каталоги использовать нельзя."
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Выберите новую или пустую папку на локальном диске. Папка с сохранёнными данными LINK также подходит, если программа может подтвердить их принадлежность. Проверьте путь и права доступа. Системные папки и ссылки на другие каталоги использовать нельзя."
   Abort
  ${EndIf}
 FunctionEnd
@@ -487,20 +487,22 @@ FunctionEnd
  removalRetry:
  !insertmacro CheckClosed
  SetOutPath "$PLUGINSDIR"
+ StrCpy $9 "cache"
+ ${If} $PurgeProfile == ${BST_CHECKED}
+  StrCpy $9 "purge"
+ ${EndIf}
+ DetailPrint "Очистка локальных данных CRAFTCODE LINK…"
+ nsExec::ExecToStack '"$PLUGINSDIR\care.exe" $9 "$APPDATA"'
+ Pop $0
+ Pop $1
+ StrCmp $0 0 +2
+ Goto dataRemovalFailed
  DetailPrint "Удаление файлов CRAFTCODE LINK…"
  nsExec::ExecToStack '"$PLUGINSDIR\care.exe" remove "$INSTDIR"'
  Pop $0
  Pop $1
  StrCmp $0 0 +2
  Goto removalFailed
- ${If} $PurgeProfile == ${BST_CHECKED}
-  DetailPrint "Удаление локального профиля…"
-  nsExec::ExecToStack '"$PLUGINSDIR\care.exe" purge "$APPDATA"'
-  Pop $0
-  Pop $1
-  StrCmp $0 0 +2
-  Goto removalFailed
- ${EndIf}
  !insertmacro RemoveLink "$SMPROGRAMS\CRAFTCODE LINK.lnk" "StartLinkSHA256"
  !insertmacro RemoveLink "$DESKTOP\CRAFTCODE LINK.lnk" "DesktopLinkSHA256"
  ClearErrors
@@ -511,6 +513,10 @@ FunctionEnd
  RMDir "$INSTDIR"
  DeleteRegKey HKCU "${REGKEY}"
  Goto removalDone
+ dataRemovalFailed:
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Не удалось завершить очистку данных. Проверьте доступность диска с хранилищем и закройте приложения, использующие его файлы. Нажмите «Повторить», чтобы продолжить." /SD IDCANCEL IDRETRY removalRetry
+  SetErrorLevel 1
+  Abort
  removalFailed:
   MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Удаление не завершено. Проверьте доступ к файлам программы и нажмите «Повторить»." /SD IDCANCEL IDRETRY removalRetry
   SetErrorLevel 1

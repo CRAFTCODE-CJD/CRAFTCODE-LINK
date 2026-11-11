@@ -1,3 +1,3 @@
 module craftcode.link/installer/care
 
-go 1.22
+go 1.25

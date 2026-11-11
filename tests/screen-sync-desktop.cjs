@@ -100,7 +100,8 @@ async function open(label){
    let last=baseline;
    while(Date.now()-start<stageSeconds*1000){
      const m=await g.evaluate(()=>qaWindow());
-     assert(m.n>=4 && m.frames>last.frames && m.videoBytes>last.videoBytes && m.soundBytes>last.soundBytes && m.voiceBytes>last.voiceBytes);
+     assert(m.n>=4 && m.frames>last.frames && m.videoBytes>last.videoBytes && m.soundBytes>last.soundBytes && m.voiceBytes>last.voiceBytes,
+       'Media stopped advancing: '+JSON.stringify({previous:last,current:m}));
      markerSkews.push(m.skew);last=m;
    }
    const stages=await stagesBetween(start,Date.now()-500);

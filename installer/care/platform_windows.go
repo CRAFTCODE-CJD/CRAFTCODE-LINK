@@ -13,6 +13,21 @@ import (
 
 var kernel = syscall.NewLazyDLL("kernel32.dll")
 
+// Do not share DELETE (unlike Go's default OpenFile): the startup/cleanup
+// handshake must remain present until this operation explicitly releases it.
+func createMaintenanceFile(base string) (*os.File, error) {
+	name := filepath.Join(base, maintenanceFile)
+	pointer, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := syscall.CreateFile(pointer, syscall.GENERIC_READ|syscall.GENERIC_WRITE, syscall.FILE_SHARE_READ, nil, syscall.CREATE_NEW, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "create maintenance guard", Path: name, Err: err}
+	}
+	return os.NewFile(uintptr(handle), name), nil
+}
+
 func linklike(f os.FileInfo) bool {
 	return f.Sys().(*syscall.Win32FileAttributeData).FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
@@ -116,4 +131,39 @@ func checkRunning() error {
 		return nil
 	}
 	return err
+}
+
+func checkProfileProcess(pid uint32, started uint64) error {
+	handle, err := syscall.OpenProcess(0x1000, false, pid)
+	if errors.Is(err, syscall.Errno(87)) {
+		return nil
+	} // Process already exited.
+	if err != nil {
+		return err
+	}
+	defer syscall.CloseHandle(handle)
+	var creation, exit, kernelTime, userTime syscall.Filetime
+	if err = syscall.GetProcessTimes(handle, &creation, &exit, &kernelTime, &userTime); err != nil {
+		return err
+	}
+	if uint64(creation.HighDateTime)<<32|uint64(creation.LowDateTime) != started {
+		return nil
+	}
+	if exit.HighDateTime != 0 || exit.LowDateTime != 0 {
+		return nil
+	}
+	return busy
+}
+
+func currentProcessStart() (uint64, error) {
+	handle, err := syscall.OpenProcess(0x1000, false, uint32(os.Getpid()))
+	if err != nil {
+		return 0, err
+	}
+	defer syscall.CloseHandle(handle)
+	var creation, exit, kernelTime, userTime syscall.Filetime
+	if err = syscall.GetProcessTimes(handle, &creation, &exit, &kernelTime, &userTime); err != nil {
+		return 0, err
+	}
+	return uint64(creation.HighDateTime)<<32 | uint64(creation.LowDateTime), nil
 }

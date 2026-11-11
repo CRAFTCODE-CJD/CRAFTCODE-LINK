@@ -18,6 +18,7 @@ const api = {
   installRelease: options=>invoke('install-release',options),
   chatLink: options=>invoke('chat-link',options),
   releases: options=>invoke('releases',options),
+  storage: options=>invoke('storage',options),
   files: options=>invoke('files',options),
   direct: options => invoke('direct',options),
   internet: options => invoke('internet', options),
@@ -38,6 +39,7 @@ const api = {
   streamAudio: (op,token) => invoke('stream-audio',{op,token}),
   sources: type => invoke('sources', type),
   selectSource: (options) => invoke('select-source', options),
+  liveCamera: options => invoke('live-camera',options),
   copyText: (text) => invoke('copy-text', text),
   onEvent: (callback) => {
     if (typeof callback !== 'function') throw new TypeError('Event callback must be a function.');

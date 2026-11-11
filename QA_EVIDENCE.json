@@ -552,6 +552,121 @@
       "underruns": 17,
       "discardedMs": 17,
       "scope": "Five minute simulated 10ms source through actual LINK sender and receiver; physical output not measured"
+    },
+    "afterCamera": {
+      "version": "0.7.14",
+      "viewerVersion": "0.7.14",
+      "utc": "2026-11-11T04:54:51.244Z",
+      "elapsedMs": 120650,
+      "limits": {
+        "p95Ms": null,
+        "medianMs": null
+      },
+      "nativeRead": {
+        "n": 7759,
+        "firstReadMs": 20,
+        "medianMs": 30,
+        "p95Ms": 31,
+        "readFrames": 5826720,
+        "skippedFrames": 10080
+      },
+      "stages": {
+        "pictureInput": {
+          "n": 97,
+          "p05": 1,
+          "median": 15,
+          "p95": 30,
+          "p95Abs": 30
+        },
+        "audioWorklet": {
+          "n": 97,
+          "p05": 45,
+          "median": 50,
+          "p95": 59,
+          "p95Abs": 59
+        },
+        "audioSender": {
+          "n": 97,
+          "p05": 45,
+          "median": 50,
+          "p95": 59,
+          "p95Abs": 59
+        },
+        "audioOutput": {
+          "n": 97,
+          "p05": 128,
+          "median": 160,
+          "p95": 205,
+          "p95Abs": 205
+        },
+        "audioReceiver": {
+          "n": 97,
+          "p05": 121,
+          "median": 155,
+          "p95": 205,
+          "p95Abs": 205
+        },
+        "pictureReceiver": {
+          "n": 97,
+          "p05": 56,
+          "median": 150,
+          "p95": 181,
+          "p95Abs": 181
+        },
+        "audioWorkletToSender": {
+          "n": 97,
+          "p05": 0,
+          "median": 0,
+          "p95": 0,
+          "p95Abs": 0
+        },
+        "audioSenderToReceiver": {
+          "n": 97,
+          "p05": 69,
+          "median": 102,
+          "p95": 157,
+          "p95Abs": 157
+        },
+        "audioReceiverToOutput": {
+          "n": 97,
+          "p05": 0,
+          "median": 8,
+          "p95": 17,
+          "p95Abs": 17
+        },
+        "pictureInputToReceiver": {
+          "n": 97,
+          "p05": 37,
+          "median": 138,
+          "p95": 163,
+          "p95Abs": 163
+        },
+        "sourcePictureMinusAudio": {
+          "n": 97,
+          "p05": -53,
+          "median": -37,
+          "p95": -21,
+          "p95Abs": 53
+        },
+        "receivedPictureMinusAudio": {
+          "n": 97,
+          "p05": -79,
+          "median": -9,
+          "p95": 32,
+          "p95Abs": 79
+        },
+        "outputPictureMinusAudio": {
+          "n": 97,
+          "p05": -88,
+          "median": -23,
+          "p95": 25,
+          "p95Abs": 88
+        }
+      },
+      "frames": 3582,
+      "videoBytes": 970705,
+      "soundBytes": 2875191,
+      "voiceBytes": 963745
     }
   },
   "physicalAvSync": "NOT TESTED",
@@ -708,14 +823,14 @@
       "gameToHost": 6852,
       "gameFromHost": 4023,
       "scope": "Two actual MTDS clients on private Windows desktops and loopback packet fixtures",
-      "logs": "E:/CRAFTCODE-QA/DM-Security-0714/discovery-match-recheck.log"
+      "logs": "discovery-match-recheck.log"
     }
   },
   "unit": {
-    "passed": 237,
+    "passed": 308,
     "failed": 0,
     "skipped": 0,
-    "log": "0714-native-download-paths-full.log"
+    "log": "0714-desktop-final-tests.log"
   },
   "previousRelease": {
     "version": "0.7.13",
@@ -1846,10 +1961,11 @@
     "windowsShortPaths": {
       "status": "PASS",
       "reproducedBeforeFix": true,
-      "regressions": 2,
-      "syntaxFiles": 249,
-      "tests": 237,
-      "log": "0714-native-download-paths-full.log"
+      "regressions": 5,
+      "shortTempFullTests": 239,
+      "shortTempLog": "0714-short-temp-full.log",
+      "githubRun": "https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/actions/runs/42954475109",
+      "githubResult": "success"
     }
   },
   "help": {
@@ -1864,8 +1980,8 @@
       1440
     ],
     "tutorialSeconds": {
-      "chat": 14,
-      "call": 15.25,
+      "chat": 13.75,
+      "call": 15,
       "lan": 13.75
     },
     "videoSize": [
@@ -1874,13 +1990,79 @@
     ],
     "decodedFrames": true,
     "adapterEnabled": false,
-    "evidence": "E:/CRAFTCODE-QA/Help-0714-final",
-    "independentProfileStateReview": "PASS"
+    "evidence": "0714-help-camera.log",
+    "independentProfileStateReview": "PASS",
+    "assetBytes": 447561,
+    "privacyReview": "PASS: 170 decoded demonstration frames, no audio streams"
   },
   "multiDevice": {
     "profileTransfer": "PASS",
     "log": "0714-profile-devices.json",
     "ownDeviceHistorySync": "NOT IMPLEMENTED",
     "android": "NOT IMPLEMENTED"
+  },
+  "storage": {
+    "status": "PASS_TESTED_SCENARIOS",
+    "unitTests": 290,
+    "fullUnitLog": "0714-storage-full-final.log",
+    "freshPackagedWindows": "PASS",
+    "freshPackagedLog": "0714-storage-packaged-smoke.log",
+    "freshDefault": "CRAFTCODE LINK Data beside executable",
+    "bootstrapAnchor": "Small locator and process guards in AppData",
+    "desktop": "0714-storage-desktop.json",
+    "download": "0714-storage-download-desktop.json",
+    "security": "0714-storage-security-review.json",
+    "privacy": "0714-storage-privacy.json",
+    "native": {
+      "passedTopLevel": 39,
+      "passedSubtests": 55,
+      "legacySymlinkPrivilegeSkips": 1,
+      "realJunctionTests": "PASS"
+    },
+    "failureModels": [
+      "low disk space",
+      "ENOSPC during copy",
+      "destination parent unavailable",
+      "interrupted promotion and locator commit"
+    ],
+    "limitations": [
+      "copy before main window without progress bar",
+      "physical disk unplug and full physical disk not tested",
+      "full NSIS concurrent launch wizard not tested",
+      "live game adapter removal not tested"
+    ]
+  },
+  "camera": {
+    "status": "PASS_TESTED_SCENARIOS",
+    "desktopChecks": 19,
+    "clients": 3,
+    "evidence": "0714-live-camera.json",
+    "securityReview": "0714-camera-security.json",
+    "sourceRegressionTests": 10,
+    "decodedVideoAndVoice": true,
+    "cameraVoiceStreamAssociation": "PASS",
+    "screenSystemStreamAssociation": "PASS",
+    "locales": [
+      "ru",
+      "en"
+    ],
+    "widths": [
+      800,
+      1440
+    ],
+    "limitations": [
+      "Chromium test devices",
+      "one camera or screen source per participant",
+      "physical webcam and two-PC lip sync not tested"
+    ]
+  },
+  "desktopSourcePrivacy": {
+    "status": "PASS_CURRENT_SOURCE_AND_TUTORIAL_REVIEW",
+    "files": 419,
+    "ffmpegArchiveMembers": 11114,
+    "confirmedLeaks": 0,
+    "report": "0714-desktop-final-source-privacy.json",
+    "sourcePreflightTests": 5,
+    "syntaxFiles": 267
   }
 }

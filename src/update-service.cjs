@@ -26,7 +26,7 @@ class UpdateService {
   save(value){writeProfileFile(this.file,JSON.stringify(value));this.preferences=value;}
   schedule(){
     clearTimeout(this.timer);
-    if(this.closed || !this.scheduled || !this.supported || !this.allowed() || !this.preferences.automatic || this.operation || this.staged)return;
+    if(this.closed || this.clearing || !this.scheduled || !this.supported || !this.allowed() || !this.preferences.automatic || this.operation || this.staged)return;
     const delay=Math.max(20000,this.preferences.checked+DAY-this.now());
     this.timer=setTimeout(()=>this.check(true).catch(()=>{}),delay);this.timer.unref();
   }
@@ -43,7 +43,7 @@ class UpdateService {
   start(phase){
     if(!this.supported)throw Error(tr(platformMessage));
     if(!this.allowed())throw Error(tr(strictMessage));
-    if(this.operation || this.installing)throw Error(tr(busyMessage));
+    if(this.operation || this.installing || this.clearing)throw Error(tr(busyMessage));
     clearTimeout(this.timer);
     const controller=this.operation=new AbortController();this.phase=phase;this.error='';this.notify();
     return controller;
@@ -95,7 +95,7 @@ class UpdateService {
       case 'download':return this.fetchInstaller();
       case 'install':{
         if(!this.staged || this.phase!=='ready')throw Error(tr('Сначала скачайте проверенный установщик.'));
-        if(this.installing)throw Error(tr(busyMessage));
+        if(this.installing || this.clearing)throw Error(tr(busyMessage));
         this.installing=true;
         try{await this.install(this.staged,this.release);}
         catch(e){
@@ -113,6 +113,14 @@ class UpdateService {
       }
       default:throw Error(tr('Неизвестная команда.'));
     }
+  }
+  async clearCache(cleanup){
+    if(this.closed || this.operation || this.installing || this.clearing)throw Error(tr(busyMessage));
+    this.clearing=true;clearTimeout(this.timer);
+    try{
+      await cleanup(this.cache);
+      this.staged=null;this.phase=this.release||this.preferences.offer?'available':'idle';this.error='';
+    }finally{this.clearing=false;this.schedule();if(!this.closed)this.notify();}
   }
   close(){this.closed=true;clearTimeout(this.timer);this.operation?.abort();}
 }

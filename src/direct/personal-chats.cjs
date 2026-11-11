@@ -110,7 +110,11 @@ class PersonalChats {
           const receipt=this.storage.downloadReceipt(id);
           if(!receipt)continue;
           const allow=()=>this.owner===owner && !this.storage.referencesPath(receipt.filename);
-          const state=allow()?await removeSavedDownload(this.files.io.downloads(),receipt,allow):'inUse';
+          let state='inUse';
+          if(allow()){
+            const roots=this.files.io.downloadRoots?.()??[this.files.io.downloads()];
+            state=await removeSavedDownload(roots,receipt,allow);
+          }
           if(this.owner!==owner)throw unavailable();
           if(state!=='inUse')this.storage.forgetDownload(id);
           if(state==='removed')summary.removed++;

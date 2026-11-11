@@ -8,7 +8,7 @@ const {DirectService}=require('./service.cjs');
 const {ProfileStore}=require('./identity.cjs');
 const {chatCommand}=require('./personal-chats.cjs');
 const {CameraConsent,promptCamera}=require('../files/camera-consent.cjs');
-function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ring,clearChatNotice,journal}){
+function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ring,clearChatNotice,journal,downloads=()=>app.getPath('downloads'),downloadRoots=()=>[downloads()]}){
   const lanCamera=new CameraConsent();
   let service,locked=false,directRoom=false,strict=true,dnd=false,paused=false,switching=false;
   let staged,voiceSwitch;
@@ -30,7 +30,7 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
   const get=()=>{
     if(service)return service;
     service=new DirectService({store:new ProfileStore(app.getPath('userData'),safeStorage),
-      attachmentIO:{downloads:()=>app.getPath('downloads'),journal,
+      attachmentIO:{downloads,downloadRoots,journal,
         async choose(){
           const picked=await dialog.showOpenDialog(window(),{title:tr('Поделиться файлом'),properties:['openFile']});
           return !picked.canceled && picked.filePaths[0];

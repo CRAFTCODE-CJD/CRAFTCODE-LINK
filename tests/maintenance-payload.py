@@ -1,6 +1,6 @@
 """Exercise the maintenance filesystem engine in a temporary directory with two release installers.
 Usage: python tests/maintenance-payload.py PREVIOUS-Setup.exe CURRENT-Setup.exe [CURRENT-Portable.zip]
-Requires Go 1.22+, 7z and enough disk for both unpacked releases. Does not change the registry.
+Requires Go 1.25+, 7z and enough disk for both unpacked releases. Does not change the registry.
 """
 import hashlib
 import json

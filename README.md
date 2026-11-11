@@ -10,6 +10,12 @@ On first use, Home offers a theme and a shortcut to edit the local profile. Owne
 
 The optional **Show first steps** card introduces friends, messages and calls. Choose Later to dismiss it for this profile. Open **? → Help** at any time to search the guide or watch three short examples with subtitles. The videos are included in the application and play on request.
 
+In **Settings → Storage**, choose a drive or folder for your profile and chat history, or change the folder for new downloads. Profile data moves after an explicit restart; existing downloads stay where they are. The move may take some time and LINK opens when it finishes. You can inspect used/free space and clear cache without removing your history or attachments. Uninstalling clears temporary cache in both modes; deleting the profile requires the checkbox, and user-saved downloads remain.
+
+Fresh Windows installations store data in a dedicated **CRAFTCODE LINK Data** folder beside the application, with only small location and process-control records in the Windows profile. Updating an existing installation keeps its previous data location. If you use the portable ZIP, extract it to a writable folder before launching LINK.
+
+After uninstalling while keeping the profile, you can reinstall into the same folder. The installer accepts its verified preserved data folder and installs program files beside it without moving the profile. Other occupied folders remain protected.
+
 Drag a file into a private chat, media room chat, Game LAN chat or group text channel. Paste a screenshot with Ctrl+V. Review the image and caption, then choose Send. For multiple files, the caption goes on the first one. Group members offer files to the owner for publication. The Game LAN chat and its attachments work while the game adapter is off.
 
 Open a private conversation's menu and choose **Conversation security** to compare its identity code with your friend through an independent channel. The dialog shows the current encrypted transport and the devices known at your last comparison. Details of the different chat transports and local storage are described in [SECURITY.md](SECURITY.md).
@@ -43,6 +49,8 @@ Use the speaker button on a participant's tile to mute their voice on your PC. R
 After an unexpected guest shutdown, open the same profile on the same device and choose **Return to room**. The host must still have that room open and allow the return. The host can revoke return access under room management.
 
 Microphone memory is on by default. In your first call, turn on the microphone when you want to speak. LINK remembers both manual unmute and mute for subsequent calls. Your voice and stream volume for each confirmed friend are saved separately. You can turn microphone memory off in voice settings.
+
+For a video call, choose **Camera**, select a device and open the preview. Choose **Turn video on** when ready. The microphone has its own control. In a two-person call, your friend fills the main stage and your video appears in a small movable window. Drag it within the stage or move it with the arrow keys. Click it to swap the videos. Its position is saved on this device. Each participant chooses either a camera or screen sharing.
 
 Open another friend's private conversation during a call to message them while room audio continues. Decline an incoming personal call to stay, or confirm a switch to the caller's room. When a guest switches, the existing host stays with the other participants. A host who switches confirms that their current room will close.
 

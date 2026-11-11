@@ -101,7 +101,7 @@ export function stereoDescription(description) {
 }
 
 export class RoomMedia {
-  constructor({ session, sendSignal, files=null, rightsChanged=()=>{}, onTrack = () => {}, onState = () => {}, onError = () => {}, onStats = () => {}, onChat = () => {}, onControl = () => {}, refreshIce = null, signalingReady = () => true, peerFactory, screenOutputDelay = null }) {
+  constructor({ session, sendSignal, files=null, rightsChanged=()=>{}, videoSourceChanged=()=>{}, onTrack = () => {}, onState = () => {}, onError = () => {}, onStats = () => {}, onChat = () => {}, onControl = () => {}, refreshIce = null, signalingReady = () => true, peerFactory, screenOutputDelay = null }) {
     this.session = session;
     this.rightsKnown = this.isHost || !!session.groupVoice;
     this.files=files;this.rightsChanged=rightsChanged;this.moderated=false;this.speakers=new Set();this.allowedVoice=true;
@@ -114,7 +114,10 @@ export class RoomMedia {
     this.onChat = onChat;
     this.onControl = onControl;
     this.watchBuffer = new WatchBuffer(screenOutputDelay);
+    this.videoSources = new Map();
+    this.videoSourceChanged = videoSourceChanged;
     this.screenGroups = new Map();
+    this.voiceGroups = new Map();
     this.viewHeight = 0;
     this.inputHeights = new Map();
     this.onState = onState;
@@ -139,6 +142,99 @@ export class RoomMedia {
   get isHost() { return this.session.role === 'host'; }
   getTrack(slot, role) { return this.tracks.get(`${slot}:${role}`) || null; }
 
+  videoSource(slot) {
+    const peer = this.peers.find(p => p.slot === slot);
+    return this.videoSources.get(peer?.id) || 'screen';
+  }
+
+  updateVideoSource(peer, source, refresh = false) {
+    if (!refresh && (this.videoSources.get(peer.id) || 'screen') === source) return false;
+    if (source === 'camera') this.videoSources.set(peer.id, source);
+    else this.videoSources.delete(peer.id);
+    for (const ep of this.endpoints.values()) {
+      const transceiver = ep.pc.getTransceivers()[trackIndex(peer.slot, 'screen')];
+      if (transceiver && (this.isHost ? ep.remoteSlot !== peer.slot : peer.id === this.session.selfId)) {
+        transceiver.sender.setStreams(...this.senderStreams(peer.slot, 'screen'));
+      }
+      if (this.isHost) this.scheduleVideoNegotiation(ep);
+    }
+    this.watchBuffer.update(this);
+    this.videoSourceChanged();
+    return true;
+  }
+
+  setVideoSource(source) {
+    const peer = this.peers.find(p => p.id === this.session.selfId);
+    if (this.closed || !peer || !['camera', 'screen'].includes(source)) return;
+    if (source === 'camera' && !this.allowed(peer.slot, 'screen')) return;
+    this.updateVideoSource(peer, source, true);
+    this.publishVideoSources(undefined, true);
+  }
+
+  publishVideoSources(target, renegotiate = false) {
+    const peers = this.isHost ? this.peers : this.peers.filter(p => p.id === this.session.selfId);
+    const targets = target ? [target] : [...this.endpoints.values()];
+    const sources = peers.map(peer => ({peerId: peer.id, slot: peer.slot, source: this.videoSource(peer.slot)}));
+    for (const ep of targets) {
+      if (renegotiate && !this.isHost) ep.videoSourceNegotiation = true;
+      const packet = this.isHost ? {kind: 'video-sources', sources} : sources.length && {
+        kind: 'video-source', ...sources[0], ...(ep.videoSourceNegotiation ? {renegotiate: true} : {}),
+      };
+      if (!packet) continue;
+      if (this.sendControl(ep.id, packet)) {
+        clearTimeout(ep.videoSourceRetry);
+        ep.videoSourceRetry = null;
+        ep.videoSourceNegotiation = false;
+      } else if (!this.closed && ep.channel?.readyState === 'open' && !ep.videoSourceRetry) {
+        ep.videoSourceRetry = setTimeout(() => {
+          ep.videoSourceRetry = null;
+          if (!this.closed && this.endpoints.get(ep.id) === ep) this.publishVideoSources(ep);
+        }, 250);
+      }
+    }
+  }
+
+  receiveVideoSources(ep, packet) {
+    if (this.isHost || ep.id !== this.session.hostId ||
+        Object.keys(packet).some(key => !['kind', 'sources'].includes(key)) ||
+        !Array.isArray(packet.sources) || packet.sources.length > MAX_PARTICIPANTS) return;
+    const ids = new Set();
+    for (const row of packet.sources) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) ||
+          Object.keys(row).some(key => !['peerId', 'slot', 'source'].includes(key)) ||
+          !Number.isInteger(row.slot) || !['camera', 'screen'].includes(row.source) || ids.has(row.peerId) ||
+          !this.peers.some(peer => peer.id === row.peerId && peer.slot === row.slot)) return;
+      ids.add(row.peerId);
+    }
+    for (const row of packet.sources) this.receiveVideoSource(ep, {kind: 'video-source', ...row});
+  }
+
+  receiveVideoSource(ep, packet) {
+    if (Object.keys(packet).some(key => !['kind', 'peerId', 'slot', 'source', 'renegotiate'].includes(key)) ||
+        !Number.isInteger(packet.slot) || !['camera', 'screen'].includes(packet.source) ||
+        (packet.renegotiate !== undefined && packet.renegotiate !== true)) return;
+    const peer = this.peers.find(p => p.id === packet.peerId && p.slot === packet.slot);
+    if (!peer || peer.id === this.session.selfId) return;
+    if (this.isHost) {
+      if (peer.id !== ep.id || peer.slot !== ep.remoteSlot ||
+          (packet.source === 'camera' && !this.allowed(peer.slot, 'screen'))) return;
+    } else if (ep.id !== this.session.hostId) return;
+    const changed = this.updateVideoSource(peer, packet.source);
+    if (this.isHost) {
+      if (changed) this.publishVideoSources();
+      else if (packet.renegotiate) this.scheduleVideoNegotiation(ep);
+    }
+  }
+
+  scheduleVideoNegotiation(ep) {
+    ep.videoNegotiationPending = true;
+    ep.queue = ep.queue.then(async () => {
+      if (this.closed || this.endpoints.get(ep.id) !== ep || ep.pc.signalingState !== 'stable' || !ep.videoNegotiationPending) return;
+      ep.videoNegotiationPending = false;
+      await this.offer(ep);
+    }).catch(error => { if (!this.closed) this.onError(error.message); });
+  }
+
   allowed(slot,role){
     if(!this.moderated||slot===0)return true;
     if(!this.isHost)return role==='voice'&&this.allowedVoice;
@@ -154,6 +250,10 @@ export class RoomMedia {
     if(!enabled)this.speakers.clear();
     if(id&&this.endpoints.has(id)){if(grant)this.speakers.add(id);else this.speakers.delete(id);}
     for(const ep of this.endpoints.values())this.sendRights(ep);
+    for (const peer of this.peers) {
+      if (!this.allowed(peer.slot, 'screen')) this.updateVideoSource(peer, 'screen');
+    }
+    this.publishVideoSources();
     for(const [key,track] of this.rawTracks){
       const [n,role]=key.split(':'),slot=Number(n),next=this.allowed(slot,role)&&track.readyState==='live'?track:null;
       if(this.getTrack(slot,role)===next)continue;
@@ -167,6 +267,25 @@ export class RoomMedia {
     return this.screenGroups.get(slot);
   }
 
+  senderStreams(slot, role) {
+    if (role === 'voice' || (role === 'screen' && this.videoSource(slot) === 'camera')) {
+      if (!this.voiceGroups.has(slot)) this.voiceGroups.set(slot, new MediaStream());
+      return [this.voiceGroups.get(slot)];
+    }
+    return [this.screenGroup(slot)];
+  }
+
+  restoreCameraStreams(ep) {
+    // Chromium can restore the original MSID during replaceTrack/setParameters.
+    // Reapply the current camera/voice grouping after native sender mutations.
+    const transceivers = ep.pc.getTransceivers();
+    for (const id of this.videoSources.keys()) {
+      const peer = this.peers.find(p => p.id === id);
+      if (!peer || (this.isHost ? peer.slot === ep.remoteSlot : id !== this.session.selfId)) continue;
+      transceivers[trackIndex(peer.slot, 'screen')]?.sender.setStreams(...this.senderStreams(peer.slot, 'screen'));
+    }
+  }
+
   watch(peerId, milliseconds) {
     this.watchBuffer.select(peerId, milliseconds);
     return this.watchBuffer.update(this);
@@ -177,6 +296,9 @@ export class RoomMedia {
       if (this.closed) return;
       const oldPeers = this.peers;
       this.peers = peers.slice();
+      for (const id of this.videoSources.keys()) {
+        if (!peers.some(peer => peer.id === id)) this.videoSources.delete(id);
+      }
       this.watchBuffer.prune(peers);
       this.watchBuffer.update(this);
       if (this.isHost) {
@@ -191,7 +313,7 @@ export class RoomMedia {
               for (const role of ROLES) {
                 const t = ep.pc.addTransceiver(role === 'screen' ? 'video' : 'audio', {
                   direction: slot === peer.slot ? 'recvonly' : 'sendonly',
-                  streams: slot !== peer.slot && role !== 'voice' ? [this.screenGroup(slot)] : [],
+                  streams: slot !== peer.slot ? this.senderStreams(slot, role) : [],
                 });
                 const track = this.getTrack(slot, role);
                 if (slot !== peer.slot && track?.readyState === 'live') await t.sender.replaceTrack(track);
@@ -203,6 +325,8 @@ export class RoomMedia {
       } else if (!this.endpoints.has(this.session.hostId)) {
         this.createEndpoint(this.session.hostId, 0);
       }
+      this.publishVideoSources();
+      if (!this.isHost) this.sendControl(this.session.hostId, {kind: 'video-source-sync'});
     }).catch(e => this.onError(`${tr("Не удалось подготовить соединение: ")}${e.message}`));
     return this.rosterQueue;
   }
@@ -277,7 +401,11 @@ export class RoomMedia {
     if (channel.label !== 'room-chat' || ep.channel) { channel.close(); return; }
     ep.channel = channel;
     channel.onclose=()=>this.chatChanged?.();
-    channel.onopen=()=>{this.sendRights(ep);this.chatChanged?.();ep.advertisedHeight=undefined;this.publishViewHeights();this.publishShareProfile();};
+    channel.onopen=()=>{
+      this.sendRights(ep);this.chatChanged?.();ep.advertisedHeight=undefined;this.publishViewHeights();this.publishShareProfile();
+      this.publishVideoSources(ep);
+      if (!this.isHost) this.sendControl(ep.id, {kind: 'video-source-sync'});
+    };
     channel.onmessage = ({data}) => {
       if (this.closed || this.endpoints.get(ep.id)!==ep || typeof data !== 'string' || data.length>25000) return;
       let message; try { message=JSON.parse(data); } catch { return; }
@@ -296,6 +424,12 @@ export class RoomMedia {
           ep.remotePressureUntil=message.control.rough?Date.now()+6500:0;
         }else if(kind==='route-pong'){
           if(nonce===ep.probeNonce){clearTimeout(ep.probeTimer);ep.probeTimer=null;}
+        }else if(kind==='video-source'){
+          this.receiveVideoSource(ep,message.control);
+        }else if(kind==='video-sources'){
+          this.receiveVideoSources(ep,message.control);
+        }else if(kind==='video-source-sync'){
+          if(this.isHost && Object.keys(message.control).length===1)this.publishVideoSources(ep);
         }else if(kind==='share-profile'){
           this.receiveShareProfile(ep,message.control);
         }else if(kind==='view-height'){
@@ -399,7 +533,9 @@ export class RoomMedia {
   }
 
   async offer(ep, restart = false) {
+    await ep.encodingQueue;
     if (this.closed || ep.pc.signalingState === 'closed') return;
+    this.restoreCameraStreams(ep);
     await ep.pc.setLocalDescription(stereoDescription(await ep.pc.createOffer({ iceRestart: restart })));
     ep.round=(ep.round || 0)+1;
     this.emitSignal(ep.id, { type: 'offer', sdp: ep.pc.localDescription.sdp, round:ep.round });
@@ -524,10 +660,11 @@ export class RoomMedia {
           const mine = slot === this.selfSlot;
           t.direction = mine ? 'sendonly' : 'recvonly';
           if (mine) {
-            if (role !== 'voice') t.sender.setStreams(this.screenGroup(slot));
             await t.sender.replaceTrack(this.getTrack(slot, role));
+            t.sender.setStreams(...this.senderStreams(slot, role));
           }
         }
+        this.restoreCameraStreams(ep);
         await ep.pc.setLocalDescription(stereoDescription(await ep.pc.createAnswer()));
         ep.answeredAt=Date.now();
         ep.remoteRound=Number.isSafeInteger(data.round)?data.round:undefined;
@@ -539,6 +676,10 @@ export class RoomMedia {
         await ep.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
         await this.flushCandidates(ep);
         await this.applyEncoding(ep);
+        if (ep.videoNegotiationPending) {
+          ep.videoNegotiationPending = false;
+          await this.offer(ep);
+        }
       } else if (data.type === 'restart' && this.isHost) {
         if(data.routeChanged===true)this.routeChanged(ep);else this.maybeRestart(ep);
       }
@@ -569,7 +710,10 @@ export class RoomMedia {
     else {
       const ep = this.endpoints.get(this.session.hostId);
       const sender = ep?.pc.getTransceivers()[trackIndex(slot, role)]?.sender;
-      if (sender) await sender.replaceTrack(track);
+      if (sender) {
+        await sender.replaceTrack(track);
+        sender.setStreams(...this.senderStreams(slot, role));
+      }
       if (ep) await this.applyEncoding(ep);
     }
   }
@@ -579,7 +723,10 @@ export class RoomMedia {
     const outcomes = await Promise.allSettled([...this.endpoints.values()].map(async ep => {
       if (ep.remoteSlot === slot || ep.pc.signalingState === 'closed') return;
       const sender = ep.pc.getTransceivers()[trackIndex(slot, role)]?.sender;
-      if (sender) await sender.replaceTrack(track);
+      if (sender) {
+        await sender.replaceTrack(track);
+        sender.setStreams(...this.senderStreams(slot, role));
+      }
       await this.applyEncoding(ep);
     }));
     const failure = outcomes.find(o => o.status === 'rejected');
@@ -636,6 +783,7 @@ export class RoomMedia {
         if (!this.closed && sender.track && ep.pc.connectionState !== 'closed') this.onError(`${tr("Ограничение битрейта не применено: ")}${error.message}`);
       }
     }
+    this.restoreCameraStreams(ep);
   }
 
   restoreFileChannel(ep){
@@ -730,6 +878,7 @@ export class RoomMedia {
     if (ep) {
       clearTimeout(ep.probeTimer);clearTimeout(ep.disconnectedTimer);
       clearTimeout(ep.connectionTimer);
+      clearTimeout(ep.videoSourceRetry);
       this.files?.detach?.(id);ep.pc.ondatachannel=null;
       ep.pc.ontrack = null;
       ep.pc.onicecandidate = ep.pc.onicecandidateerror = null;
@@ -756,11 +905,14 @@ export class RoomMedia {
     for (const ep of this.endpoints.values()) {
       clearTimeout(ep.probeTimer);clearTimeout(ep.disconnectedTimer);
       clearTimeout(ep.connectionTimer);
+      clearTimeout(ep.videoSourceRetry);
       ep.pc.ontrack = ep.pc.onicecandidate = ep.pc.onicecandidateerror = ep.pc.onconnectionstatechange = ep.pc.oniceconnectionstatechange = null;
       ep.pc.close();
     }
     this.endpoints.clear();
     this.screenGroups.clear();
+    this.voiceGroups.clear();
+    this.videoSources.clear();
     this.rawTracks.clear();this.tracks.clear();this.files?.close();
     this.statHistory.clear();
   }

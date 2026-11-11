@@ -11,6 +11,7 @@ import {bindProfileAppearance,paintAvatar} from './profile-appearance.mjs';
 import {bindProfileWelcome} from './profile-welcome.mjs';
 import {bindHelpCenter} from './help-center.mjs';
 import {bindSettingsNavigation} from './settings-navigation.mjs';
+import {bindStorageControls} from './storage-controls.mjs';
 import {roomPortraits} from './room-portraits.mjs';
 import {participantMix} from './participant-mix.mjs';
 import {participantSoundMenu} from './participant-sound-menu.mjs';
@@ -23,6 +24,8 @@ import { AudioMixer, Microphone, volumeLimit } from './audio.mjs';
 import { directPanel } from './direct-panel.mjs';
 import { internetPanel } from './internet-panel.mjs';
 import { removeDisplayAudio, openProtectedAudio } from './capture.mjs';
+import {cameraCapture,cameraError} from './camera-capture.mjs';
+import {callPictureInPicture} from './camera-call-layout.mjs';
 import { roomReport, routeProblem } from './diagnostics.mjs';
 
 const $ = id => document.getElementById(id);
@@ -49,7 +52,7 @@ settings.streamGain = Math.min(200, Math.max(0, settings.streamGain));
 
 const state = {
   environment: null, session: null, media: null, peers: [], mode: 'host', starting: false,
-  ready: false, queuedEvents: [], micMuted: true, deafened: false, sharing: false, shareTitle: '',
+  ready: false, queuedEvents: [], micMuted: true, deafened: false, sharing: false, shareTitle: '', captureKind:'screen', videoPair:'',
   sourceListRequest:0, sourceChoice:null, captureAbort:null, protectedSound:null, withSound:false, audioLost:false, screenStream: null, pendingScreenStream: null, sourceType: 'screen', sources: [], selectedPeerId: null,
   connectionStates: new Map(), stats: new Map(), captureBusy: false, micBusy: false,
   roomEpoch: 0, captureEpoch: 0, errorTimes: new Map(),
@@ -69,6 +72,9 @@ const micProfile = () => direct?.active() ? 'link/' + direct.raw().me.id :
 const roomMic = new RoomMicrophoneChoice(localStorage, micProfile);
 let micRequest = null;
 let captureOwner = null;
+const cameraPreview=cameraCapture({api,current:()=>!!state.session && !!state.media?.allowed(state.media.selfSlot,'screen') &&
+  !state.controlLost && $('sourceDialog').open && state.sourceType==='camera',changed:renderCameraPreview});
+const callPip=callPictureInPicture({stage:$('streamStage'),swap:id=>{state.selectedPeerId=id;renderStage();}});
 
 function drawMicPreference() {
   const value = roomMic.read(), signedIn = !!micProfile();
@@ -256,8 +262,10 @@ async function prepareMedia(info){
     shelf.scope=scope;shelf.view=(id,v)=>composer.view(shelf,id,v);
     const media=state.media = new RoomMedia({
       screenOutputDelay:id=>mixer.screenOutputDelay(id),
+      videoSourceChanged:()=>{renderStage();renderParticipants();},
       files:shelf,rightsChanged:()=>{
         if(state.media!==media)return;
+        if(!media.allowed(media.selfSlot,'screen'))cameraPreview.stop();
         if(!media.isHost&&media.moderated){
           roomMic.pending=null;
           if((!media.allowedVoice || micRequest?.remembered) && (micRequest || mic.outputTrack)){
@@ -401,6 +409,8 @@ async function handleEvent(event) {
     await syncRemoteAudio();
     renderAll();
   } else if(event.type==='network-reconnecting'){
+    cameraPreview.stop();
+    if(state.captureKind==='camera'&&(state.sharing||state.captureBusy))await stopCapture();
     if(!state.controlLost){
       roomMic.reconnect(!state.micMuted);
       if(micCheck?.tap)stopMicCheck();
@@ -456,6 +466,7 @@ async function disconnectRoom(notify = true, nativeAlreadyClosed = false) {
   state.controlLost=false;
   state.roomEpoch++;
   state.captureEpoch++;
+  cameraPreview.stop();
   releaseCaptureSound();
   state.captureBusy = false;
   state.pendingScreenStream?.getTracks().forEach(track => track.stop());
@@ -662,7 +673,7 @@ function screenTrack(participant) {
 
 function renderPlayerVolume() {
   const participant=state.peers.find(p=>p.sharing && p.id===state.selectedPeerId);
-  $('playerVolumeBox').hidden=!participant;
+  $('playerVolumeBox').hidden=!participant || state.media?.videoSource(participant.slot)==='camera';
   $('broadcastStatus').hidden=!participant || !state.sharing || participant.id!==state.session?.selfId;
   if(!participant)return;
   const own=participant.id===state.session?.selfId;
@@ -678,6 +689,9 @@ function audibleShare(p) {
 }
 function renderStage() {
   const shares = state.peers.filter(p => p.sharing);
+  const pair=state.peers.length===2&&shares.length===2?shares.map(p=>p.id).sort().join('/') : '';
+  if(pair&&state.videoPair!==pair)state.selectedPeerId=shares.find(p=>p.id!==state.session?.selfId)?.id||null;
+  state.videoPair=pair;
   if (!shares.some(p => p.id === state.selectedPeerId)) state.selectedPeerId = shares.find(p => p.id !== state.session?.selfId)?.id || shares[0]?.id || null;
   const selected = shares.find(p => p.id === state.selectedPeerId);
   for (const p of state.peers) if (p.id !== state.session?.selfId && mixer.getSetting(p.id,'system').active !== audibleShare(p)) {
@@ -694,6 +708,8 @@ function renderStage() {
   $('watchBufferNote').textContent = hint;
   $('watchBufferNote').hidden = !(buffer?.forwarding && buffer.requested);
   const track = screenTrack(selected);
+  const secondary=state.peers.length===2 && shares.length===2?shares.find(p=>p.id!==selected?.id):null;
+  callPip.render(secondary,screenTrack(secondary),{own:secondary?.id===state.session?.selfId,mirror:secondary?.id===state.session?.selfId&&state.captureKind==='camera'});
   $('stageEmpty').hidden = Boolean(selected||state.session);
   const grid=$('voiceGrid'),filmstrip=$('roomFilmstrip'),stage=$('streamStage');
   const gridParent=selected?filmstrip:stage;
@@ -704,6 +720,7 @@ function renderStage() {
   $('lobbyTitle').textContent = state.session ? tr('Вы в комнате') : tr('Начать звонок');
   $('remoteVideo').hidden = !selected;
   const player=$('remoteVideo');
+  player.classList.toggle('camera-mirror',selected?.id===state.session?.selfId&&state.captureKind==='camera');
   attachVideo(player,track);
   if(frameTrack!==track || framePeer!==selected?.id){
     if(frameTicket)player.cancelVideoFrameCallback(frameTicket);
@@ -713,11 +730,13 @@ function renderStage() {
       portraits.preview(selected.id,player);
     });
   }
-  const screenName=selected ? selected.id===state.session?.selfId ? tr('Ваш экран') : tr('Экран · ')+selected.name : '';
+  const cameraSelected=selected&&state.media?.videoSource(selected.slot)==='camera';
+  const screenName=selected ? selected.id===state.session?.selfId ? tr(cameraSelected?'Ваша камера':'Ваш экран') : tr(cameraSelected?'Камера · ':'Экран · ')+selected.name : '';
   $('stageTitle').textContent=screenName;
   $('stageTitle').title=[screenName,selected?.shareTitle].filter(Boolean).join(' — ');
   $('stageBadge').hidden=!!state.session&&!selected;
-  $('stageBadge').textContent=tr('В эфире');
+  $('stageBadge').textContent=tr(cameraSelected?'Камера':'В эфире');
+  $('stageBadge').classList.toggle('camera-badge',!!cameraSelected);
   $('stageName').textContent = selected ? `${selected.name}${selected.id === state.session?.selfId ? tr(' · локальный предпросмотр') : ''}` : tr('Трансляция ещё не началась');
   $('stageSubtitle').textContent = state.session
     ? tr('Включите микрофон для разговора или нажмите «Показать экран».')
@@ -924,6 +943,12 @@ function renderControls() {
   $('micBtn').disabled = !state.ready || !media || state.controlLost || state.micBusy || !media.allowed(media.selfSlot,'voice');
   const me=self();if(me)portraits.refreshSound(me);
   $('shareBtn').disabled = !connected || state.controlLost || state.captureBusy || !!media&&!media.allowed(media.selfSlot,'screen');
+  $('cameraBtn').disabled=$('shareBtn').disabled;
+  const cameraOn=state.sharing&&state.captureKind==='camera';
+  $('cameraBtn').classList.toggle('is-on',cameraOn);$('cameraBtn').setAttribute('aria-pressed',String(cameraOn));
+  $('cameraBtn').title=tr(cameraOn?'Выключить камеру':'Включить камеру');$('cameraBtn').setAttribute('aria-label',$('cameraBtn').title);
+  $('cameraLabel').textContent=tr(cameraOn?'Камера включена':'Камера');
+  $('stopShareBtn').title=tr(cameraOn?'Выключить камеру':'Остановить показ экрана');$('stopShareBtn').setAttribute('aria-label',$('stopShareBtn').title);
   if(state.controlLost){$('chatInput').disabled=true;$('sendChatBtn').disabled=true;}
   $('micBtn').classList.toggle('is-muted', state.micMuted);
   $('micBtn').setAttribute('aria-pressed', String(!state.micMuted));
@@ -943,9 +968,10 @@ function appendChat(message) {
   roomChat.append({author:message.name,text:message.text,time:message.time,own:message.from===state.session?.selfId});
 }
 
-async function openSources() {
+async function openSources(type='screen') {
   if(state.media&&!state.media.allowed(state.media.selfSlot,'screen'))return;
   if (!state.session || state.captureBusy) return;
+  state.sourceType=type==='camera'?'camera':'screen';
   const env = state.environment;
   $('withSystemAudio').disabled = !env?.systemAudioSupported;
   state.sourceChoice=null;
@@ -959,12 +985,14 @@ async function openSources() {
 }
 
 async function refreshSources() {
+  cameraPreview.stop();$('cameraPreviewError').textContent='';
   const epoch = state.roomEpoch, request=++state.sourceListRequest;
   const stale=()=>epoch!==state.roomEpoch || request!==state.sourceListRequest || !$('sourceDialog').open;
   state.sources=[];
   state.sourceChoice=null;renderChoice();
+  if(state.sourceType==='camera'){$('cameraDevice').replaceChildren();renderCameraPreview();}
   const windows = state.sourceType === 'window';
-  for (const [id, active] of [['screenTabBtn', !windows], ['windowTabBtn', windows]]) {
+  for (const [id, active] of [['screenTabBtn', state.sourceType==='screen'], ['windowTabBtn', windows],['cameraTabBtn',state.sourceType==='camera']]) {
     $(id).classList.toggle('active', active);
     $(id).setAttribute('aria-pressed', String(active));
   }
@@ -972,12 +1000,16 @@ async function refreshSources() {
   $('sourcesGrid').replaceChildren(node('p', 'field-help', windows ? tr('Ищем открытые окна…') : tr('Ищем экраны…')));
   $('refreshSourcesBtn').disabled = true;
   try {
-    const sources = await api.sources(state.sourceType);
+    const sources = state.sourceType==='camera' ? (await navigator.mediaDevices.enumerateDevices()).filter(device=>device.kind==='videoinput').map((device,index)=>({id:device.deviceId,name:device.label||tr('Камера')+' '+(index+1),type:'camera'})) : await api.sources(state.sourceType);
     if(stale())return;
     state.sources = sources;
-    renderSources();
+    if(state.sourceType==='camera'){
+      $('cameraDevice').replaceChildren(...sources.map(source=>{const entry=node('option','',source.name);entry.value=source.id;return entry;}));
+      renderCameraPreview();
+    }else renderSources();
   } catch (error) {
     if(stale())return;
+    if(state.sourceType==='camera'){$('cameraPreviewError').textContent=cameraError(error);renderCameraPreview();return;}
     $('sourcesGrid').replaceChildren(node('p', 'error-text', tr('Не удалось получить список. Проверьте разрешение на запись экрана и нажмите «Обновить».')));
     throw error;
   } finally { if(!stale()) { $('refreshSourcesBtn').disabled=false; $('sourcesGrid').setAttribute('aria-busy','false'); } }
@@ -1014,13 +1046,25 @@ function renderSources() {
 }
 
 function renderChoice() {
-  $('startShare').textContent=state.captureBusy?tr('Начинаем показ…'):state.sharing?tr('Сменить источник'):tr('Начать показ');
-  for(const id of ['closeSourceDialog','screenTabBtn','windowTabBtn'])$(id).disabled=state.captureBusy;
+  const camera=state.sourceType==='camera';
+  $('sourcesGrid').hidden=camera;$('cameraPreviewPanel').hidden=!camera;$('withSystemAudio').closest('label').hidden=camera;
+  $('startShare').textContent=state.captureBusy?tr('Начинаем показ…'):camera?tr('Включить видео'):state.sharing?tr('Сменить источник'):tr('Начать показ');
+  for(const id of ['closeSourceDialog','screenTabBtn','windowTabBtn','cameraTabBtn'])$(id).disabled=state.captureBusy;
   $('withSystemAudio').disabled=state.captureBusy || !state.environment?.systemAudioSupported;
-  $('startShare').disabled=state.captureBusy || !state.sourceChoice;
-  $('sourceSelection').textContent=state.sourceChoice?.name || tr('Выберите экран или окно');
+  $('startShare').disabled=state.captureBusy || (camera?!cameraPreview.stream:!state.sourceChoice);
+  $('sourceSelection').textContent=camera?tr('Проверьте изображение перед включением видео.'):state.sourceChoice?.name || tr('Выберите экран или окно');
   for(const button of $('sourcesGrid').querySelectorAll('.source-card'))
     button.setAttribute('aria-pressed',String(button.dataset.sourceId===state.sourceChoice?.id));
+}
+function renderCameraPreview(){
+  const stream=cameraPreview.stream,video=$('cameraPreviewVideo');
+  if(video.srcObject!==stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});}
+  video.hidden=!stream;$('cameraPreviewHint').hidden=!!stream;
+  $('cameraPreviewHint').textContent=tr(cameraPreview.busy?'Включаем камеру…':state.sources.length?'Камера выключена. Включите предпросмотр, чтобы проверить изображение.':'Камера не найдена. Подключите её и нажмите «Обновить».');
+  $('previewCameraBtn').textContent=tr(cameraPreview.busy?'Включаем камеру…':stream?'Остановить предпросмотр':'Предпросмотр');
+  $('previewCameraBtn').disabled=cameraPreview.busy||state.captureBusy||!state.sources.length;
+  $('cameraDevice').disabled=cameraPreview.busy||state.captureBusy||!state.sources.length;
+  renderChoice();
 }
 function releaseCaptureSound() {
   state.captureAbort?.abort();state.captureAbort=null;
@@ -1028,10 +1072,12 @@ function releaseCaptureSound() {
   state.withSound=false;state.audioLost=false;
 }
 async function startCapture(source) {
+  const camera=state.sourceType==='camera';
   if(state.media&&!state.media.allowed(state.media.selfSlot,'screen'))return;
-  if (!source || !state.session || state.captureBusy) return;
+  if ((!source&&!camera) || !state.session || state.captureBusy || (camera&&!cameraPreview.stream)) return;
+  if(camera)source={id:$('cameraDevice').value,name:tr('Камера')+' · '+($('cameraDevice').selectedOptions[0]?.textContent||tr('По умолчанию')),type:'camera'};
   const epoch = state.roomEpoch;
-  const audioRequested=$('withSystemAudio').checked && state.environment.systemAudioSupported;
+  const audioRequested=!camera && $('withSystemAudio').checked && state.environment.systemAudioSupported;
   const captureEpoch = ++state.captureEpoch;
   state.captureBusy = true; $('refreshSourcesBtn').disabled=true;
   for (const button of $('sourcesGrid').querySelectorAll('button')) button.disabled = true;
@@ -1041,13 +1087,14 @@ async function startCapture(source) {
   state.captureAbort=controller;
   let stream, sound, committed=false;
   try {
-    const {token}=await api.selectSource({id:source.id, withAudio:audioRequested});
-    const q = quality();
-    stream = await navigator.mediaDevices.getDisplayMedia({
+    const token=camera?null:(await api.selectSource({id:source.id, withAudio:audioRequested})).token;
+    const q = camera?{...quality(),width:1280,height:720,fps:30,content:'motion'}:quality();
+    stream = camera?cameraPreview.take():await navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: q.width, max: q.width }, height: { ideal: q.height, max: q.height }, frameRate: { ideal: q.fps, max: q.fps } },
       audio:false, systemAudio:'exclude', selfBrowserSurface:'exclude',
     });
-    if (epoch !== state.roomEpoch || captureEpoch !== state.captureEpoch || !state.media) { stream.getTracks().forEach(t => t.stop()); return; }
+    if(!stream)return;
+    if (epoch !== state.roomEpoch || captureEpoch !== state.captureEpoch || !state.media || !state.media.allowed(state.media.selfSlot,'screen')) { stream.getTracks().forEach(t => t.stop()); return; }
     state.pendingScreenStream = stream;
     const video = stream.getVideoTracks()[0];
     if (!video || video.readyState !== 'live') throw new Error(tr('Выбранное окно не отдаёт изображение. Попробуйте оконный режим игры или захват экрана.'));
@@ -1077,14 +1124,18 @@ async function startCapture(source) {
       stream.getTracks().forEach(t => t.stop());
       return;
     }
+    // Chromium can restore the previous stream identity on replaceTrack.
+    // Publish the source only after both replacements have completed.
+    media.setVideoSource(camera?'camera':'screen');
     state.pendingScreenStream = null;
     state.screenStream = stream;
     state.protectedSound=sound;sound?.setGain(settings.streamGain);committed=true;state.withSound=system?.readyState==='live';state.audioLost=audioRequested && !state.withSound;
     internet?.hush();
     state.sharing = true;
+    state.captureKind=camera?'camera':'screen';
     state.shareTitle = source.name.slice(0, 160);
     state.shareStarted=Date.now();
-    state.selectedPeerId=state.session.selfId;
+    state.selectedPeerId=camera&&state.peers.length===2?state.peers.find(p=>p.id!==state.session.selfId&&p.sharing)?.id||state.session.selfId:state.session.selfId;
     video.addEventListener('ended', () => { if (state.screenStream === stream) stopCapture().catch(errorToast); });
     previous?.getTracks().forEach(t => t.stop());
     await media.setQuality(q);
@@ -1095,7 +1146,7 @@ async function startCapture(source) {
     renderStage();
     if (!state.withSound && audioRequested) {
       toast(tr('Windows не открыла защищённый звук. Показ идёт без звука компьютера. Микрофон работает отдельно.'), true);
-    } else toast(state.withSound ? tr('Трансляция со звуком началась.') : tr('Трансляция началась. Системный звук выключен.'));
+    } else toast(camera?tr('Камера включена. Микрофон управляется отдельно.'):state.withSound ? tr('Трансляция со звуком началась.') : tr('Трансляция началась. Системный звук выключен.'));
   } catch (error) {
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
@@ -1104,6 +1155,7 @@ async function startCapture(source) {
         state.screenStream?.getTracks().forEach(t => t.stop());
         releaseCaptureSound();state.screenStream = null; state.sharing = false; state.shareTitle = '';
         await Promise.allSettled([state.media?.setLocalTrack('screen', null), state.media?.setLocalTrack('system', null)]);
+        state.media?.setVideoSource('screen');
         await sendPresence();
         renderStage();
       }
@@ -1124,6 +1176,7 @@ async function startCapture(source) {
 
 async function stopCapture() {
   state.captureEpoch++;
+  cameraPreview.stop();
   releaseCaptureSound();
   state.pendingScreenStream?.getTracks().forEach(track => track.stop());
   state.pendingScreenStream = null;
@@ -1134,6 +1187,7 @@ async function stopCapture() {
   const media = state.media;
   previous?.getTracks().forEach(t => t.stop());
   const results = await Promise.allSettled([media?.setLocalTrack('screen', null), media?.setLocalTrack('system', null)]);
+  media?.setVideoSource('screen');
   if (media !== state.media) return;
   await sendPresence();
   renderControls(); renderStage();
@@ -1315,6 +1369,7 @@ function setSendLevel(role, value) {
   if(role==='system'){renderPlayerVolume();renderControls();}
   saveSettings();
 }
+let storageControls;
 function settingsPane(pane) {
   if(pane!=='voice' && micCheck)stopMicCheck();
   for(const button of document.querySelectorAll('.pref-nav button')){
@@ -1327,6 +1382,7 @@ function settingsPane(pane) {
     $('profileName').value=internet.name();
   }
   document.querySelector('.pref-content').scrollTop=0;
+  if(pane==='storage')storageControls?.refresh();
 }
 const settingsHome=document.createComment('settings position');
 $('settingsDialog').before(settingsHome);
@@ -1498,7 +1554,24 @@ function bindUI() {
     renderControls();
     toast(state.deafened ? tr('Входящий звук выключен. Ваш микрофон управляется отдельно.') : tr('Входящий звук включён.'));
   });
-  action('shareBtn', openSources);
+  action('shareBtn',()=>openSources('screen'));
+  action('cameraBtn',()=>state.sharing&&state.captureKind==='camera'?stopCapture():openSources('camera'));
+  action('previewCameraBtn',async()=>{
+    $('cameraPreviewError').textContent='';
+    if(cameraPreview.stream){cameraPreview.stop();return;}
+    try{
+      if(await cameraPreview.open($('cameraDevice').value)){
+        const stream=cameraPreview.stream,devices=cameraPreview.devices;
+        if(!stream||stream!==cameraPreview.stream)return;
+        const selected=stream.getVideoTracks()[0]?.getSettings().deviceId;
+        state.sources=devices.filter(device=>device.kind==='videoinput').map((device,index)=>({id:device.deviceId,name:device.label||tr('Камера')+' '+(index+1),type:'camera'}));
+        $('cameraDevice').replaceChildren(...state.sources.map(source=>{const entry=node('option','',source.name);entry.value=source.id;return entry;}));
+        if(state.sources.some(source=>source.id===selected))$('cameraDevice').value=selected;
+        renderCameraPreview();
+      }
+    }catch(error){$('cameraPreviewError').textContent=error.message;}
+  });
+  $('cameraDevice').addEventListener('change',()=>{cameraPreview.stop();$('cameraPreviewError').textContent='';});
   action('startShare',()=>startCapture(state.sourceChoice));
   $('sourceDialog').addEventListener('cancel',e=>{if(state.captureBusy)e.preventDefault();});
   action('stopShareBtn', stopCapture);
@@ -1556,6 +1629,7 @@ function bindUI() {
   action('inviteDoneBtn', () => closeDialog('inviteDialog'));
   $('sourceDialog').addEventListener('close', () => {
     if ($('sourceDialog').open) return;
+    cameraPreview.stop();
     state.sourceListRequest++;
     state.sources = [];
     state.sourceChoice = null;
@@ -1563,7 +1637,7 @@ function bindUI() {
   });
   action('closeSourceDialog',()=>{if(!state.captureBusy)closeDialog('sourceDialog');});
   for (const name of ['Room', 'Settings', 'Network']) action(`close${name}Dialog`, () => closeDialog(`${name.toLowerCase()}Dialog`));
-  for (const [id, type] of [['screenTabBtn','screen'], ['windowTabBtn','window']]) {
+  for (const [id, type] of [['screenTabBtn','screen'], ['windowTabBtn','window'],['cameraTabBtn','camera']]) {
     action(id, () => {
       if (state.sourceType === type) return;
       state.sourceType = type;
@@ -1672,6 +1746,7 @@ async function init() {
   const welcome=bindProfileWelcome({$,storage:localStorage,openProfile:()=>openSettings('profile'),openGuide:()=>$('helpTutorial').click(),flush:()=>api.flushLocalPreferences?.().catch(errorToast)});
   bindUI();
   bindSettingsNavigation($);
+  storageControls=bindStorageControls($,api);
   bindHelpCenter({$,showDialog,closeDialog});
   function changeLanguage(value){
     if(!['ru','en'].includes(value))return;
@@ -1760,7 +1835,7 @@ async function init() {
   });
   api.onEvent(event => {
     if(event.type==='release-updated'){projectUpdates?.draw(event.state);return;}
-    if(event.type==='window-hidden'){composer.stopCapture();return;}
+    if(event.type==='window-hidden'){composer.stopCapture();cameraPreview.stop();return;}
     if(event.type==='window-focused'){workspace.windowFocused();return;}
     if(event.type==='tray-game'){workspace.navigate('game');return;}
     if(event.type==='tray-chat'){

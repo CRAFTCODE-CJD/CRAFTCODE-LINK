@@ -43,6 +43,8 @@ jobs:
         run: npm run check
       - name: Test application contracts
         run: npm test
+      - name: Check release data isolation
+        run: python tests/payload-privacy.py
       - name: Test native Windows helpers
         run: |
           foreach ($module in @('native/loopback', 'native/game-lan', 'installer/care')) {

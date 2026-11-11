@@ -13,6 +13,8 @@ const installerRelease = process.argv.includes('--installer');
 const base = `CRAFTCODE-LINK-${version}-${installerRelease ? 'Installer-Handoff' : 'Windows-x64'}`;
 const bundle = path.join(out, base);
 const sourceNames = ['AGENTS.md', 'src', 'native', 'installer', 'scripts', 'tests', 'package.json', 'package-lock.json', 'README_RU.md', 'README.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'LICENSE', 'QA_REPORT.md', 'WORK_HANDOFF_RU.md', 'MESSENGER_ROADMAP_RU.md', 'FIRST_START_RU.txt', 'IMPLEMENTATION_CONTRACT.md', 'START.cmd', 'BUILD-WINDOWS.cmd', 'TEST-RTP.cmd', 'CHECK-STREAM-AUDIO.cmd', 'WINDOWS_TEST_RU.md', 'QA_EVIDENCE.json', 'FRIENDS_RU.md'];
+const sourceInputs=[...sourceNames,'.gitignore','.github','docs','CONTRIBUTING.md','licenses','third-party-sources'];
+const {verifyPayloadPrivacy,verifySourcePrivacy,sourceIncluded}=require('./payload-privacy.cjs');
 
 async function hash(file) {
   const h = crypto.createHash('sha256');
@@ -42,20 +44,23 @@ function zip(file, cwd, item) {
 (async () => {
   if (fss.existsSync(bundle)) throw new Error(`Handoff already exists: ${bundle}`);
   if (!fss.existsSync(path.join(portable, 'CRAFTCODE-LINK.exe'))) throw new Error('Build portable Windows output first.');
+  await verifyPayloadPrivacy(portable);
+  await verifySourcePrivacy(sourceInputs.map(name=>path.join(root,name)));
   await require('./package-win.cjs').verifyAppSource(path.join(root, 'src'), path.join(portable, 'resources', 'app', 'src'));
   if (installerRelease) await fs.mkdir(bundle);
   else await fs.cp(portable, bundle, { recursive: true });
   const source = path.join(bundle, 'SOURCE');
   await fs.mkdir(source);
-  for (const name of [...sourceNames,'.gitignore','.github','docs','CONTRIBUTING.md','licenses','third-party-sources']) {
+  for (const name of sourceInputs) {
     await fs.cp(path.join(root, name), path.join(source, name), {
-      recursive: true, filter: file => path.basename(file) !== '__pycache__',
+      recursive: true, filter: sourceIncluded,
     });
     if (/\.md$/.test(name) || name === 'FIRST_START_RU.txt') await fs.copyFile(path.join(root, name), path.join(bundle, name));
   }
   await fs.copyFile(path.join(portable,require('./third-party-notices.cjs').noticeName),path.join(source,'THIRD-PARTY-NPM.txt'));
   await fs.copyFile(path.join(portable,'LICENSE'),path.join(source,'licenses','Electron-LICENSE.txt'));
   await fs.copyFile(path.join(portable,'LICENSES.chromium.html'),path.join(source,'licenses','LICENSES.chromium.html'));
+  await verifySourcePrivacy([source]);
   await manifest(source);
   const fullZip = path.join(out, `${base}.zip`);
   const sourceZip = path.join(out, `CRAFTCODE-LINK-${version}-Source.zip`);

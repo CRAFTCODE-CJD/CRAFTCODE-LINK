@@ -6,6 +6,7 @@ __pycache__/
 .env.*
 !.env.example
 *.cclprofile
+craftlink-account-v1.bin*
 link-direct-v1.bin*
 link-personal-chats*.sqlite*
 *.part
@@ -14,3 +15,12 @@ link-personal-chats*.sqlite*
 *.pfx
 *.p12
 local.properties
+CRAFTCODE LINK Data/
+.craftcode-link-move-*/
+.craftcode-link-copy-v1/
+storage-location-v1.json
+storage-paths-v1.json
+active-process-v1.json
+.craftcode-link-data-v1.json
+.craftcode-link-migration-v1.json
+.craftcode-link-maintenance-v1.json

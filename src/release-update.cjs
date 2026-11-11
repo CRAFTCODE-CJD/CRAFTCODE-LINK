@@ -33,15 +33,18 @@ async function stage(file,dir,expected){
     await output?.close().catch(()=>{});await removeStage(work);throw e;
   }finally{await input?.close().catch(()=>{});}
 }
-async function cleanup(dir){
-  const list=await fs.readdir(dir,{withFileTypes:true}).catch(()=>[]);
+async function cleanup(dir,{strict=false}={}){
+  const stat=await fs.lstat(dir).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+  if(!stat)return;
+  if(!stat.isDirectory()||stat.isSymbolicLink())throw Error(tr('Не удалось безопасно открыть расположение данных LINK.'));
+  const list=await fs.readdir(dir,{withFileTypes:true});
   for(const e of list)if(e.isDirectory()&&/^install-[a-zA-Z0-9]{6}$/.test(e.name))
-    await removeStage(path.join(dir,e.name)).catch(()=>{});
+    await removeStage(path.join(dir,e.name)).catch(e=>{if(strict)throw e;});
 }
 function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActive,changed,openExternal,
   supported=process.platform==='win32'&&process.arch==='x64',fetcher,launcher=spawn}){
   const dir=path.join(app.getPath('userData'),'update-cache');
-  const ready=cleanup(dir);let busy=false,launching=false,closed=false;
+  const ready=cleanup(dir).catch(()=>{});let busy=false,launching=false,closed=false;
   function idle(){
     if(closed || launching)throw Error(tr('Приложение завершает работу.'));
     if(sessionActive())throw Error(tr('Сначала завершите звонок и выйдите из игровой LAN. Скачанный установщик можно открыть позже.'));
@@ -79,6 +82,10 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
       return await confirmInstall(file,expected);
     }finally{busy=false;}
   });
-  return {policy:()=>hub.policy(),close:()=>{closed=true;hub.close();},get launching(){return launching;}};
+  return {policy:()=>hub.policy(),close:()=>{closed=true;hub.close();},get launching(){return launching;},
+    async clearCache(){
+      if(busy||launching||closed)throw Error(tr('Дождитесь завершения текущей операции обновления.'));
+      busy=true;try{await ready;await hub.clearCache(dir=>cleanup(dir,{strict:true}));}finally{busy=false;}
+    }};
 }
 module.exports={release,stage,cleanup,registerUpdates};

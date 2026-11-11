@@ -196,6 +196,7 @@ class GameFiles{
     const fresh=()=>{if(t.cancelled||r!==this.room||this.downloads.get(item.id)!==t||!this.scope(t.link))throw lost();this.checkItem(item,reader);};
     this.downloads.set(item.id,t);this.s.update();
     try{
+      t.shelf.downloads=this.io.downloads();
       t.local=await t.shelf.begin(item.attachment,'LAN-'+r.id);
       fresh();
       do{
@@ -229,7 +230,8 @@ class GameFiles{
       for(const [key,receipt] of pending){
         const allow=()=>this.room===r&&!this.downloads.has(key)&&this.receipts.get(key)===receipt;
         try{
-          const status=await removeSavedDownload(this.io.downloads(),receipt,allow);
+          const roots=this.io.downloadRoots?.()??[this.io.downloads()];
+          const status=await removeSavedDownload(roots,receipt,allow);
           if(status==='removed'||status==='missing'){
             result.removed++;this.receipts.delete(key);
             const item=this.items.get(key);if(item?.saved){this.shelf.completed.delete(item.saved);delete item.saved;}

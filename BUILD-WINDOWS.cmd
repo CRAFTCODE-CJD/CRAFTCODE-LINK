@@ -9,7 +9,7 @@ if errorlevel 1 (
 )
 where go >nul 2>nul
 if errorlevel 1 (
-  echo Install Go 1.22 or newer for Windows audio support, then run this file again.
+  echo Install Go 1.25 or newer for Windows builds, then run this file again.
   pause
   exit /b 1
 )
@@ -29,7 +29,7 @@ if errorlevel 1 goto failed
 call npm run pack:win
 if errorlevel 1 goto failed
 echo Portable build complete.
-choice /C YN /M "Also build the Windows setup wizard (Python 3.11+, Go 1.22+, NSIS 3 in PATH)"
+choice /C YN /M "Also build the Windows setup wizard (Python 3.11+, Go 1.25+, NSIS 3 in PATH)"
 if errorlevel 2 exit /b 0
 python scripts\package-setup.py
 if errorlevel 1 goto failed

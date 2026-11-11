@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "directoryNames": ["craftcode link data", ".craftcode-link-copy-v1", "pending-downloads-v1", "group-files-v1"],
+  "directoryPrefixes": [".craftcode-link-move-"],
+  "fileNames": [
+    ".craftcode-link-data-v1.json",
+    ".craftcode-link-migration-v1.json",
+    ".craftcode-link-maintenance-v1.json",
+    "storage-location-v1.json",
+    "storage-paths-v1.json",
+    "active-process-v1.json"
+  ],
+  "filePrefixes": ["craftlink-account-v1.bin", "link-direct-v1.bin", "link-personal-chats"],
+  "fileSuffixes": [".cclprofile", ".pfx", ".p12", ".jks", ".keystore"]
+}

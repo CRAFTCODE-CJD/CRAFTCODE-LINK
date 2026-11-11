@@ -28,7 +28,7 @@ func paths() ([]string, error) {
 		return nil, errors.New("empty catalog")
 	}
 	for _, n := range names {
-		if !filepath.IsLocal(n) || strings.ContainsAny(n, "\\:") || filepath.ToSlash(filepath.Clean(n)) != n {
+		if !filepath.IsLocal(n) || strings.ContainsAny(n, "\\:") || filepath.ToSlash(filepath.Clean(n)) != n || strings.EqualFold(strings.SplitN(n, "/", 2)[0], dataDirectory) {
 			return nil, errors.New("invalid catalog")
 		}
 	}
@@ -59,24 +59,11 @@ func target(p string) error {
 	}
 	return safeChain(p)
 }
-func empty(p string) error {
-	entries, err := os.ReadDir(p)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if len(entries) > 0 {
-		return errors.New("folder is not empty")
-	}
-	return nil
-}
 func validate(p string) error {
 	if err := target(p); err != nil {
 		return err
 	}
-	if err := empty(p); err != nil {
+	if _, err := installationContents(p); err != nil {
 		return err
 	}
 	return freeSpace(p)
@@ -126,8 +113,19 @@ func commit(p, base string) error {
 			return err
 		}
 	}
-	if err = empty(p); err != nil {
+	preserved, err := installationContents(p)
+	if err != nil {
 		return err
+	}
+	if preserved {
+		// Only the data child was authorized. A program file appearing after
+		// selection is not an installed payload and must not be overwritten.
+		for _, name := range append(names, "Uninstall.exe") {
+			if _, e := os.Lstat(filepath.Join(p, filepath.FromSlash(name))); !errors.Is(e, os.ErrNotExist) {
+				return errors.New("installation folder changed")
+			}
+		}
+		return repair(p, base)
 	}
 	err = removeDir(p)
 	existed := err == nil
@@ -156,35 +154,21 @@ func checkStagedFile(p string) error {
 
 // Remove reparse points as leaves. Never walk into a junction or symlink.
 func wipe(p string) error {
-	st, err := os.Lstat(p)
+	if !filepath.IsAbs(p) || filepath.Dir(p) == p {
+		return errors.New("invalid cleanup folder")
+	}
+	root, err := os.OpenRoot(filepath.Dir(p))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if linklike(st) || !st.IsDir() {
-		return os.Remove(p)
-	}
-	entries, err := os.ReadDir(p)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if err = wipe(filepath.Join(p, entry.Name())); err != nil {
-			return err
-		}
-	}
-	return removeEmptiedDir(p)
+	defer root.Close()
+	return root.RemoveAll(filepath.Base(p))
 }
 func purge(base string) error {
-	if !filepath.IsAbs(base) || filepath.Dir(base) == base {
-		return errors.New("invalid profile parent")
-	}
-	if err := safeChain(base); err != nil {
-		return err
-	}
-	return wipe(filepath.Join(base, product))
+	return cleanProfiles(base, true)
 }
 func removePayload(p string) error {
 	if err := target(p); err != nil {
@@ -277,7 +261,15 @@ func run(a []string) (string, error) {
 		case "remove":
 			return "", removePayload(a[1])
 		case "purge":
+			if err := checkRunning(); err != nil {
+				return "", err
+			}
 			return "", purge(a[1])
+		case "cache":
+			if err := checkRunning(); err != nil {
+				return "", err
+			}
+			return "", cleanProfiles(a[1], false)
 		case "hash":
 			return digest(a[1])
 		}

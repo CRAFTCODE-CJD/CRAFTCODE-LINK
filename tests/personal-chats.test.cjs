@@ -309,7 +309,9 @@ test('optional local download cleanup survives text clears and restart, respects
   io.downloads=()=>{throw Object.assign(Error('offline volume'),{code:'EACCES'});};
   const unavailable=await clear(b,a,{deleteDownloads:true});
   assert.equal(unavailable.failed,2);assert(b.snapshot().chatStorage.downloads);
-  io.downloads=()=>temp;
+  const newer=path.join(temp,'new download location');fs.mkdirSync(newer);
+  io.downloads=()=>newer;
+  io.downloadRoots=()=>[newer,temp];
   const result=await clear(b,a,{deleteDownloads:true});
   assert.deepEqual(result,{removed:1,kept:2,failed:0});
   assert(!fs.existsSync(voice));assert.equal(fs.readFileSync(used,'utf8'),'user-owned file');

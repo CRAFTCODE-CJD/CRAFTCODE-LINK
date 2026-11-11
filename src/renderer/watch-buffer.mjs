@@ -178,6 +178,14 @@ export class WatchBuffer {
 
   update(room) {
     const peer = room.peers.find(p => p.id === this.selected && p.id !== room.session.selfId);
+    if (peer && room.videoSource?.(peer.slot) === 'camera') {
+      // Live conversation uses the native voice/video timing. A prior screen
+      // viewing preference must not hold the webcam behind its microphone.
+      this.stopTiming();
+      this.resetAlignment();
+      for (const receiver of this.applied.keys()) this.release(receiver);
+      return {requested: 0, forwarding: false, available: false, camera: true};
+    }
     const requested = peer ? this.preferences.get(peer.id) || 0 : 0;
     // On the host, an incoming guest track is also the input to another
     // participant's sender. Reset it before that forwarding route is attached.

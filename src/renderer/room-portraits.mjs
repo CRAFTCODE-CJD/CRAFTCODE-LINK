@@ -66,7 +66,7 @@ export function roomPortraits({grid,state,direct,mixer,mix,soundMenu,watch,ownLe
     const own=p.id===state.session?.selfId;
     const connection=own?'connected':state.connectionStates.get(state.session.role==='host'?p.id:state.session.hostId);
     const status=[];
-    if(p.sharing)status.push(tr('Трансляция'));
+    if(p.sharing)status.push(tr(state.media?.videoSource(p.slot)==='camera'?'Камера':'Трансляция'));
     if(!own && mixer.getSetting(p.id,'voice').muted)status.push(tr('Заглушён у вас'));
     else if(p.micMuted)status.push(tr('Микрофон выключен'));
     if(connection && connection!=='connected')status.push(tr(connection==='failed'||connection==='unreachable'?'Нет медиа-связи':'Соединение…'));
