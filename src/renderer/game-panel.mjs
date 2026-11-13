@@ -120,7 +120,7 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
     const d=direct.raw(),g=d.game,r=g?.room,n=g?.network;if(!r||!n)return;
     const me=r.roster.find(p=>p.device===d.me.device),p=r.roster.find(p=>p.device===$('gameTarget').value)||r.roster.find(p=>p!==me),result=n.path||{};
     const t=n.traffic||{},tested=result.device===p?.device;
-    const lines=['CRAFTCODE LINK · LAN · '+new Date().toISOString(),
+    const lines=['CRAFTCODE LINK · LAN · '+(state.environment?.version||'—')+' · '+new Date().toISOString(),
       tr('Этот ПК')+' '+r.prefix+'.'+(me?.slot??'?')+' / '+n.phase+' · UDP '+(result.port||result.code||result.state),
       tr('Участник')+' '+(p?r.prefix+'.'+p.slot+' / '+(p.ready?'ready · UDP '+(p.probePort??45879):'off'):'—'),
       tr('Проверка UDP')+' '+(result.device&&!tested?'idle':result.state)+(tested&&Number.isFinite(result.ms)?' · '+result.ms+tr(' мс'):''),
@@ -137,6 +137,9 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
     if(t.lastMatch)lines.push(tr('Обнаруженный игровой сервер')+' · '+r.prefix+'.'+t.lastMatch.seat+':'+t.lastMatch.port+
       (Number.isInteger(t.lastMatch.build)?' · build '+t.lastMatch.build:'')+(t.lastMatch.corrected?' · '+tr('Исправлен адрес адаптера'):''));
     if(t.adapterDrops)lines.push(tr('Не передано адаптеру')+' · '+t.adapterDrops);
+    lines.push(tr('Матч Generals / Zero Hour')+' · UDP 8088 · TX '+(t.gameplay8088Tx||0)+' / RX '+(t.gameplay8088Rx||0));
+    if(t.queueDrops)lines.push(tr('Потери в очереди отправки')+' · '+t.queueDrops);
+    if(t.alternateFrames)lines.push(tr('Передано по запасному соединению')+' · '+t.alternateFrames);
     try{await api.copyText(lines.join('\n'));$('gameDiagStatus').textContent=tr('Скопировано');}catch(e){actionError(e);}
   };
   $('gameTestPath').onclick=()=>command('game-check-path',{device:$('gameTarget').value});

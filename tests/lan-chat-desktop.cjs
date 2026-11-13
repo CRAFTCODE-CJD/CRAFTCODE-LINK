@@ -58,6 +58,8 @@ module.exports=async({a,b})=>{
   await a.page.waitForFunction(()=>document.querySelector('#gameDiagStatus').textContent==='Скопировано');
   const report=await a.app.evaluate(()=>globalThis.testClipboard);
   assert.match(report,/Включение адаптера · access-denied/);
+  assert.ok(report.startsWith('CRAFTCODE LINK · LAN · '+require('../package.json').version+' · '));
+  assert.match(report,/Матч Generals \/ Zero Hour · UDP 8088 · TX 0 \/ RX 0/);
   assert.match(report,/Участник 10\.\d+\.\d+\.2 \/ off/);
   await a.page.click('#gameChatTab');
   await b.page.evaluate(()=>localStorage.setItem('craftcode.language','en'));await b.page.reload();
