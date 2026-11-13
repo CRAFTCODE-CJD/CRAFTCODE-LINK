@@ -1,8 +1,8 @@
-# CRAFTCODE LINK 0.7.20
+# CRAFTCODE LINK
+
+CRAFTCODE LINK is a free, open-source messenger for Windows. Create a profile on your PC, exchange LINK cards with a friend and confirm the connection. You can then message each other, share files, make video calls or share your screen. Create a group for your friends to meet in text and voice channels. Direct chat history stays on the participants’ devices, and the group runs on its owner’s computer.
 
 For Game LAN, everyone joins the same room and enables the Windows game network. One player hosts in the game and the others refresh its LAN list. See the [tested games and connection troubleshooting (in Russian)](docs/LAN_COMPATIBILITY_RU.md).
-
-CRAFTCODE LINK is a Windows messenger with local profiles, private messages, voice rooms, screen sharing and game LAN. Friends exchange a LINK card and confirm the connection. A group runs on its owner's computer.
 
 In a wide window, opening a group keeps your friends and direct messages on the left and places the group’s channels beside them. In Settings, preview your personal theme and chat wallpaper. Each local profile remembers its own choices. The animated wallpaper respects reduced motion in LINK and Windows.
 
@@ -66,7 +66,7 @@ Profile settings include a photo, interface themes and chat backgrounds. A Windo
 
 Only confirmed LINK friends with photo support receive your profile photo. In a LINK room, friends see photos for verified LINK participants. Guests joining by code, IP or Jabber appear to others with initials. Interface themes and chat backgrounds stay on this device.
 
-The Windows x64 app checks the stable releases of CRAFTCODE-CJD/CRAFTCODE-LINK daily in normal mode. Open Help → Updates to turn checks off, check now, download a release or install after leaving active sessions. A current client checks the public latest-release link with one request. For a new version, LINK shows download progress and speed and verifies the installer against the SHA-256 published with that release.
+The Windows x64 app checks the stable releases of CRAFTCODE-CJD/CRAFTCODE-LINK daily in normal mode. Open Help → Updates to turn checks off, check now, download a release or install after leaving active sessions. A current client checks the public latest-release link with one request. For a new version, LINK shows download progress and speed. An interrupted download keeps its progress and resumes automatically, including after an app restart. Resume now retries immediately. Cancel download removes the partial file. LINK verifies the complete installer against the SHA-256 published with the release.
 
 Click a confirmed LINK friend’s name to open **Chats**. Pending messages and attachments stay in the local encrypted queue until both apps are online. A clock indicates a queued message. One check means the recipient’s device has saved the message. Two checks mean the message was visible in the conversation on a recipient device and that device confirmed it. Both apps must support read receipts. Each PC keeps its own private conversation history. In the conversation menu, **Clear chat history** removes that conversation locally. **Chat storage → Clear all private chats** clears all conversations for the active profile on this PC.
 

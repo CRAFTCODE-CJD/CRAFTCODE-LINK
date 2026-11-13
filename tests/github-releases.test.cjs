@@ -64,7 +64,7 @@ test('Binary retrieves only the bound asset or GitHub release CDN, checks every 
     assert.equal(count,1);
   }
   for(const contents of [bytes.subarray(0,-1),Buffer.alloc(bytes.length,1),Buffer.concat([bytes,bytes])]){
-    await assert.rejects(download(release,cache,()=>new Response(contents),signal()));
+    await assert.rejects(download(release,cache,()=>new Response(contents,{headers:{'Content-Length':String(contents.length)}}),signal()));
     assert.deepEqual(await fs.readdir(cache),[path.basename(path.dirname(file))]);
   }
   await assert.rejects(download({...release,sha:'0'.repeat(64)},cache,()=>new Response(bytes),signal()));
@@ -121,6 +121,28 @@ test('Restart preserves the available-version hint only and revalidates with the
   assert.equal(hub.phase,'available');await hub.check(true);const check=[latestURL,feed(version).code,feed(version).exe];assert.deepEqual(calls,check);
   assert.equal((await hub.command({op:'download'})).phase,'ready');
   assert.deepEqual(calls,[...check,...check,feed(version).exe]);
+});
+test('A download requested offline from a cached offer resumes after restart before any bytes were received',async t=>{
+  const directory=await temp(t),cache=path.join(directory,'cache');
+  let online=true,downloads=0,notice=()=>{};
+  const make=()=>new UpdateService({directory,cache,current:'0.1.0',allowed:()=>true,supported:true,scheduled:false,
+    changed:state=>notice(state),fetcher:(url,opts)=>{
+      if(!online)throw new TypeError('offline');
+      if(url===feed(version).exe&&opts.method==='GET')downloads++;
+      return published(url,opts);
+    }});
+  let hub=make();t.after(()=>hub.close());
+  await hub.check();hub.close();online=false;
+  hub=make();await hub.restore();
+  const paused=await hub.command({op:'download'});
+  assert.equal(paused.phase,'waiting');assert.equal(paused.received,0);hub.close();
+  online=true;hub=make();
+  const ready=new Promise((resolve,reject)=>{
+    const deadline=setTimeout(()=>reject(Error('Download did not resume')),5000);
+    notice=state=>{if(state.phase==='ready'){clearTimeout(deadline);resolve();}};
+  });
+  await hub.restore();await ready;
+  assert.equal(downloads,1);assert.deepEqual(await fs.readFile(hub.staged),bytes);
 });
 test('Quitting during native confirmation before the installer starts never launches or resumes an install',async t=>{
   const directory=await temp(t),handlers=new Map();let ctrl;

@@ -5,14 +5,15 @@ module.exports=async function checkShell(page,language){
   await page.setViewportSize({width:1426,height:933});
   const images=process.env.LINK_UI_QA_IMAGES;
   async function shot(name){if(images){await fs.mkdir(images,{recursive:true});await page.screenshot({path:path.join(images,name+'-'+language+'.png'),animations:'disabled'});}}
-  await page.evaluate(()=>{
+  const sharedGroup='Соседи · ЛабораторияМногопользовательскихИгр';
+  await page.evaluate(sharedGroup=>{
     const peers=['Анна','Борис','Вера','Глеб','Дима','Лена','Маша','Ника','Рома']
       .map((name,i)=>({id:'friend-'+i,name,online:i%3!==0,state:'friend',devices:[],added:Date.UTC(2026,8,14),chat:{supported:true}}));
     peers[0].status='busy';peers[2].status='busy';peers[4].status='away';
     peers[1].rooms=[{door:'voice',device:'other-pc',count:2}];
     const channels=[{id:'lobby',name:'общий',type:'text'},{id:'plans',name:'планы',type:'text'},{id:'voice',name:'Вечерний звонок',type:'voice'}]
       .map(c=>({...c,access:'all',allow:[]}));
-    let spaces=['Соседи','Ночной эфир'].map((name,i)=>({id:'space-'+i,name,role:'owner',online:true,epoch:1,revision:0}));
+    let spaces=[sharedGroup,'Ночной эфир'].map((name,i)=>({id:'space-'+i,name,role:'owner',online:true,epoch:1,revision:0}));
     const original=window.craftlink.direct;
     window.craftlink.direct=async request=>{
       if(request.op==='group-open'){
@@ -21,7 +22,7 @@ module.exports=async function checkShell(page,language){
       }
       if(request.op==='group-shared-with')return request.person==='friend-7'?spaces.slice(0,1):[];
       if(request.op==='chat-history'){
-        const messages=request.id==='friend-7'?['Ты сегодня зайдёшь в голосовой?','Да, буду после восьми.','Хорошо, до вечера!'].map((text,i)=>({
+        const messages=request.id==='friend-7'?['Ты сегодня зайдёшь в голосовой?','Да, буду после восьми.','Хорошо, до вечера! Вчера мы нашли новую карту для совместной игры. Заходи, покажу, где она начинается и как нам встретиться в первой комнате.'].map((text,i)=>({
           text,id:String(i),time:Date.UTC(2026,10,10,15,20+i),direction:i===1?'out':'in',status:'delivered'
         })):[];
         return {messages,hasMore:false};
@@ -37,7 +38,7 @@ module.exports=async function checkShell(page,language){
     };
     window.dropSpace=()=>{spaces=spaces.slice(0,1);roomFixture.refresh();};
     roomFixture.refresh();
-  });
+  },sharedGroup);
   const spaces=page.locator('#spaceList button');
   await spaces.nth(1).waitFor();
   assert.equal(await page.locator('#quickPeople button').count(),9);
@@ -62,14 +63,41 @@ module.exports=async function checkShell(page,language){
   assert(await page.locator('#friendsContext').isHidden());
   await page.locator('#dmProfileName').filter({hasText:'Ника'}).waitFor();
   assert(await page.locator('#dmIntro').isVisible());
-  await page.locator('#dmSharedList button').filter({hasText:'Соседи'}).waitFor();
+  const sharedButton=page.locator('#dmSharedList').getByRole('button',{name:sharedGroup,exact:true});
+  await sharedButton.waitFor();
   assert.equal(await page.locator('#dmLog article').count(),3);
   assert.equal(await page.locator('#navRail [aria-current="page"]').getAttribute('id'),'navChats');
   assert.equal(await page.locator('#navChats').evaluate(el=>getComputedStyle(el,'::before').content),'""');
-  await shot('direct');
-  await page.click('#dmProfileToggle');assert(await page.locator('#dmProfile').isHidden());
-  await page.click('#dmProfileToggle');await page.click('#dmSharedList button');
-  await page.locator('#groupName,#groupsTitle').filter({hasText:'Соседи'}).first().waitFor();
+  const widths=[1426,1920,740];
+  for(const width of widths){
+    await page.setViewportSize({width,height:width===740?560:933});
+    const compact=width===740;
+    await page.waitForFunction(expected=>document.querySelector('#dmConversation').classList.contains('compact-profile')===expected,compact);
+    for(const show of [true,false]){
+      if(await sharedButton.isVisible()!==show)await page.click('#dmProfileToggle');
+      if(show)await sharedButton.waitFor();else await sharedButton.waitFor({state:'hidden'});
+      const layout=await page.evaluate(()=>{
+        const box=selector=>document.querySelector(selector).getBoundingClientRect();
+        const thread=box('.dm-thread-body'),composer=box('#dmForm'),incoming=box('#dmLog article:not(.is-own)'),outgoing=box('#dmLog article.is-own');
+        const profile=document.querySelector('#dmProfile'),label=document.querySelector('#dmSharedList button span:last-child');
+        const rightmost=box('#dmSharedList button'),card=box('#dmSharedGroups');
+        return {left:incoming.left-thread.left,right:thread.right-outgoing.right,
+          composerLeft:composer.left-thread.left,composerRight:thread.right-composer.right,
+          longest:box('#dmLog article:last-child').width,
+          fits:profile.scrollWidth<=profile.clientWidth&&rightmost.right<=card.right&&label.scrollWidth<=label.clientWidth,
+          lines:label.getBoundingClientRect().height/parseFloat(getComputedStyle(label).lineHeight)};
+      });
+      assert(layout.left>=8&&layout.left<=20&&layout.right>=8&&layout.right<=26,JSON.stringify({width,show,layout}));
+      assert(Math.abs(layout.left-layout.composerLeft)<=1&&Math.abs(layout.right-layout.composerRight)<=8);
+      assert(layout.longest<600,'Long messages should still wrap at a readable line length');
+      if(show)assert(layout.fits&&layout.lines>1,'The full group name should wrap inside its card: '+JSON.stringify(layout));
+      await shot('direct-'+width+(show?'-profile':''));
+    }
+  }
+  await page.setViewportSize({width:1426,height:933});
+  await page.waitForFunction(()=>!document.querySelector('#dmConversation').classList.contains('compact-profile'));
+  await page.click('#dmProfileToggle');await sharedButton.focus();await page.keyboard.press('Enter');
+  await page.locator('#groupName,#groupsTitle').filter({hasText:sharedGroup}).first().waitFor();
   await spaces.nth(1).click();
   await page.locator('#groupName,#groupsTitle').filter({hasText:'Ночной эфир'}).first().waitFor();
   assert.equal(await spaces.nth(1).getAttribute('aria-current'),'page');

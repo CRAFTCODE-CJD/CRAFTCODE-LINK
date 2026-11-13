@@ -47,7 +47,7 @@ async function cleanup(dir,{strict=false}={}){
 function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActive,changed,announce,openExternal,
   supported=process.platform==='win32'&&process.arch==='x64',fetcher,launcher=spawn}){
   const dir=path.join(app.getPath('userData'),'update-cache');
-  const ready=cleanup(dir).catch(()=>{});let busy=false,launching=false,closed=false;
+  let busy=false,launching=false,closed=false;
   function idle(){
     if(closed || launching)throw Error(tr('Приложение завершает работу.'));
     if(sessionActive())throw Error(tr('Сначала завершите звонок и выйдите из игровой LAN. Скачанный установщик можно открыть позже.'));
@@ -69,6 +69,9 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
       if(busy)throw Error(tr('Обновление уже открыто.'));
       busy=true;try{return await confirmInstall(file,expected);}finally{busy=false;}
     }});
+  const ready=cleanup(dir).then(()=>hub.restore());
+  // An inaccessible cache is reported by IPC when the update panel is opened.
+  ready.catch(()=>{});
   handle('releases',async raw=>{await ready;return hub.command(raw);});
   handle('install-release',async value=>{
     if(!supported)throw Error(tr('Этот установщик предназначен для Windows x64.'));
@@ -100,7 +103,7 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
       return await confirmInstall(file,expected);
     }finally{busy=false;}
   });
-  return {policy:()=>hub.policy(),announceAvailable:()=>hub.announceAvailable(),close:()=>{closed=true;hub.close();},get launching(){return launching;},
+  return {policy:()=>{if(!allowed())hub.policy();else ready.then(()=>hub.policy()).catch(()=>{});},announceAvailable:()=>hub.announceAvailable(),close:()=>{closed=true;hub.close();},get launching(){return launching;},
     async clearCache(){
       if(busy||launching||closed)throw Error(tr('Дождитесь завершения текущей операции обновления.'));
       busy=true;try{await ready;await hub.clearCache(dir=>cleanup(dir,{strict:true}));}finally{busy=false;}

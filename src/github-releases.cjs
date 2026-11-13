@@ -1,5 +1,6 @@
 'use strict';
-const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
+const fs=require('node:fs/promises');
+const {receiveInstaller,partialSize,cleanupPartials}=require('./update-download.cjs');
 const {parseUpdateCode}=require('./renderer/release-code.mjs');
 const {repository,donationURL}=require('./project-links.json');
 
@@ -28,18 +29,28 @@ function retryDelay(res){
   const delay=/^\d+$/.test(raw)?Number(raw)*1000:Date.parse(raw)-Date.now();
   return Number.isFinite(delay)?Math.max(1000,Math.min(delay,7*86400000)):60000;
 }
-async function request(url,method,fetcher,signal){
+async function request(url,method,fetcher,signal,headers){
   signal.throwIfAborted();
-  const res=await fetcher(url,{method,headers:{'User-Agent':'CRAFTCODE-LINK-Updater'},redirect:'manual',credentials:'omit',signal});
+  let res;
+  try{
+    res=await fetcher(url,{method,headers:{'User-Agent':'CRAFTCODE-LINK-Updater',...headers},redirect:'manual',credentials:'omit',signal});
+  }catch(e){
+    signal.throwIfAborted();
+    throw Object.assign(unavailable(),{retryable:true,cause:e});
+  }
   if(res.status===429 || res.status===403&&(res.headers.has('retry-after')||res.headers.get('x-ratelimit-remaining')==='0')){
     await res.body?.cancel();
-    throw Object.assign(Error(rateLimitMessage),{retryAfterMs:retryDelay(res)});
+    throw Object.assign(Error(rateLimitMessage),{retryable:true,retryAfterMs:retryDelay(res)});
+  }
+  if(res.status===408||res.status>=500){
+    await res.body?.cancel();
+    throw Object.assign(unavailable(),{retryable:true,retryAfterMs:res.headers.has('retry-after')?retryDelay(res):0});
   }
   return res;
 }
-async function releaseAsset(url,method,fetcher,signal){
+async function releaseAsset(url,method,fetcher,signal,headers){
   for(let hop=0;hop<=4;hop++){
-    const res=await request(url,method,fetcher,signal);
+    const res=await request(url,method,fetcher,signal,headers);
     if(!redirects.has(res.status))return res;
     await res.body?.cancel();
     const location=res.headers.get('location');
@@ -66,10 +77,16 @@ async function lookup(current,fetcher,signal){
   const res=await releaseAsset(assetPrefix+'-Update-Code.txt','GET',fetcher,signal);
   if(res.status!==200||!res.body||Number(res.headers.get('content-length'))>256){await res.body?.cancel();throw invalid();}
   let size=0;const chunks=[];
-  for await(const part of res.body){
-    size+=part.length;if(size>256)throw invalid();
-    chunks.push(part);
+  try{
+    for await(const part of res.body){
+      size+=part.length;if(size>256)break;
+      chunks.push(part);
+    }
+  }catch(e){
+    signal.throwIfAborted();
+    throw Object.assign(unavailable(),{retryable:true,cause:e});
   }
+  if(size>256)throw invalid();
   const release=parseUpdateCode(Buffer.concat(chunks).toString('latin1'),current);
   if(release.version!==version)throw invalid();
   const url=assetPrefix+'-Setup-x64.exe';
@@ -79,33 +96,17 @@ async function lookup(current,fetcher,signal){
   if(info.status!==200||!Number.isSafeInteger(bytes)||bytes<2||bytes>maxSize)throw invalid();
   return {phase:'available',release:{...release,size:bytes,url}};
 }
-async function download(release,dir,fetcher,signal,progress){
-  const res=await releaseAsset(release.url,'GET',fetcher,signal);
-  const length=res.headers.get('content-length');
-  if(res.status!==200 || !res.body || length!==null&&Number(length)!==release.size){await res.body?.cancel();throw invalid();}
-  await fs.mkdir(dir,{recursive:true,mode:0o700});
-  const work=await fs.mkdtemp(path.join(dir,'install-')),file=path.join(work,release.name);
-  let handle,committed=false;
-  try{
-    handle=await fs.open(file,'wx',0o700);
-    const hash=crypto.createHash('sha256'),magic=Buffer.alloc(2);let received=0;
-    for await(const part of res.body){
-      signal.throwIfAborted();
-      const bytes=Buffer.from(part);
-      if(received<2)bytes.copy(magic,received,0,Math.min(2-received,bytes.length));
-      received+=bytes.length;if(received>release.size)throw invalid();
-      hash.update(bytes);await handle.writeFile(bytes);
-      progress?.(received);
-    }
-    if(received!==release.size || magic[0]!==0x4d || magic[1]!==0x5a || hash.digest('hex')!==release.sha)throw invalid();
-    await handle.sync();await handle.close();handle=null;committed=true;return file;
-  }finally{
-    await handle?.close().catch(()=>{});
-    if(!committed)await removeStage(work);
-  }
+async function download(release,dir,fetcher,signal,progress,options){
+  const name='CRAFTCODE-LINK-'+release.version+'-Setup-x64.exe';
+  if(!stable.test(release.version)||release.name!==name||release.url!==home+'/releases/download/v'+release.version+'/'+name)throw invalid();
+  return receiveInstaller(release,dir,signal,progress,(offset,watchdog)=>{
+    const headers={'Accept-Encoding':'identity'};
+    if(offset)headers.Range='bytes='+offset+'-';
+    return releaseAsset(release.url,'GET',fetcher,watchdog,headers);
+  },options);
 }
 function supportURL(configured=donationURL){
   if(typeof configured!=='string')return null;
   try{const u=new URL(configured);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port?u.href:null;}catch{return null;}
 }
-module.exports={lookup,download,savedOffer,supportURL,removeStage,rateLimitMessage,latestURL,home};
+module.exports={lookup,download,partialSize,cleanupPartials,savedOffer,supportURL,removeStage,rateLimitMessage,latestURL,home};

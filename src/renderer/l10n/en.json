@@ -1,4 +1,12 @@
 {
+  "Продолжаем загрузку обновления…": "Resuming the update download…",
+  "Отменить загрузку": "Cancel download",
+  "Удалить скачанную часть обновления": "Delete the downloaded part of this update",
+  "Продолжить сейчас": "Resume now",
+  "Загрузка обновления": "Update download",
+  "Загрузка приостановлена. Следующая попытка в": "Download paused. Next attempt at",
+  "Ожидаем соединения для продолжения загрузки.": "Waiting for a connection to resume the download.",
+  "Загрузка приостановлена в режиме «Только через ретранслятор». Она продолжится, когда вы разрешите прямое подключение.": "Relay-only mode paused the download. It will resume when you allow a direct connection.",
   "Сейчас говорят": "Speaking now",
   "Открыть обновления": "Open updates",
   "GitHub ограничил запросы. Повтор будет доступен после": "GitHub is limiting requests. Try again after",
