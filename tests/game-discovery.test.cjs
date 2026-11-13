@@ -4,6 +4,28 @@ const {GameNetwork}=require('../src/game/network.cjs');
 const {GameDiscovery,discoveryMessage}=require('../src/game/discovery.cjs');
 
 const members=[1,2,3].map(slot=>({slot,id:'person'+slot,device:'device'+slot}));
+test('ioquake3 multiport LAN scan only admits the responding server for the querying player',t=>{
+  const {net,writes,receive}=harness(t);
+  const oob=text=>Buffer.concat([Buffer.from([255,255,255,255]),Buffer.from(text)]);
+  const response=challenge=>oob('infoResponse\n\\mapname\\q3dm1\\protocol\\71\\challenge\\'+challenge);
+  const clientPort=49012;
+  receive(2,frame(2,255,clientPort,27960,oob('getstatus')));
+  assert.equal(writes.length,0);
+  for(let port=27960;port<=27963;port++)
+    receive(2,frame(2,255,clientPort,port,oob('getinfo xxx')));
+  assert.deepEqual(writes.map(b=>b.readUInt16BE(22)),[27960,27961,27962,27963]);
+  net.route(1,frame(1,2,27960,clientPort,response('wrong')),true);
+  assert(!net.discovery.listener(2,1,27960));
+  net.route(1,frame(1,2,27960,clientPort,response('xxx')),true);
+  assert(net.discovery.listener(2,1,27960));
+  assert(!net.discovery.listener(3,1,27960));
+  receive(2,frame(2,1,clientPort,27960,oob('getchallenge')));
+  receive(3,frame(3,1,clientPort,27960,oob('getchallenge')));
+  assert.equal(writes.length,5);
+  assert(!discoveryMessage(response('xxx'),{sport:5353,dport:clientPort}));
+  assert(!discoveryMessage(oob('infoResponse\n\\challenge\\xxx\\protocol\\71'),{sport:27960,dport:clientPort}));
+  assert(!discoveryMessage(oob('getinfo xxx\nrcon bad'),{sport:clientPort,dport:27960}));
+});
 function frame(from,to,sport,dport,data){
   const b=Buffer.alloc(28+data.length);
   b[0]=0x45;b[8]=64;b[9]=17;b.writeUInt16BE(b.length,2);

@@ -3,6 +3,29 @@
 const {allowedPort}=require('./ports.cjs');
 const rakMagic=Buffer.from('00ffff00fefefefefdfdfdfd12345678','hex');
 const bedrockPorts=new Set([19132,19133]);
+const quakePort=port=>port>=27960&&port<=27963;
+
+// ioquake3's Local Servers scan sends a getinfo challenge to four UDP ports.
+// Only a matching server reply may open the gameplay port for this pair.
+function quakeDiscovery(data,h){
+  if(data.length<12||data.length>1100||data.readUInt32BE(0)!==0xffffffff)return;
+  const text=data.toString('latin1',4);
+  if(quakePort(h.dport)){
+    const query=/^getinfo ([A-Za-z0-9_-]{1,128})$/.exec(text);
+    if(query)return {type:'query',key:'ioq3/'+h.dport+'/'+query[1],discoveryPort:true};
+  }
+  if(!quakePort(h.sport)||!text.startsWith('infoResponse\n\\'))return;
+  const fields=text.slice('infoResponse\n\\'.length).split('\\');
+  if(fields.length%2!==0||fields.length>128)return;
+  const values=new Map();
+  for(let i=0;i<fields.length;i+=2){
+    if(!/^[A-Za-z0-9_]{1,48}$/.test(fields[i])||/[\x00-\x1f\x7f]/.test(fields[i+1])||values.has(fields[i]))return;
+    values.set(fields[i],fields[i+1]);
+  }
+  const challenge=values.get('challenge');
+  if(!challenge||!/^[A-Za-z0-9_-]{1,128}$/.test(challenge)||!/^\d{1,5}$/.test(values.get('protocol'))||!values.get('mapname'))return;
+  return {type:'answer',key:'ioq3/'+h.sport+'/'+challenge,session:{port:h.sport}};
+}
 
 // Epic's NboSerializerNull writes a string session ID before the IP.
 // NboSerializerSteam writes a 64-bit session ID after the IP.
@@ -32,6 +55,10 @@ function epicSession(data,start,steam){
 }
 
 function discoveryMessage(data,h){
+  if(quakePort(h.sport)||quakePort(h.dport)){
+    const quake=quakeDiscovery(data,h);
+    if(quake)return quake;
+  }
   const version=data[0],header=version===12?32:version===11?16:0;
   if(header&&data[6]===0x53){
     const key='epic/'+data.subarray(0,6).toString('hex')+'/'+data.subarray(8,16).toString('hex');
