@@ -43,7 +43,7 @@
   "Опустошения очереди за трансляцию": "Audio queue underruns during this stream",
   "пропущено при переполнении": "discarded on overflow",
   "Не удалось сохранить профиль.": "Could not save your profile.",
-  "Был на связи · {date}": "Last seen · {date}",
+  "Последний раз в сети · {date}": "Last seen · {date}",
   "Прочитано": "Read",
   "Б": "B",
   "КиБ": "KiB",

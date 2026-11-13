@@ -171,7 +171,7 @@ async function run(){
       await b.page.waitForFunction(({status,label})=>{
         const presence=document.querySelector('#dmPresence');
         if(status==='invisible')return !presence.classList.contains('available') &&
-          (presence.textContent===label||presence.textContent.startsWith('Был на связи · '));
+          (presence.textContent===label||presence.textContent.startsWith('Последний раз в сети · '));
         return presence.textContent===label;
       },{status,label});
     }

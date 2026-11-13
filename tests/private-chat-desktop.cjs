@@ -227,7 +227,11 @@ async function run(){
     await a.page.locator('#dmLog').getByText('Завтра в восемь?',{exact:true}).waitFor();
     await b.page.evaluate(()=>localStorage.setItem('craftcode.language','en'));
     await b.app.close(); apps.delete(b.app);
-    await a.page.waitForFunction(()=>document.querySelector('#dmPresence').textContent.startsWith('Был на связи'));
+    await a.page.waitForFunction(()=>{
+      const status=document.querySelector('#dmPresence').textContent;
+      return status.startsWith('Последний раз в сети · ') && /\d/.test(status) &&
+        document.querySelector('#dmProfileStatus').textContent===status;
+    });
     await a.page.fill('#dmInput','До связи');await a.page.press('#dmInput','Enter');
     await a.page.locator('#dmLog').getByText('Ожидает доставки',{exact:true}).waitFor();
     b=await open('boris');await b.page.click('#navChats');await b.page.locator('#dmList button').click();

@@ -154,7 +154,7 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
     $('dmTitle').textContent=c.name;
     const online=c.online===true;
     const seen=!online&&c.status==='offline'&&Number.isFinite(c.lastSeen)&&c.lastSeen>0&&c.lastSeen<=Date.now();
-    $('dmPresence').textContent=seen?tr('Был на связи · {date}').replace('{date}',()=>lastContact.format(c.lastSeen)):contactStatusLabel(c);
+    $('dmPresence').textContent=seen?tr('Последний раз в сети · {date}').replace('{date}',()=>lastContact.format(c.lastSeen)):contactStatusLabel(c);
     $('dmPresence').classList.toggle('available',online);
     $('dmIntro').hidden=loading||loadError||hasMore;
     for(const id of ['dmIntroAvatar','dmProfileAvatar'])paintAvatar($(id),c.name,c.avatar);
