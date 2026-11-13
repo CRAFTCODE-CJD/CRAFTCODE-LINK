@@ -637,7 +637,7 @@ async function createWindow() {
     clearCapture();
     lastSources.clear();
   });
-  await mainWindow.loadFile(UI_PATH);
+  await mainWindow.loadURL(UI_URL);
 }
 
 app.whenReady().then(async () => {
