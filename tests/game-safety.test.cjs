@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),os=require('node:os'),fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
-const {GameNetwork,overlaps}=require('../src/game/network.cjs'),{GameRoom}=require('../src/game/room.cjs');
+const {GameNetwork}=require('../src/game/network.cjs'),{GameRoom}=require('../src/game/room.cjs');
 const {ShelfStorage,safe,BLOCK}=require('../src/files/storage.cjs');
 const {DirectService}=require('../src/direct/service.cjs'),{seed,publicCard,friend}=require('../src/direct/identity.cjs');
 const members=['A','B','C'].map((name,i)=>({id:String(i+1).repeat(64),device:String(i+4).repeat(64),name,slot:i+1}));
@@ -39,7 +39,8 @@ test('only admitted seats may inject approved room-local game UDP; return traffi
  n.route(1,frame({src:1,dst:2,sport:44444,dport:7000}),true);send(members[1],frame({sport:7000,dport:44444}));assert.equal(delivered.length,2);n.stop();
 });
 test('overlapping adapter ranges detected including VPN /8',()=>{
- const nic=mask=>({n:[{family:'IPv4',address:'10.90.2.50',netmask:mask}]});
+ const {overlaps,interfaceRanges}=require('../src/game/subnet.cjs');
+ const nic=mask=>interfaceRanges({n:[{family:'IPv4',address:'10.90.2.50',netmask:mask}]});
  assert(overlaps('10.90.2',nic('255.255.255.0')));assert(overlaps('10.90.88',nic('255.0.0.0')));assert(!overlaps('10.90.88',nic('255.255.255.0')));
 });
 test('Generals lobby broadcasts and fixed-port match traffic cross the LAN between admitted peers',async t=>{

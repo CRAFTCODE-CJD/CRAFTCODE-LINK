@@ -1,20 +1,14 @@
 'use strict';
-const os=require('node:os');
+const {ipv4Number,interfaceRanges,overlaps,chooseFreePrefix}=require('./subnet.cjs');
 const {launch}=require('./windows.cjs');
 const {tr}=require('../native-language.cjs');
 const {PathCheck,isProbePort,isProbe,peerProbePort}=require('./path-check.cjs');
 const {GamePorts,allowedPort}=require('./ports.cjs');
 const {GameDiscovery,discoveryMessage,localAnswer}=require('./discovery.cjs');
 const newTraffic=()=>({tx:0,rx:0,broadcastTx:0,broadcastRx:0,blockedTx:0,blockedRx:0,lastBlockedTx:'',lastBlockedRx:'',relayed:0,queriesTx:0,queriesRx:0,answersTx:0,answersRx:0,matchedRx:0,adapterDrops:0,lastMatch:null});
-const number=ip=>ip.split('.').reduce((a,b)=>(a*256+Number(b))>>>0,0);
-// Ignore default routes; only interface-owned on-link prefixes are compared.
-function overlaps(prefix,interfaces=os.networkInterfaces()){
-  const subnet=number(prefix+'.0');
-  return Object.values(interfaces).flat().some(n=>n?.family==='IPv4'&&((number(n.address)&number(n.netmask))===(subnet&number(n.netmask)) || (number(n.address)>>>8)===(subnet>>>8)));
-}
 function inspect(b,prefix){
   if(!Buffer.isBuffer(b)||b.length<28||b.length>1500||b[0]!==0x45||b.readUInt16BE(2)!==b.length||
-     (b.readUInt16BE(6)&0xbfff)!==0||b.readUIntBE(12,3)!==number(prefix+'.0')/256)return null;
+     (b.readUInt16BE(6)&0xbfff)!==0||b.readUIntBE(12,3)!==ipv4Number(prefix+'.0')/256)return null;
   const tcp=b[9]===6;
   if(tcp){
     if(b.length<40 || (b[32]>>>4)<5 || (b[32]>>>4)*4+20>b.length)return null;
@@ -58,11 +52,14 @@ class GameNetwork {
     try{
       if(this.release)await this.release;
       if(epoch!==this.generation)return;
-      let interfaces;
-      try{interfaces=os.networkInterfaces();}catch{throw Error(tr('Не удалось проверить сетевые адаптеры. Повторите попытку.'));}
-      // The elevated helper checks every interface again after validating the LINK device identity.
-      const otherInterfaces=Object.fromEntries(Object.entries(interfaces).filter(([name])=>name.toLowerCase()!=='craftcode link lan'));
-      if(overlaps(r.prefix,otherInterfaces))throw Object.assign(Error(tr('Подсеть занята. Создайте новую игровую LAN.')),{code:'overlap'});
+      let ranges;
+      try{ranges=interfaceRanges(undefined,true);}catch{throw Error(tr('Не удалось проверить сетевые адаптеры. Повторите попытку.'));}
+      if(overlaps(r.prefix,ranges)){
+        const message=chooseFreePrefix(ranges)===null
+          ? tr('Для игровой LAN нет свободной подсети на этом ПК. После смены сети повторите включение. Чат доступен.')
+          : tr('Подсеть комнаты занята на этом ПК. Создайте новую игровую LAN с друзьями или повторите включение после смены сети.');
+        throw Object.assign(Error(message),{code:'overlap'});
+      }
       const adapter=await this.open({room:r.id,repair,ip:address,packet:b=>{if(epoch===this.generation)this.route(me.slot,b,true);},
         closed:()=>{if(epoch===this.generation){this.stop();this.error=tr('Игровой адаптер отключён.');this.changed();}},
         abort:fn=>{if(epoch===this.generation)this.abort=fn;else fn();}});
@@ -197,4 +194,4 @@ class GameNetwork {
     this.schedule();
   }
 }
-module.exports={GameNetwork,inspect,overlaps};
+module.exports={GameNetwork,inspect};

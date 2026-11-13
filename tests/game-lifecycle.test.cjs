@@ -49,7 +49,7 @@ test('a late approval after cancellation cannot attach to a retired listener', a
   assert.equal(err.code, 'ECONNREFUSED');
 });
 test('an authenticated helper reports a busy adapter or overlapping subnet before readiness', async () => {
-  for (const [code, error] of [['busy',/уже используется/],['overlap',/Подсеть занята/],['driver-create:5',/не создала/],['driver-file:2',/wintun/]]) {
+  for (const [code, error] of [['busy',/уже используется/],['overlap',/Подсеть комнаты занята/],['driver-create:5',/не создала/],['driver-file:2',/wintun/]]) {
     const s = setup(), socket = await connectHelper(s.started);
     const rejected = assert.rejects(s.adapter,{message:error,code});
     socket.write(Buffer.concat([Buffer.from([0,code.length]),Buffer.from(code)]));

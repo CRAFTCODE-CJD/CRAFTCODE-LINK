@@ -1,5 +1,5 @@
 'use strict';
-const { randomUUID, randomInt } = require('node:crypto');
+const { randomUUID } = require('node:crypto');
 const { validateName, validateChat, TokenBucket } = require('../core/protocol.cjs');
 const { tr } = require('../native-language.cjs');
 const { isProbePort } = require('./path-check.cjs');
@@ -7,7 +7,7 @@ const LIMIT = 17;
 const hex = s => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);
 const uuid = s => typeof s === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(s);
 const validSlot = n => Number.isInteger(n) && n >= 1 && n <= LIMIT;
-const validPrefix = s => typeof s === 'string' && /^10\.\d{1,3}\.\d{1,3}$/.test(s) && s.split('.').every(x => String(Number(x)) === x) && Number(s.split('.')[1])>=80 && Number(s.split('.')[1])<=223 && Number(s.split('.')[2])>=1 && Number(s.split('.')[2])<=253;
+const { validPrefix, newRoomPrefix } = require('./subnet.cjs');
 const fail = msg => { throw Error(tr(msg)); };
 function readRoster(list) {
   if (!Array.isArray(list) || list.length < 1 || list.length > LIMIT) return null;
@@ -35,7 +35,7 @@ class GameRoom {
     if(this.active) fail('Сначала выйдите из игровой LAN.');
     const {id,device,name}=this.self();
     const roomTitle=validateName(title);this.cancelAsk();
-    this.active={id:randomUUID(),title:roomTitle,prefix:'10.'+randomInt(80,224)+'.'+randomInt(1,254),host:true,listed,
+    this.active={id:randomUUID(),title:roomTitle,prefix:newRoomPrefix(),host:true,listed,
       roster:[{id,device,name,slot:1}],messages:[],waiting:false};
     this.invitations.clear();this.changed();
   }
@@ -284,6 +284,7 @@ class GameRoom {
         const list=readRoster(m.list),self=this.self();
         const me=list?.find(p=>p.device===self.device && p.id===self.id);
         if(!me||!validPrefix(m.prefix)||list[0].device!==card.device || list[0].id!==card.id)return;
+        if(!r.waiting && r.prefix !== m.prefix)return;
         const reported=me.ready;
         me.ready=r.localReady===true;me.probePort=r.localProbePort;
         r.waiting=false;r.prefix=m.prefix;r.roster=list;this.changed();
