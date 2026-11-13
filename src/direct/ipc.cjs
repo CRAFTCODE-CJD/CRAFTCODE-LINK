@@ -312,6 +312,16 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
     }else throw Error(tr('Неизвестная команда.'));
     return s.snapshot();
   });
+  function updateBlocker(){
+    if(staged || voiceSwitch || switching || service?.pending || service?.out || service?.voiceChannels.rooms.size ||
+      service?.voiceChannels.local || service?.voiceChannels.preparing)return 'Завершите звонок или закройте приглашение, затем нажмите «Установить» снова.';
+    if(service?.chats.files.transfers.size || service?.groups.files?.tasks.size || service?.game.files.transferring)
+      return 'Дождитесь завершения передачи файлов, затем нажмите «Установить» снова.';
+    if([...(service?.groups.records.values()||[])].some(r=>r.move))
+      return 'Дождитесь завершения передачи группы, затем нажмите «Установить» снова.';
+    if(!service?.game.active && service?.gameNet.release)return 'Отключаем игровую сеть. Через несколько секунд нажмите «Установить» снова.';
+    return '';
+  }
   return {
     offerSelected(target,selection,caption){
       const s=service;
@@ -324,9 +334,13 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
     allowsPublicLookup:()=>policyReady && !strict,
     get camera(){return service?.chats.files.camera;},
     lanCamera,
-    updateSessionActive:()=>!!(service?.game.active || service?.gameNet.release || service?.pending || service?.out || service?.chats.files.transfers.size ||
-      service?.voiceChannels.rooms.size || service?.voiceChannels.local || service?.voiceChannels.preparing || service?.groups.files?.tasks.size ||
-      [...(service?.groups.records.values()||[])].some(r=>r.move) || staged || voiceSwitch || switching),
+    updateBlocker,
+    get gameRoom(){return service?.game.active;},
+    async leaveGameForUpdate(){
+      service.game.leave();
+      await service.gameNet.stop();
+      await Promise.allSettled([...service.game.files.work]);
+    },
     canOpenChat:(profile,id)=>!!(service?.me?.id===profile && !service.paused && service.chats.friend(id) && service.chats.summary(service.contact(id)).unread),
     joinedPeer:(port,invite,id,address)=>service?.joinedPeer(port,invite,id,address),leftByChoice:(port,invite,address)=>service?.leftByChoice(port,invite,address),endGame:()=>{if(service){service.game.invitations.clear();service.game.leave();}},stop:()=>{discardVoice();discardSwitch();return service?.stop();},presence:()=>service?.announceRooms(),clear:preserve=>{if(voiceSwitch&&voiceSwitch!==preserve)discardVoice();if(staged && staged!==preserve)discardSwitch();directRoom=false;if(service){service.publishRoom=false;service.guestAppearance=null;service.audience={mode:'friends',ids:new Set()};service.announceRooms();service.grants.clear();service.returning.clear();service.tunnels.clear();}},get active(){return directRoom;}};
 }

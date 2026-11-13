@@ -11,9 +11,17 @@
 #attachmentDraftStatus {flex:none;max-height:min(96px,16dvh);overflow:auto;overflow-wrap:anywhere;margin:8px 0 0}
 #attachmentDraftStatus:empty {display:none}
 #attachmentDraft .dialog-actions {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:14px}
-.link-chat-emoji[open] .emoji-picker:popover-open {position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(324px,94vw);height:min(348px,72vh);padding:10px;display:grid;grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 9px 24px #0005}
-.emoji-picker :is(input,select) {font:inherit;min-width:0;width:100%;box-sizing:border-box;padding:6px 8px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:6px}
-.emoji-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));align-content:start;justify-items:center;gap:2px;min-height:0;overflow:auto;overscroll-behavior:contain}
-.emoji-grid button {font:21px "LINK Emoji","Segoe UI Emoji",sans-serif}
-.emoji-picker .emoji-more {width:100%;font-size:13px;color:var(--accent)}
-.emoji-picker p {margin:0}
+.emoji-picker:popover-open {
+  position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(324px,calc(100vw - 16px));max-height:calc(100dvh - 16px);
+  display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto;
+  background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 9px 24px #0005;
+}
+.emoji-picker :is(input,select) {
+  flex:none;font:inherit;min-width:0;width:100%;height:34px;box-sizing:border-box;padding:5px 9px;
+  color:var(--text);background-color:var(--bg);border:1px solid var(--border);border-radius:7px;
+}
+.emoji-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:3px;align-content:start;min-height:0;max-height:min(224px,45dvh);overflow:auto;overscroll-behavior:contain}
+.emoji-grid button {display:grid;place-items:center;height:34px;padding:0;border:0;border-radius:7px;background:transparent;color:inherit;cursor:pointer;font:21px "LINK Emoji","Segoe UI Emoji",sans-serif}
+.emoji-grid button:hover,.emoji-grid button:focus-visible {background:var(--soft)}
+.emoji-picker .emoji-more {width:100%;min-height:30px;font-size:13px;color:var(--accent)}
+.emoji-picker p {margin:0;font-size:13px;color:var(--muted)}

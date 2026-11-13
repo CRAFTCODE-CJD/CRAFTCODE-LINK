@@ -20,10 +20,3 @@ export function friendRooms(contacts,local,account,session,currentHost){
   return rooms.sort((a,b)=>Number(a.count>=a.limit)-Number(b.count>=b.limit) || Number(!!b.canReturn)-Number(!!a.canReturn) ||
     Number(b.favorite)-Number(a.favorite) || collator.compare(a.name,b.name) || a.door.localeCompare(b.door));
 }
-export function newestPeerVersion(contacts,current){
-  const valid=v=>typeof v==='string' && /^(?:0|[1-9]\d{0,3})(?:\.(?:0|[1-9]\d{0,3})){2}$/.test(v);
-  if(!valid(current))return '';
-  const versions=contacts.filter(c=>c.online && c.state==='friend').flatMap(c=>c.versions||[]).filter(valid);
-  const newest=[current,...versions].sort((a,b)=>collator.compare(b,a))[0];
-  return newest===current?'':newest;
-}

@@ -6,7 +6,7 @@ import {tr} from './locale.mjs';
 import {workspaceShell} from './workspace-shell.mjs';
 import {paintAvatar} from './profile-appearance.mjs';
 import {selectContacts} from './contact-list.mjs';
-import {friendRooms,newestPeerVersion} from './room-directory.mjs';
+import {friendRooms} from './room-directory.mjs';
 
 const discoveryActions={strictProxy:'Настройки соединения',directStatus:'Изменить статус',directNic:'Выбрать локальную сеть',directDht:'Настройки поиска'};
 
@@ -244,10 +244,10 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
       group:inRoom?session?.groupVoice?.group:groups.selected});
     const rooms=friendRooms(data.contacts,data.local,internet.account,state.session,internet.room.hostFull);
     const busy=!!(state.starting || direct.raw().incoming || direct.raw().outgoing || internet.room.pending || internet.room.outgoing || internet.room.joining || internet.access.pending);
-    const peerVersion=newestPeerVersion(data.contacts,state.environment?.version);
-    $('peerVersionHint').hidden=!peerVersion;
-    if(peerVersion && $('updatePanel').dataset.seen!==peerVersion){$('updatePanel').dataset.seen=peerVersion;$('updatePanel').open=true;}
-    $('peerVersionHint').textContent=peerVersion?tr('У друга доступна версия ')+peerVersion:'';
+    const gameRoom=data.local && direct.raw().game?.room;
+    const notice=$('updateRoomNotice');
+    notice.hidden=!gameRoom;
+    if(gameRoom)notice.textContent=tr(gameRoom.host?'Вы организатор игровой LAN. Установка закроет комнату для всех участников.':'Вы в игровой LAN. Перед установкой LINK предложит выйти из комнаты.');
     const games=data.local?direct.raw().game?.returns||[]:[];
     const railKey=JSON.stringify([identity,view,rooms,games,busy,!!session,data.contacts.map(c=>[c.id,c.avatarRev])]);
     if(railKey!==lastRail){

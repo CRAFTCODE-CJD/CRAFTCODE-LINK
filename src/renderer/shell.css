@@ -39,7 +39,13 @@
 #groupRail .space-utilities {margin-top:auto}
 #groupRail #networkHelpBtn {color:var(--muted);background:transparent}
 #groupRail #networkHelpBtn:hover {background:var(--surface-hover)}
-#groupRail #networkHelpBtn .release-hint {position:absolute;top:0;right:-1px;font-size:8px}
+#groupRail #releaseRail:not([hidden]) {display:grid;background:var(--soft);color:var(--accent);border-radius:12px}
+#groupRail #releaseRail[hidden] {display:none}
+#releaseRail .update-indicator {position:absolute;inset:5px 5px auto auto;width:8px;height:8px;border-radius:50%;background:var(--accent);outline:2px solid var(--nav)}
+#releaseRail[data-phase=waiting] .update-indicator {background:var(--warning)}
+#releaseRail[data-phase=downloading] .update-indicator {animation:update-pulse 1.4s ease-in-out infinite alternate}
+@keyframes update-pulse {to{opacity:.35}}
+@media(prefers-reduced-motion:reduce){#releaseRail .update-indicator {animation:none}}
 #navRail {grid-area:sections;align-items:stretch;gap:8px;padding:10px 9px 8px;max-height:45vh;overflow:auto;scrollbar-width:thin;border-bottom:1px solid var(--border-soft)}
 #sidebarSearch .dm-search {margin:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:7px;min-height:32px}
 #sidebarSearch .icon {flex:none;width:15px;height:15px}

@@ -75,6 +75,7 @@ export function bindHelpCenter({$,showDialog,closeDialog}){
   $('helpExamplesTitle').addEventListener('click',()=>{if($('helpExamples').open)stop();});
   $('helpExamples').addEventListener('toggle',()=>{if(!$('helpExamples').open)stop();});
   $('helpConnectivity').addEventListener('click',stop);
+  $('helpOpenUpdates').addEventListener('click',stop);
   $('networkDialog').addEventListener('close',()=>{
     stop();$('helpSearch').value='';for(const article of articles){article.hidden=false;article.open=false;}$('helpNothing').hidden=true;
   });

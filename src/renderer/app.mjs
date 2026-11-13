@@ -1,7 +1,6 @@
 import {chatComposer} from './chat-composer.mjs';
 import {bindAttachmentDraft} from './attachment-draft.mjs';
 import {createChatView} from './chat-view.mjs';
-import {parseUpdateCode} from './release-code.mjs';
 import {updateControls} from './update-controls.mjs';
 import {RoomFiles} from './room-files.mjs';
 import {requestNotices} from './request-notices.mjs';
@@ -269,7 +268,7 @@ const validateRoomAttachment=bindAttachmentDraft({area:$('roomSidebar'),input:$(
 let chatPreference=null, compactRoom=false;
 async function prepareMedia(info){
     const scope=await api.files({op:'open',label:info.peers.find(p=>p.slot===0)?.name||'LINK'});
-    const shelf=new RoomFiles(info,opts=>api.files({...opts,scope}),()=>{if(state.media?.files===shelf){for(const p of state.peers)shelf.names.set(p.id,p.name);shelf.render($('shelfItems'));shelf.render($('chatMessages'),true);$('emptyChat').hidden=!!$('chatMessages').childElementCount;if($('networkDialog').open&&$('updatePanel').open)renderRelease();}},errorToast);
+    const shelf=new RoomFiles(info,opts=>api.files({...opts,scope}),()=>{if(state.media?.files===shelf){for(const p of state.peers)shelf.names.set(p.id,p.name);shelf.render($('shelfItems'));shelf.render($('chatMessages'),true);$('emptyChat').hidden=!!$('chatMessages').childElementCount;}},errorToast);
     shelf.scope=scope;shelf.view=(id,v)=>composer.view(shelf,id,v);
     const media=state.media = new RoomMedia({
       screenOutputDelay:id=>mixer.screenOutputDelay(id),
@@ -784,21 +783,6 @@ function renderStudio() {
     return group;
   });
   target.replaceChildren(...rows);
-}
-function roomRelease(){
-  const shelf=state.media?.files,code=$('releaseCode').value.trim();
-  if(!code)return {};
-  const {name,sha,error}=parseUpdateCode(code,state.environment?.version);
-  if(error||!shelf)return {error};
-  const entry=[...shelf.entries.values(),...[...shelf.downloads.values()].map(d=>d.v)].find(v=>v.name===name&&v.sha===sha&&!shelf.local.has(v.id));
-  return {shelf,entry,download:entry&&shelf.downloads.get(entry.id)};
-}
-function renderRelease(){
-  const {entry,download,error}=roomRelease(),button=$('downloadRelease');
-  button.hidden=!entry;button.disabled=!!download&&!download.final&&!download.paused;
-  button.textContent=tr(download?.final?'Установить':download?.paused?'Продолжить в файлах комнаты':'Скачать обновление');
-  $('chooseRelease').disabled=!!error||!$('releaseCode').value.trim();
-  $('releaseStatus').textContent=error?tr(error):download?.final?tr('Загрузка завершена.'):download&&!download.paused?Math.floor(download.pos/entry.size*100)+'%':!entry&&$('releaseCode').value.trim()?tr('Подходящий установщик пока недоступен в комнате.'):'';
 }
 function stageFormat(value) {
   $('stageStats').textContent=value;
@@ -1516,11 +1500,10 @@ function help(network=false){
   $('helpAddCard').textContent=tr(jabber?'Ввести адрес друга':'Вставить карточку друга');
   $('helpTopics').hidden=network;$('helpNetwork').hidden=!network;$('technicalReport').open=false;
   $('networkTitle').textContent=network?tr('Диагностика связи'):tr('Справка LINK');
-  showDialog('networkDialog');renderRelease();if(network)renderStatistics();
+  showDialog('networkDialog');if(network)renderStatistics();
 }
 function openUpdates(){
-  help();$('updatePanel').open=true;
-  $('updateSummary').focus();$('updateSummary').scrollIntoView({block:'nearest'});
+  showDialog('updatesDialog');
 }
 function bindUI() {
   $('watchBuffer').addEventListener('change', () => {
@@ -1547,27 +1530,18 @@ function bindUI() {
   $('roomDialog').addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !state.starting) { e.preventDefault(); connectRoom().catch(errorToast); }
   });
-  $('releaseCode').addEventListener('input',renderRelease);
   action('openOfflineUpdate',async()=>{
     const button=$('openOfflineUpdate'),status=$('offlineUpdateStatus');
     button.disabled=true;status.textContent=tr('Выбор и проверка пакета…');
-    try{await api.installRelease({offline:true});status.textContent='';}
+    try{await api.installRelease();status.textContent='';}
     catch(error){status.textContent=errorMessage(error);}
     finally{button.disabled=false;}
   });
-  projectUpdates=updateControls($,api,errorToast);
-  $('updatePanel').addEventListener('toggle',renderRelease);
-  action('chooseRelease',()=>api.installRelease({code:$('releaseCode').value}));
-  action('downloadRelease',async()=>{
-    const {shelf,entry,download}=roomRelease();if(!entry)return;
-    if(download?.final)return api.installRelease({code:$('releaseCode').value,token:download.token});
-    if(download?.paused){
-      closeDialog('networkDialog');$('navRoom').click();closeStudio();
-      if(document.querySelector('.app-shell.cinema'))$('cinemaBtn').click();
-      setSidebar(true);$('roomShelf').open=true;return;
-    }
-    await shelf.start(entry);renderRelease();
-  });
+  projectUpdates=updateControls($,api,errorMessage);
+  action('helpDonate',()=>api.releases({op:'donate'}));
+  action('helpOpenUpdates',openUpdates);
+  action('releaseRail',openUpdates);
+  action('closeUpdatesDialog',()=>closeDialog('updatesDialog'));
   action('shelfOffer',()=>state.media?.files.offer());
   $('roomModerated').onchange=()=>state.media?.setRights($('roomModerated').checked).catch(errorToast);
   $('audienceMode').onchange=()=>saveAudience();
@@ -1634,7 +1608,7 @@ function bindUI() {
   action('useStun',enableStun);action('stageStun',enableStun);
   $('publicStun').checked=!!settings.publicStun;
   $('publicStun').addEventListener('change',()=>{settings.publicStun=$('publicStun').checked;saveSettings();if(state.session?.internet||state.session?.usePeerIce)retryRoutes();});
-  action('networkHelpBtn',()=>{$('helpCardStatus').textContent='';help();if(projectUpdates?.offered?.())$('updatePanel').open=true;});
+  action('networkHelpBtn',()=>{$('helpCardStatus').textContent='';help();});
   action('copyDiagnosticsBtn', async () => {
     await api.copyText(voiceRoomReport());
     toast(tr('Отчёт скопирован.'));

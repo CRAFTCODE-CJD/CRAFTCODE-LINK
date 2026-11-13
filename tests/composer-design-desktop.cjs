@@ -32,6 +32,32 @@ module.exports = async function checkComposer(client, other) {
       };
     });
   }
+  async function checkEmoji(menu, input) {
+    await page.click(menu + ' summary');
+    const picker = page.locator(menu + ' .emoji-picker');
+    await picker.locator('[data-glyph="🎮"]').waitFor();
+    const layout = await picker.evaluate(el => {
+      const box = child => child.getBoundingClientRect();
+      const search = box(el.querySelector('input')), categories = box(el.querySelector('select'));
+      const grid = box(el.querySelector('.emoji-grid')), glyph = box(el.querySelector('[data-glyph]'));
+      return {
+        stacked: search.bottom <= categories.top && categories.bottom <= grid.top,
+        fullWidth: search.width >= el.clientWidth * .8 && categories.width >= search.width - 1,
+        usableGrid: grid.width >= glyph.width * 6,
+        visible: box(el).left >= 0 && box(el).right <= innerWidth && box(el).bottom <= innerHeight
+      };
+    });
+    assert(Object.values(layout).every(Boolean), menu + ': ' + JSON.stringify(layout));
+    if (menu === '#chatEmoji') await capture('room-emoji-picker');
+    await picker.locator('select').selectOption('Animals & Nature');
+    await picker.locator('.emoji-more').waitFor();
+    assert(await picker.locator('.emoji-grid').evaluate(el => el.scrollHeight > el.clientHeight));
+    await picker.locator('input').fill('ракета');
+    await picker.locator('[data-glyph="🚀"]').waitFor();
+    await picker.locator('input').press('Enter');
+    assert.equal(await page.inputValue(input), '🚀');
+    await page.fill(input, '');
+  }
   await page.setViewportSize({width: 1280, height: 800});
   await page.click('#dmCall');
   await peer.click('#peerAccept');
@@ -53,6 +79,7 @@ module.exports = async function checkComposer(client, other) {
   assert.equal(await page.locator('#dmEmoji input').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
   await page.keyboard.press('Escape');
   await page.click('#dmInput');
+  await checkEmoji('#dmEmoji', '#dmInput');
   await page.fill('#dmInput','Я на связи');
   await page.keyboard.press('Tab');
   assert.equal(await page.locator('#dmSend').evaluate(el => el === document.activeElement), true);
@@ -67,6 +94,7 @@ module.exports = async function checkComposer(client, other) {
   console.log('PASS direct chat during a call: local field focus, keyboard picker and send.');
   await page.click('#navRoom');
   if (!await page.isVisible('#chatInput')) await page.click('#togglePanelBtn');
+  await checkEmoji('#chatEmoji', '#chatInput');
   await page.click('#chatInput');
   await capture('room-chat-editing');
   assert.notEqual((await readFocus('#chatForm')).mark, 'none');
@@ -85,6 +113,7 @@ module.exports = async function checkComposer(client, other) {
   await page.click('#navGame');
   await page.fill('#gameTitle','Вечерний матч');
   await page.click('#gameCreate button');
+  await checkEmoji('#gameEmoji', '#gameMessage');
   await page.click('#gameMessage');
   await capture('lan-chat-light');
   assert.notEqual((await readFocus('#gameComposer')).mark, 'none');
@@ -92,6 +121,7 @@ module.exports = async function checkComposer(client, other) {
   await page.click('#groupCreate');
   await page.fill('#groupField-name','Вечер друзей');
   await page.click('#groupEditSubmit');
+  await checkEmoji('#groupEmoji', '#groupInput');
   await page.click('#groupInput');
   await capture('group-chat-light');
   assert.notEqual((await readFocus('#groupComposer')).mark, 'none');

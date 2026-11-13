@@ -136,6 +136,8 @@ class GroupFiles{
     if(generation!==this.generation||this.groups.s.me.id!==me)throw lost();
     const shelf=new ShelfStorage(this.io.downloads());let t;
     try{
+      if(file.filename&&(await fs.stat(file.filename)).size>MAX)
+        throw Error(tr('В группе можно хранить файлы до 32 МиБ. Больший файл можно отправить в личный чат.'));
       const m=file.filename?await shelf.offer(file.filename,MAX):shelf.memory(file.name,file.bytes);
       if(generation!==this.generation||this.groups.s.me.id!==me)throw invalid();
       if(own)this.reserve(this.auth(group,channel,me),m);else if(link!==this.ownerLink(group))throw lost();

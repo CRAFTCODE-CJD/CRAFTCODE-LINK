@@ -20,16 +20,19 @@ async function folder(parent,name){
 }
 class ShelfStorage{
   constructor(downloads,journal=null){this.downloads=downloads;this.journal=journal;this.sources=new Map();this.completed=new Map();this.incoming=new Map();this.closed=false;}
-  async offer(filename,limit=MAX){
+  async offer(filename,limit=MAX,onHashProgress){
     if(this.closed||this.sources.size>=24)fail();
     const id=randomUUID(),file=await fs.open(filename,'r');
     if(this.closed||this.sources.size>=24){await file.close();fail();}this.sources.set(id,file);
     try{
-      const start=await file.stat();if(!start.isFile()||start.size>Math.min(MAX,limit))fail();
+      const start=await file.stat();if(!start.isFile())fail();
+      if(start.size>MAX)throw Error(tr('Максимальный размер файла — 64 ГиБ.'));
+      if(start.size>limit)fail();
       const hash=createHash('sha256'),block=Buffer.alloc(512*1024);
       for(let offset=0;offset<start.size;){
         if(this.closed)fail();const {bytesRead}=await file.read(block,0,Math.min(block.length,start.size-offset),offset);
         if(!bytesRead)fail();hash.update(block.subarray(0,bytesRead));offset+=bytesRead;
+        onHashProgress?.(offset);
       }
       const end=await file.stat();if(start.mtimeMs!==end.mtimeMs||start.size!==end.size||this.closed)fail();
       file.location=filename;file.size=start.size;file.stamp=start.mtimeMs;return {id,name:safe(path.basename(filename)),size:start.size,sha:hash.digest('hex')};

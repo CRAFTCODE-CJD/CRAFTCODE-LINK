@@ -3,7 +3,7 @@ const {randomUUID}=require('node:crypto');
 const fs=require('node:fs/promises');
 const {exactKeys,TokenBucket}=require('../core/protocol.cjs');
 const {ShelfStorage,BLOCK}=require('../files/storage.cjs');
-const {MAX_FILE,validMeta}=require('../files/attachment-meta.cjs');
+const {MAX_FILE,LEGACY_FILE_LIMIT,validMeta}=require('../files/attachment-meta.cjs');
 const {CameraConsent}=require('../files/camera-consent.cjs');
 const {MAX_CLIP}=require('../files/chat-media.cjs');
 const {FILE_CHUNK}=require('./links.cjs');
@@ -63,9 +63,14 @@ class PersonalAttachments {
   }
   describe(row){
     const kind=this.chats.storage.attachmentKind(row.seq),transfer=this.find(row.direction==='in'?'download':'send',row.person,row.id);
-    const state=kind==='saved'?'saved':kind==='withdrawn'?'withdrawn':transfer?(row.direction==='in'?'receiving':'sending'):
-      row.direction==='in' && !this.peers(row.person).some(l=>l.card.device===row.origin)?'offline':kind==='failed'?'failed':'offered';
-    return {...row.attachment,state,played:row.played===true,...(transfer?{pos:transfer.pos,bytesPerSecond:Math.round(transfer.pos*1000/Math.max(1,performance.now()-transfer.started))}:{})};
+    const peers=this.peers(row.person);
+    const needsUpgrade=row.direction==='out' && row.status==='pending' && row.attachment.size>LEGACY_FILE_LIMIT &&
+      peers.length>0 && !peers.some(link=>link.largeFiles);
+    const state=kind==='saved'?'saved':kind==='withdrawn'?'withdrawn':needsUpgrade?'update-required':transfer?(row.direction==='in'?'receiving':'sending'):
+      row.direction==='in' && !peers.some(l=>l.card.device===row.origin)?'offline':
+      kind==='failed'||kind==='disk-full'?kind:'offered';
+    return {...row.attachment,state,played:row.played===true,...(kind==='path'&&row.attachment.size>LEGACY_FILE_LIMIT?{originalRequired:true}:{}),
+      ...(transfer?{pos:transfer.pos,bytesPerSecond:Math.round(transfer.pos*1000/Math.max(1,performance.now()-transfer.started))}:{})};
   }
   find(mode,person,id,link){return [...this.transfers].find(t=>t.mode===mode && t.person===person && t.id===id && (!link || t.link===link));}
   async offer(person,kind,bytes,selection,caption=''){
@@ -80,11 +85,15 @@ class PersonalAttachments {
         const filename=selection?.filename ?? await this.io.choose();
         if(!filename||!this.fresh(t))return false;
         const st=await fs.stat(filename);
-        if(st.size>MAX_FILE)throw Error(tr('Максимальный размер вложения в личном чате — 256 МиБ.'));
+        if(st.size>MAX_FILE)throw Error(tr('Максимальный размер файла — 64 ГиБ.'));
+        if(st.size>LEGACY_FILE_LIMIT){
+          const peers=this.peers(person);
+          if(peers.length&&!peers.some(link=>link.largeFiles))throw Error(tr('Чтобы получить файл больше 256 МиБ, другу нужно обновить LINK.'));
+        }
         t.opening=t.store.offer(filename,MAX_FILE);
         meta=await t.opening;selected={kind:'path',bytes:Buffer.from(filename)};
         if(!this.fresh(t))throw offline();
-        if(startedOffline||!this.peers(person).length){
+        if(meta.size<=LEGACY_FILE_LIMIT && (startedOffline||!this.peers(person).length)){
           staged=storage.startSnapshot(meta.id,meta.size);
           const hash=createHash('sha256');
           for(let pos=0;pos<meta.size;pos+=SNAPSHOT_PART){
@@ -121,7 +130,14 @@ class PersonalAttachments {
     if(local.kind==='memory')meta=t.store.memory(row.attachment.name,local.bytes);
     else if(local.kind==='clip')meta=t.store.clip(row.attachment.clip,local.bytes);
     else{
-      t.opening=t.store.offer(local.bytes.toString('utf8'),row.attachment.size);meta=await t.opening;
+      // Pin the contents again before disclosing bytes from a saved path.
+      // Slow disks can take longer than the idle timeout on multi-GiB files.
+      const onHash=t.mode==='send'&&row.attachment.size>LEGACY_FILE_LIMIT?pos=>{
+        if(performance.now()-(t.lastCheck??t.started)<10000)return;
+        if(!this.packet(t,'checking',{pos}))throw offline();
+        t.lastCheck=performance.now();this.deadline(t);
+      }:undefined;
+      t.opening=t.store.offer(local.bytes.toString('utf8'),row.attachment.size,onHash);meta=await t.opening;
     }
     if(!this.fresh(t)||meta.sha!==row.attachment.sha||meta.size!==row.attachment.size)throw absent();
     return meta.id;
@@ -139,9 +155,11 @@ class PersonalAttachments {
     t.pos=pos;
     if(!t.update||performance.now()-t.update>300){t.update=performance.now();this.chats.changed(t.person);}
   }
-  failDownload(t){
+  failDownload(t,error){
     try{if(this.fresh(t)){
-      const row=this.row(t.person,t.id);this.chats.storage.setAttachment(row.seq,'failed');
+      this.packet(t,'stop');
+      const row=this.row(t.person,t.id);
+      this.chats.storage.setAttachment(row.seq,error?.code==='ENOSPC'||error?.code==='EDQUOT'?'disk-full':'failed');
     }}catch{this.chats.storageIssue();}
     return this.end(t,true);
   }
@@ -212,6 +230,10 @@ class PersonalAttachments {
     }
     const t=this.find('download',person,m.id);
     if(!t||t.link!==link||t.token!==m.token)return;
+    if(m.op==='checking'&&link.largeFiles&&t.size>LEGACY_FILE_LIMIT&&!t.pos&&!t.busy&&exactKeys(m,[...base,'pos'])&&
+      Number.isSafeInteger(m.pos)&&m.pos>=(t.checked||0)+512*1024&&m.pos<=t.size){
+      t.checked=m.pos;this.deadline(t);return;
+    }
     if(m.op==='gone' && exactKeys(m,base)){await this.failDownload(t);return;}
     if(m.op!==(t.chunk?'chunk':'block')||!exactKeys(m,[...base,'pos','data'])||m.pos!==t.pos||t.busy||typeof m.data!=='string')return;
     t.busy=true;
@@ -219,6 +241,7 @@ class PersonalAttachments {
       const expected=Math.min(t.chunk?FILE_CHUNK:BLOCK,t.size-t.pos);
       if(m.data.length!==4*Math.ceil(expected/3))throw invalid();
       const bytes=Buffer.from(m.data,'base64');if(bytes.length!==expected||bytes.toString('base64')!==m.data)throw invalid();
+      if(t.pos+bytes.length===t.size)clearTimeout(t.timer); // Local disk verification owns this phase.
       const result=await t.store.putBytes(t.file,t.pos,bytes,(filename,identity)=>{
         if(!this.fresh(t))throw absent();
         this.chats.storage.saveDownload(this.row(person,t.id),filename,identity);
@@ -233,7 +256,7 @@ class PersonalAttachments {
         this.pullAt.set(link,next+(t.chunk?15:35));
         t.next=setTimeout(()=>{if(!this.packet(t,t.chunk?'get-chunk':'get',{pos:t.pos}))this.end(t,true);},Math.max(0,next-now));
       }
-    }catch{await this.failDownload(t);}finally{t.busy=false;}
+    }catch(error){await this.failDownload(t,error);}finally{t.busy=false;}
   }
   async command(raw){
     const {action,id:person,messageId,requestId}=raw;
@@ -265,7 +288,7 @@ class PersonalAttachments {
       this.chats.storage.setAttachment(row.seq,'withdrawn');
       for(const t of this.transfers)if(t.id===messageId && t.person===person)this.end(t);
       for(const l of this.peers(person))l.send({kind:'friend-file',op:'revoked',to:person,id:messageId,token:randomUUID()});
-      this.chats.changed(person);return true;
+      this.chats.changed(person);this.chats.flush(person);return true;
     }
     if(action==='cancel'){
       const t=this.find('download',person,messageId);

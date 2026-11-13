@@ -138,14 +138,11 @@
 }
 .link-chat-emoji summary::-webkit-details-marker {display:none}
 .link-chat-emoji[open] summary,.link-chat-compose .chat-tools details[open] summary {color:var(--accent);background:var(--soft)}
-.link-chat-emoji[open] .link-chat-emoji-choices,.chat-tools details[open]>div {
+.chat-tools details:not(.link-chat-emoji)[open]>div {
   position:absolute;z-index:10;bottom:calc(100% + 8px);background:var(--panel);
   padding:5px;border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 16px #0005;
 }
-.link-chat-emoji[open] .link-chat-emoji-choices {inset-inline-end:0;display:grid;grid-template-columns:repeat(4,33px)}
-.chat-tools .link-chat-emoji[open] .link-chat-emoji-choices {inset-inline-start:0;inset-inline-end:auto;min-width:0}
-.link-chat-emoji-choices button {padding:0;width:33px;height:32px;border:0;border-radius:5px;color:inherit;background:transparent;cursor:pointer;font-size:17px}
-.link-chat-emoji-choices button:hover,.link-chat-emoji summary:hover {background:var(--surface-hover)}
+.link-chat-emoji summary:hover {background:var(--surface-hover)}
 .link-chat :is(summary,button):focus-visible {outline:2px solid var(--accent);outline-offset:1px}
 .link-chat-compose :is(summary,button,input,select):focus-visible {outline:2px solid var(--accent);outline-offset:1px}
 @media (forced-colors:active) {

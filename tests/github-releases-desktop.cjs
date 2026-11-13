@@ -10,7 +10,7 @@ const root=path.resolve(__dirname,'..'),pause=ms=>new Promise(resolve=>setTimeou
 async function runDesktop(){
   const {app,dialog,Notification,Tray}=require('electron');
   const {home,latestURL}=require('../src/github-releases.cjs'),version='99.1.0';
-  const prefix=home+'/releases/download/v'+version+'/CRAFTCODE-LINK-'+version,installer=prefix+'-Setup-x64.exe',codeURL=prefix+'-Update-Code.txt';
+  const prefix=home+'/releases/download/v'+version+'/CRAFTCODE-LINK-'+version,installer=prefix+'-Setup-x64.exe',sumsURL=prefix+'-SHA256SUMS.txt';
   const data=Buffer.alloc(48*1024,0x24);data.write('MZ');
   const digest=createHash('sha256').update(data).digest('hex');
   const calls=[],balloons=[],ranges=[];let confirmations=0,visibleRequests=0,errorResponse=false,damaged=false,disconnect=false,fixtureTray;
@@ -32,7 +32,7 @@ async function runDesktop(){
         if(errorResponse)return new Response(null,{status:429,headers:{'Retry-After':'1'}});
         return Response.redirect(home+'/releases/tag/v'+version,302);
       }
-      if(url===codeURL)return new Response('LINK-UPDATE '+version+' '+digest);
+      if(url===sumsURL)return new Response(digest+'  CRAFTCODE-LINK-'+version+'-Setup-x64.exe');
       assert.equal(url,installer);
       if(method==='HEAD')return new Response(null,{headers:{'Content-Length':String(data.length)}});
       const range=new Headers(headers).get('Range'),half=data.length/2;
@@ -62,18 +62,22 @@ async function runDesktop(){
       await reloaded;await until('document.documentElement.lang==="en" && !!document.querySelector("#githubCheck")?.onclick');
     }
     const initialShows=visibleRequests;
-    assert.equal(calls.length,0);assert.ok(await js('!document.querySelector("#coffeeSupport").hidden'));
+    assert.equal(calls.length,0);assert.ok(await js('!document.querySelector("#releaseRail").checkVisibility()'));assert.ok(await js('!document.querySelector("#coffeeSupport").hidden'));
     // With the real UI hidden in the tray, wait through the actual initial
     // scheduler delay. No window, native dialog, download or installer starts.
     await until('document.querySelector("#githubDownload").hidden===false',35000);
     assert.equal(win.isVisible(),false);assert.equal(visibleRequests,initialShows);assert.equal(confirmations,0);
-    assert.deepEqual(calls,[['HEAD',latestURL],['GET',codeURL],['HEAD',installer]]);assert.equal(await js('document.querySelector("#networkDialog").open'),false);
+    assert.deepEqual(calls,[['HEAD',latestURL],['GET',sumsURL],['HEAD',installer]]);assert.equal(await js('document.querySelector("#networkDialog").open'),false);
     assert.equal(balloons.length,1);assert.match(balloons[0].content,/99\.1\.0/);
     assert.ok(balloons[0].noSound&&balloons[0].respectQuietTime);
     await js('document.querySelector("#closeInternet").click()');
     assert.ok(fixtureTray.emit('balloon-click'),'notification click listener');
     assert.ok(visibleRequests>initialShows,'notification click reveals the window');
-    await until('document.querySelector("#networkDialog").open && document.querySelector("#updatePanel").open');
+    await until('document.querySelector("#updatesDialog").open && !document.querySelector("#networkDialog").open');
+    await js('document.querySelector("#closeUpdatesDialog").click()');
+    assert.ok(await js('document.querySelector("#releaseRail").checkVisibility() && document.querySelector("#releaseRail").getBoundingClientRect().bottom <= document.querySelector("#networkHelpBtn").getBoundingClientRect().top'));
+    await js('document.querySelector("#releaseRail").click()');
+    await until('document.querySelector("#updatesDialog").open');
     await js('document.querySelector("#releaseAutomatic").click()');
     await until('(async()=>!(await window.craftlink.releases({op:"state"})).automatic)()');
     errorResponse=true;await js('document.querySelector("#githubCheck").click()');
@@ -126,7 +130,7 @@ async function runDesktop(){
     assert.equal(ranges.at(-1),'bytes=24576-');
     assert.match(await js('document.querySelector("#githubReleaseStatus").textContent'),/SHA-256/);assert.equal(balloons.length,1);
     assert.deepEqual(calls.at(-1),['GET',installer]);assert.equal(confirmations,0);
-    await js('document.querySelector("#githubInstall").click()');await pause(150);assert.equal(confirmations,1);
+    await js('document.querySelector("#githubInstall").click()');await pause(150);assert.equal(confirmations,1);assert.equal(await js('document.querySelector("#releaseRail").dataset.phase'),'ready');
     assert.equal(await js('document.querySelector("#githubInstall").hidden'),false);
     console.log('PASS '+lang+' Electron release UI: background notice, byte progress and speed, waiting after disconnect, cancel and discard, pause under strict mode, automatic byte-range resume and verified installer confirmation.');
   }

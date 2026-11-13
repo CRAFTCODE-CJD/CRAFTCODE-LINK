@@ -48,7 +48,7 @@
   <div id="spaceList" aria-label="Мои группы"></div>
   <button type="button" id="groupCreate" class="space-button create-space" aria-label="Создать группу" title="Создать группу"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
   <button type="button" class="space-button" id="navGroups" title="Группы" aria-label="Группы"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="2"/><rect x="14.5" y="3.5" width="6" height="6" rx="2"/><rect x="3.5" y="14.5" width="6" height="6" rx="2"/><rect x="14.5" y="14.5" width="6" height="6" rx="2"/></svg><b id="groupBadge" class="request-count" hidden></b></button>
-  <div class="space-utilities"><button class="button button-ghost" id="networkHelpBtn" title="Справка LINK" aria-label="Справка LINK"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1 .7-1.8 1.1-1.8 2.8M12 17h.01"/></svg></button></div>
+  <div class="space-utilities"><button class="button button-ghost" id="releaseRail" type="button" aria-haspopup="dialog" aria-controls="updatesDialog" aria-label="Обновления" title="Обновления" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span class="update-indicator" aria-hidden="true"></span></button><button class="button button-ghost" id="networkHelpBtn" title="Справка LINK" aria-label="Справка LINK"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1 .7-1.8 1.1-1.8 2.8M12 17h.01"/></svg></button></div>
 </nav>
 <aside id="navRail" aria-label="Навигация">
   <div id="sidebarSearch"></div>
@@ -562,19 +562,14 @@
     <button id="openConnectionSettings" class="entry-link">Настройки звуков и подключения</button>
     <button id="logoutAccount" class="button button-ghost" hidden>Выйти из аккаунта</button>
   </dialog>
-  <dialog id="networkDialog" class="modal network-modal" aria-labelledby="networkTitle">
-    <div class="modal-header"><div><span class="eyebrow accent">CRAFTCODE LINK</span><h2 id="networkTitle">Справка LINK</h2></div><button id="closeNetworkDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
-    <section id="helpTopics" class="help-topics">
-      <div class="help-heading"><p id="helpIntro"></p><button type="button" id="helpTutorial" class="button button-primary"></button></div>
-      <details id="helpExamples"><summary id="helpExamplesTitle"></summary><p id="helpExamplesNote"></p><div id="helpVideos" role="group"></div><video id="helpVideo" controls playsinline preload="none" disablepictureinpicture aria-labelledby="helpVideoTitle" aria-describedby="helpVideoDescription"></video><h3 id="helpVideoTitle"></h3><p id="helpVideoDescription"></p><p id="helpVideoError" role="status" hidden></p></details>
-      <input type="search" id="helpSearch" maxlength="150" autocomplete="off">
-      <details id="helpFriendArticle"><summary>Как добавить друга?</summary><p id="helpFriendText"></p><div class="friend-actions"><button id="helpCopyCard" class="button button-secondary">Скопировать мою карточку</button><button id="helpAddCard" class="button button-primary">Вставить карточку друга</button></div><p id="helpCardStatus" class="field-help" role="status"></p></details>
-      <div id="helpArticles"></div><p id="helpNothing" class="field-help" role="status" hidden></p>
-      <details id="updatePanel"><summary id="updateSummary">Обновления</summary><p id="peerVersionHint" class="field-help" hidden></p>
+  <dialog id="updatesDialog" class="modal" aria-labelledby="updateTitle">
+    <header class="modal-header"><h2 id="updateTitle">Обновления</h2><button id="closeUpdatesDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header>
+      <p id="updateRoomNotice" class="field-help" role="status" hidden></p>
       <section id="githubUpdates" hidden>
         <label><input type="checkbox" id="releaseAutomatic"> Проверять обновления на GitHub раз в сутки</label>
         <p id="githubReleaseStatus" role="status" class="field-help"></p>
         <div id="githubProgress" hidden></div>
+        <p id="releaseActionError" class="field-help" role="alert" hidden></p>
         <div class="friend-actions">
           <button type="button" id="githubCheck" class="button button-secondary">Проверить на GitHub</button>
           <button type="button" id="githubDownload" class="button button-primary" hidden>Скачать обновление</button>
@@ -588,10 +583,16 @@
         <button type="button" id="openOfflineUpdate" class="button button-secondary">Открыть пакет обновления</button>
         <span id="offlineUpdateStatus" role="status"></span>
       </section>
-      <details id="legacyUpdate"><summary>Старый установщик и код</summary>
-      <p>Для старых выпусков попросите передать два файла из одного релиза: Setup-x64.exe и Update-Code.txt. Вставьте код из текстового файла. Сверьте его с публикацией CRAFTCODE или с доверенным отправителем.</p>
-      <label for="releaseCode">Код обновления</label><input id="releaseCode" maxlength="110" autocomplete="off" spellcheck="false" placeholder="LINK-UPDATE …">
-      <div class="friend-actions"><button id="downloadRelease" class="button button-primary" hidden></button><button id="chooseRelease" class="button button-secondary">Выбрать установщик на диске</button></div><p id="releaseStatus" role="status" class="field-help"></p></details></details>
+  </dialog>
+  <dialog id="networkDialog" class="modal network-modal" aria-labelledby="networkTitle">
+    <div class="modal-header"><div><span class="eyebrow accent">CRAFTCODE LINK</span><h2 id="networkTitle">Справка LINK</h2></div><button id="closeNetworkDialog" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <section id="helpTopics" class="help-topics">
+      <div class="help-heading"><p id="helpIntro"></p><button type="button" id="helpTutorial" class="button button-primary"></button></div>
+      <details id="helpExamples"><summary id="helpExamplesTitle"></summary><p id="helpExamplesNote"></p><div id="helpVideos" role="group"></div><video id="helpVideo" controls playsinline preload="none" disablepictureinpicture aria-labelledby="helpVideoTitle" aria-describedby="helpVideoDescription"></video><h3 id="helpVideoTitle"></h3><p id="helpVideoDescription"></p><p id="helpVideoError" role="status" hidden></p></details>
+      <input type="search" id="helpSearch" maxlength="150" autocomplete="off">
+      <details id="helpFriendArticle"><summary>Как добавить друга?</summary><p id="helpFriendText"></p><div class="friend-actions"><button id="helpCopyCard" class="button button-secondary">Скопировать мою карточку</button><button id="helpAddCard" class="button button-primary">Вставить карточку друга</button></div><p id="helpCardStatus" class="field-help" role="status"></p></details>
+      <div id="helpArticles"></div><p id="helpNothing" class="field-help" role="status" hidden></p>
+      <button type="button" id="helpOpenUpdates" class="button button-secondary" aria-haspopup="dialog" aria-controls="updatesDialog">Открыть обновления</button>
       <div id="coffeeSupport" class="coffee-support" hidden>
         <p>Если LINK вам пригодился, можно угостить автора кофе.</p>
         <button type="button" id="helpDonate" class="button button-secondary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 9h1a3 3 0 0 1 0 6h-1M4 21h14M8 2v3m4-3v3"/></svg><span>Угостить кофе</span></button>

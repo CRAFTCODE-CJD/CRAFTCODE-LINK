@@ -1,11 +1,9 @@
 import {language,tr} from './locale.mjs';
 import {transferMeter} from './transfer-progress.mjs';
 
-export function updateControls($,api,onError){
+export function updateControls($,api,errorMessage){
   if(!api?.releases)return {draw(){},refresh(){}};
-  const help=$('networkHelpBtn');
-  const badge=document.createElement('small');
-  badge.className='release-hint';badge.hidden=true;help.append(badge);
+  const rail=$('releaseRail');
   const retryFormat=new Intl.DateTimeFormat(language,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const retryTime=new Intl.DateTimeFormat(language,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   let cooldownTimer;
@@ -22,10 +20,13 @@ export function updateControls($,api,onError){
     const waiting=s.phase==='waiting';
     const downloading=s.phase==='downloading';
     const offered=waiting||downloading||s.phase==='available'||s.phase==='ready';
-    badge.hidden=!offered;badge.textContent=offered?s.version:'';
-    help.title=offered?tr('Справка LINK')+' · '+tr('Доступна версия')+' '+s.version:tr('Справка LINK');
-    help.setAttribute('aria-label',help.title);
-    $('updateSummary').textContent=tr('Обновления')+(offered?' · '+s.version:'');
+    rail.hidden=!offered;
+    rail.dataset.phase=s.phase;
+    const percent=Math.floor(100*s.received/Math.max(1,s.bytes));
+    const label=downloading?tr('Загрузка обновления')+' '+s.version+' · '+percent+'%':
+      waiting?tr('Загрузка приостановлена.'):s.phase==='ready'?tr('Обновление готово к установке'):tr('Доступна версия');
+    rail.title=downloading?label:label+' '+s.version;
+    rail.setAttribute('aria-label',tr('Открыть обновления')+' · '+rail.title);
     $('githubCheck').disabled=!s.supported||!s.networkAllowed||fetching||waiting||s.phase==='ready'||delay>0;
     const cancel=$('githubCancel');
     cancel.hidden=!fetching&&!waiting;
@@ -57,9 +58,16 @@ export function updateControls($,api,onError){
     const status=$('githubReleaseStatus');
     if(status.textContent!==text)status.textContent=text;
   }
-  const request=(op,extra={})=>api.releases({op,...extra}).then(draw).catch(onError);
+  const error=$('releaseActionError'),install=$('githubInstall');
+  async function request(op,extra={}){
+    error.hidden=true;
+    if(op==='install')install.disabled=true;
+    try{draw(await api.releases({op,...extra}));}
+    catch(e){error.textContent=errorMessage(e);error.hidden=false;}
+    finally{if(op==='install')install.disabled=false;}
+  }
   $('releaseAutomatic').onchange=()=>request('automatic',{enabled:$('releaseAutomatic').checked});
-  for(const [id,op] of [['githubCheck','check'],['githubDownload','download'],['githubCancel','cancel'],['githubInstall','install'],['helpDonate','donate']])
+  for(const [id,op] of [['githubCheck','check'],['githubDownload','download'],['githubCancel','cancel'],['githubInstall','install']])
     $(id).onclick=()=>request(op);
-  return {draw,refresh:()=>request('state'),offered:()=>!badge.hidden};
+  return {draw,refresh:()=>request('state')};
 }

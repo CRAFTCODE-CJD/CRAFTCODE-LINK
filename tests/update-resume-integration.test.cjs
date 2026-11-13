@@ -40,8 +40,8 @@ async function interruptedDownload(t){
     if(requested.pathname===new URL(latestURL).pathname){
       metadataChecks++;
       res.writeHead(302,{Location:home+'/releases/tag/v'+version}).end();
-    }else if(requested.pathname===new URL(prefix+'-Update-Code.txt').pathname){
-      res.writeHead(200).end('LINK-UPDATE '+version+' '+publishedSha+'\n');
+    }else if(requested.pathname===new URL(prefix+'-SHA256SUMS.txt').pathname){
+      res.writeHead(200).end(publishedSha+'  CRAFTCODE-LINK-'+version+'-Setup-x64.exe\n');
     }else if(requested.pathname===new URL(prefix+'-Setup-x64.exe').pathname){
       const ticket=req.method==='GET'?String(++requests):'size';
       res.writeHead(302,{Location:cdn+'/asset?ticket='+ticket}).end();

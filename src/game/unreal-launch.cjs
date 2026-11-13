@@ -5,6 +5,7 @@ const net = require('node:net');
 const {spawn} = require('node:child_process');
 const {tr} = require('../native-language.cjs');
 const {launchSelection,executable}=require('./launcher.cjs');
+const {generalsPlan}=require('./generals-options.cjs');
 
 function gameAddress(service) {
   const room=service.game.active, member=service.gameNet.mine();
@@ -42,15 +43,21 @@ async function launchUnreal(service,dialog,window,host={platform:process.platfor
     filters:[{name:tr('Приложение Windows'),extensions:['exe']}]});
   if(selected.canceled || selected.filePaths.length!==1)return;
   const file=await executable(selected.filePaths[0],host.files);
+  const plan=unreal?null:await generalsPlan(file,state.address,host.generals);
   const confirmed=await dialog.showMessageBox(window,{type:'question',title:tr('Запустить игру через LINK?'),
-    message:path.win32.basename(file),detail:file+'\n\n'+args.join(' '),
-    buttons:[tr('Отмена'),tr('Запустить игру')],defaultId:0,cancelId:0,noLink:true});
-  if(confirmed.response!==1)return;
+    message:path.win32.basename(file),detail:[file,args.join(' '),plan?.hint].filter(Boolean).join('\n\n'),
+    buttons:plan?.apply?[tr('Отмена'),tr('Настроить и запустить'),tr('Запустить без изменений')]:[tr('Отмена'),tr('Запустить игру')],
+    defaultId:0,cancelId:0,noLink:true});
+  if(confirmed.response!==1&&!(plan?.apply&&confirmed.response===2))return;
   if(await executable(file,host.files)!==file)throw Error(tr('Выбор игры изменился. Откройте запуск снова.'));
-  const current=gameAddress(service);
-  if(current?.room!==state.room||current.address!==state.address||service.me?.id!==owner||targetAddress()!==destination)throw Error(tr('Игровая сеть изменилась. Откройте запуск снова.'));
-  if(choice&&JSON.stringify(launchSelection(service.profile?.gameLaunch))!==JSON.stringify(choice))throw Error(tr('Выбор игры изменился. Откройте запуск снова.'));
-  checkPort();
+  function check(){
+    const current=gameAddress(service);
+    if(current?.room!==state.room||current.address!==state.address||service.me?.id!==owner||targetAddress()!==destination)throw Error(tr('Игровая сеть изменилась. Откройте запуск снова.'));
+    if(choice&&JSON.stringify(launchSelection(service.profile?.gameLaunch))!==JSON.stringify(choice))throw Error(tr('Выбор игры изменился. Откройте запуск снова.'));
+    checkPort();
+  }
+  check();
+  if(plan?.apply&&confirmed.response===1){await plan.apply(check);check();}
   await new Promise((resolve,reject)=>{
     const proc=host.spawn(file,args,{shell:false,detached:true,cwd:path.win32.dirname(file),stdio:'ignore'});
     proc.once('error',reject);proc.once('spawn',()=>{proc.unref();resolve();});

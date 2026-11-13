@@ -15,8 +15,6 @@ const {GroupVoice}=require('../groups/voice.cjs');
 const {decodeInvite}=require('../core/invite.cjs');
 const {LIMITS}=require('../core/protocol.cjs');
 const uuid=v=>typeof v==='string' && /^[a-f0-9-]{36}$/.test(v);
-const appVersion=require('../../package.json').version;
-const validVersion=v=>typeof v==='string' && /^(?:0|[1-9]\d{0,3})(?:\.(?:0|[1-9]\d{0,3})){2}$/.test(v);
 const roomDoor=v=>typeof v==='string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v);
 class DirectService {
   constructor({store,gameEvent=()=>{},chatEvent=()=>{},attachmentIO,changed=()=>{},incoming=()=>{},notice=()=>{},hostRoom,roomInfo=()=>null,busy=()=>false,dhtFactory,nics=interfaces}){
@@ -262,7 +260,7 @@ class DirectService {
       const inCall=!!this.roomInfo()&&!this.hidden&&!this.paused&&!this.strict;
       const signature=JSON.stringify([permitted?door:'',permitted?count:0,again,back,availability,inCall]);
       if(link.sentRoom===signature && now-link.sentRoomAt<20000)continue;
-      link.sentRoom=signature;link.sentRoomAt=now;link.send({kind:'room-state',door:permitted?door:'',count:permitted?count:0,game:1,again,back,version:appVersion,availability,inCall});
+      link.sentRoom=signature;link.sentRoomAt=now;link.send({kind:'room-state',door:permitted?door:'',count:permitted?count:0,game:1,again,back,availability,inCall});
     }
   }
   roomsFor(id){
@@ -284,7 +282,6 @@ class DirectService {
       chat:{...(f.state==='friend'?this.chats.summary(this.contact(f.id)):{unread:0,last:null}),supported:f.state==='friend'&&this.linksTo(f.id).some(l=>this.chats.eligible(l)),files:f.state==='friend'&&this.chats.files.peers(f.id).length>0,canQueueFiles:f.state==='friend'&&this.chats.files.available},
       inCall:f.state==='friend'&&visible.some(l=>l.remoteRoom?.inCall===true&&l.remoteRoom.until>Date.now()),
       game:this.linksTo(f.id).some(l=>l.remoteRoom?.game),rooms:f.state==='friend'?this.roomsFor(f.id):[],
-      versions:f.state==='friend'?[...new Set(this.linksTo(f.id).map(l=>l.remoteRoom?.version).filter(Boolean))]:[],
       onlineDevices:new Set(visible.map(l=>l.card.device)).size};};
     const room=this.publishRoom && this.roomInfo(),scope=room?.role==='host'&&room.invite?roomTag(room.invite):null;
     const admitted=scope?[...new Set([...this.returning.values()].filter(r=>r.invite===room.invite).map(r=>r.person))]:[];
@@ -415,7 +412,7 @@ class DirectService {
     if(this.out?.expires<now)this.cancel(tr('Друг не ответил.'));
     for(const [id,g] of this.grants)if(this.roomInfo()?.invite!==g.invite)this.grants.delete(id);else if(this.linksTo(g.person).some(l=>l.card.device===id && l.wire))g.until=now+150000;else if(g.until<now)this.grants.delete(id);
   }
-  friendSignal(kind){return {kind,groups:1,groupAppearance:1,groupPalettes:1,lanFiles:this.game.files.io?1:0,chat:this.chats.usable()?1:0,files:this.chats.files.available?1:0,captions:1,readReceipts:1,fileChunks:1,appearance:1,cardStyle:1,roomPeople:1};}
+  friendSignal(kind){return {kind,groups:1,groupAppearance:1,groupPalettes:1,lanFiles:this.game.files.io?1:0,chat:this.chats.usable()?1:0,files:this.chats.files.available?1:0,captions:1,readReceipts:1,fileChunks:1,largeFiles:1,appearance:1,cardStyle:1,roomPeople:1};}
   message(l,m){
     const c=l.card,f=this.contact(c.id);
     if(this.strict||this.paused||!this.links.has(l)||l.socket.destroyed||this.blocked(c.id))return;
@@ -450,7 +447,8 @@ class DirectService {
       this.announceRooms();
       const capable=m.chat===1;
       const files=capable && m.files===1;
-      const filesChanged=l.filesCapable!==files;
+      const filesChanged=l.filesCapable!==files || l.largeFiles!==(m.largeFiles===1);
+      l.largeFiles=m.largeFiles===1;
       l.filesCapable=files;
       l.captions=files && m.captions===1;
       l.readReceipts=capable&&m.readReceipts===1;l.fileChunks=files&&m.fileChunks===1;
@@ -497,7 +495,7 @@ class DirectService {
     if(m.kind==='room-state'){
       if(m.door!=='' && !roomDoor(m.door) || !Number.isInteger(m.count) ||
         (m.door ? m.count<1 || m.count>LIMITS.participants : m.count!==0))return;
-      const version=validVersion(m.version)?m.version:null,old=l.remoteRoom;
+      const old=l.remoteRoom;
       if(m.availability!==undefined && !['online','busy','away','offline'].includes(m.availability))return;
       if(m.inCall!==undefined&&typeof m.inCall!=='boolean')return;
       const status=m.availability??'online';
@@ -512,8 +510,8 @@ class DirectService {
       if(status!==l.contactStatus){l.contactStatus=status;this.update();}
       const b=m.back;
       const back=b && roomDoor(b.id) && typeof b.title==='string' && b.title.trim() && b.title.length<=48 && Number.isInteger(b.count)&&b.count>=1&&b.count<=17?{id:b.id,title:b.title,count:b.count,again:b.again===true}:null;
-      l.remoteRoom={door:m.door,count:m.count,inCall:status!=='offline'&&m.inCall===true,again:m.again===true,back,game:m.game===1,version,until:Date.now()+50000};
-      if(!old || old.door!==m.door || old.count!==m.count || old.inCall!==l.remoteRoom.inCall || old.version!==version || old.again!==l.remoteRoom.again || JSON.stringify(old.back)!==JSON.stringify(back))this.update();
+      l.remoteRoom={door:m.door,count:m.count,inCall:status!=='offline'&&m.inCall===true,again:m.again===true,back,game:m.game===1,until:Date.now()+50000};
+      if(!old || old.door!==m.door || old.count!==m.count || old.inCall!==l.remoteRoom.inCall || old.again!==l.remoteRoom.again || JSON.stringify(old.back)!==JSON.stringify(back))this.update();
       return;
     }
     if(m.kind==='ring'&&uuid(m.id)){

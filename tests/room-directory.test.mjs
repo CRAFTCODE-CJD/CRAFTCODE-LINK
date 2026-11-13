@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
-import {quickContacts,friendRooms,newestPeerVersion} from '../src/renderer/room-directory.mjs';
+import {quickContacts,friendRooms} from '../src/renderer/room-directory.mjs';
 import {DirectService} from '../src/direct/service.cjs';
 
 test('a personal call, including a legacy ring, never admits a caller to the active room',()=>{
@@ -33,11 +33,9 @@ test('a personal call, including a legacy ring, never admits a caller to the act
   clearTimeout(service.dirty);
 });
 
-test('quick access keeps offline favorites and excludes requests; a peer version is a numeric hint',()=>{
- const items=[{id:'c',name:'C',state:'friend',online:true,versions:['0.10.0','5000.x.1']},{id:'a',name:'A',state:'friend',online:false,favorite:true,versions:['100.0.0']},{id:'b',name:'B',state:'invited',favorite:true,online:true,versions:['200.0.0']}];
+test('quick access keeps offline favorites and excludes requests',()=>{
+ const items=[{id:'c',name:'C',state:'friend',online:true},{id:'a',name:'A',state:'friend',online:false,favorite:true},{id:'b',name:'B',state:'invited',favorite:true,online:true}];
  assert.deepEqual(quickContacts(items).map(c=>c.id),['a','c']);
- assert.equal(newestPeerVersion(items,'0.6.4'),'0.10.0');
- assert.equal(newestPeerVersion(items,'1.0.0'),'');
 });
 test('distinct devices can host separate rooms; hide the current room and private contacts',()=>{
  const common={id:'owner',name:'Alex',state:'friend',online:true,rooms:[{device:'one',door:'a',count:1},{device:'two',door:'b',count:8}]};

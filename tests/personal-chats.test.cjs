@@ -11,9 +11,9 @@ const {createRoomCertificate,fingerprintOf}=require('../src/core/certificate.cjs
 const certificate=createRoomCertificate();
 const history=(s,peer)=>chatCommand(s,{op:'chat-history',id:peer.me.id});
 const send=(s,peer,text,clientId=crypto.randomUUID())=>chatCommand(s,{op:'chat-send',id:peer.me.id,text,clientId});
-async function wait(check){
-  const deadline=Date.now()+6000;
-  while(!check()){if(Date.now()>deadline)throw Error('Timed out: '+check);await delay(10);}
+async function wait(check,timeout=6000,poll=10){
+  const deadline=Date.now()+timeout;
+  while(!check()){if(Date.now()>deadline)throw Error('Timed out: '+check);await delay(poll);}
 }
 function lab(t){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'link-personal-')),services=[];
@@ -57,16 +57,26 @@ async function befriend(a,b){
 test('measured private attachment transfer over loopback TLS verifies every received byte',async t=>{
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'link-dm-rate-')),open=lab(t);
   t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
-  const data=crypto.randomBytes(2*1024*1024),source=path.join(temp,'sample.bin');fs.writeFileSync(source,data);
+  const mib=Number(process.env.LINK_QA_TLS_FILE_MIB||2);assert(Number.isInteger(mib)&&mib>=1&&mib<=4200);
+  const source=path.join(temp,'sample.bin'),size=mib*1024**2+37,expected=crypto.createHash('sha256');
+  const file=await fs.promises.open(source,'wx');
+  try{
+    for(let pos=0;pos<size;pos+=1024**2){
+      const block=crypto.randomBytes(Math.min(1024**2,size-pos));expected.update(block);await file.writeFile(block);
+    }
+  }finally{await file.close();}
   const io={downloads:()=>temp,choose:async()=>source,reveal:p=>p};
   const a=open('a','Sender',io),b=open('b','Recipient',io);await befriend(a,b);
   const action=(s,peer,action,more={})=>chatCommand(s,{op:'chat-attachment',profileId:s.me.id,id:peer.me.id,action,...more});
   await action(a,b,'offer');await wait(()=>history(b,a).messages.length);
   const messageId=history(b,a).messages[0].id,start=performance.now();
-  await action(b,a,'download',{messageId});await wait(()=>history(b,a).messages[0].attachment.state==='saved');
+  await action(b,a,'download',{messageId});await wait(()=>history(b,a).messages[0].attachment.state==='saved',Math.max(6000,mib*1500),mib>256?250:10);
   const elapsed=performance.now()-start;
-  assert.deepEqual(fs.readFileSync(await action(b,a,'reveal',{messageId})),data);
-  t.diagnostic(`2 MiB, loopback TLS, explicit download to verified save: ${Math.round(elapsed)} ms (${(2000/elapsed).toFixed(2)} MiB/s)`);
+  const saved=await action(b,a,'reveal',{messageId}),actual=crypto.createHash('sha256');
+  assert.equal(fs.statSync(saved).size,size);
+  for await(const block of fs.createReadStream(saved))actual.update(block);
+  const sha=actual.digest('hex');assert.equal(sha,expected.digest('hex'));
+  t.diagnostic(`${size} bytes, loopback TLS, explicit download to verified save: ${Math.round(elapsed)} ms (${(mib*1000/elapsed).toFixed(2)} MiB/s), SHA-256 ${sha}`);
 });
 
 test('identity comparison is symmetric, local, durable and tied to the exact profile and certified device list',async t=>{
@@ -193,6 +203,84 @@ test('legacy peers use the original block size and delivery receipt without clai
   assert.deepEqual(fs.readFileSync(await cmd(b,a,'reveal',{messageId})),bytes);
   assert.equal(blocks.length,4);assert(blocks.every(([op,size])=>op==='block'&&size<=32768));
   assert.equal(history(a,b).messages[0].status,'delivered');
+});
+
+test('a large offline offer survives restart and can be withdrawn to unblock an older recipient',async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'link-large-offer-')),open=lab(t);
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const source=path.join(root,'large-offer.iso'),size=256*1024**2+1;
+  fs.writeFileSync(source,'sample');fs.truncateSync(source,size);
+  const io={downloads:()=>root,choose:async()=>source,reveal:p=>p};
+  let a=open('a','Sender',io),b=open('b','Recipient',io);
+  await befriend(a,b);await b.stop();await wait(()=>!a.linksTo(b.me.id).length);
+  const action=(s,p,action,fields={})=>chatCommand(s,{op:'chat-attachment',profileId:s.me.id,id:p.me.id,action,...fields});
+  await action(a,b,'offer');const offered=history(a,b).messages[0];
+  assert.equal(offered.attachment.originalRequired,true);assert(a.chats.footprint().bytes<2*1024**2);
+  await a.stop();a=open('a',undefined,io);b=open('b',undefined,io);
+  const signal=b.friendSignal.bind(b);b.friendSignal=kind=>{const m=signal(kind);delete m.largeFiles;return m;};
+  await connect(a,b);
+  await wait(()=>history(a,b).messages[0].attachment.state==='update-required');
+  await assert.rejects(action(a,b,'offer'),/256 МиБ/);
+  send(a,b,'Next message');
+  assert.equal(history(b,a).messages.length,0);
+  await action(a,b,'withdraw',{messageId:offered.id});
+  await wait(()=>history(b,a).messages.length===2);
+  const received=history(b,a).messages;
+  assert.equal(received[0].attachment,undefined);assert.match(received[0].text,/Доступ отозван/);
+  assert.equal(received[1].text,'Next message');assert.equal(fs.statSync(source).size,size);
+});
+
+test('attachment metadata and ranged reads preserve offsets crossing 4 GiB and reject oversize offers',async()=>{
+  const {validMeta,MAX_FILE}=require('../src/files/attachment-meta.cjs');
+  const {ShelfStorage,BLOCK}=require('../src/files/storage.cjs');
+  const source=new ShelfStorage(),pos=Math.ceil(4*1024**3/BLOCK)*BLOCK,size=pos+37;
+  const meta={name:'test.iso',size,sha:'1'.repeat(64)};
+  assert(validMeta(meta));assert(validMeta({...meta,size:MAX_FILE}));assert(!validMeta({...meta,size:MAX_FILE+1}));
+  assert(!validMeta({...meta,name:'test.webm',clip:'circle'}));
+  let offset;
+  source.sources.set('test',{size,stamp:2,stat:async()=>({size,mtimeMs:2}),read:async (bytes,start,length,position)=>{
+    offset=position;bytes.fill(0x6d,start,start+length);return {bytesRead:length};
+  }});
+  const tail=await source.readBytes('test',pos,8*BLOCK);
+  assert.equal(offset,pos);assert.deepEqual(tail,Buffer.alloc(37,0x6d));await source.close();
+});
+
+test('running out of download space cancels the sender, removes partial bytes and permits an immediate retry',async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'link-file-space-')),open=lab(t);
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const source=path.join(root,'build.iso'),data=crypto.randomBytes(1024**2+11);
+  fs.writeFileSync(source,data);
+  const io={downloads:()=>root,choose:async()=>source,reveal:p=>p};
+  const a=open('sender','Sender',io),b=open('receiver','Recipient',io);await befriend(a,b);
+  const command=(s,p,action,fields={})=>chatCommand(s,{op:'chat-attachment',profileId:s.me.id,id:p.me.id,action,...fields});
+  await command(a,b,'offer');await wait(()=>history(b,a).messages.length);
+  const messageId=history(b,a).messages[0].id,fsAsync=require('node:fs/promises');
+  const realStatfs=fsAsync.statfs;
+  const lowSpace=t.mock.method(fsAsync,'statfs',async dir=>({...await realStatfs(dir),bavail:0}));
+  await assert.rejects(command(b,a,'download',{messageId}),/Недостаточно места/);
+  lowSpace.mock.restore();
+  const realOpen=fsAsync.open;
+  let failedAt;
+  const diskFault=t.mock.method(fsAsync,'open',async (...args)=>{
+    const handle=await realOpen(...args);
+    if(String(args[0]).endsWith('.part')){
+      const write=handle.write.bind(handle);
+      handle.write=async (buffer,start,length,pos)=>{
+        if(pos>0){failedAt=pos;throw Object.assign(Error('test disk full'),{code:'ENOSPC'});}
+        return write(buffer,start,length,pos);
+      };
+    }
+    return handle;
+  });
+  await command(b,a,'download',{messageId});
+  await wait(()=>history(b,a).messages[0].attachment.state==='disk-full');
+  diskFault.mock.restore();assert(failedAt>0);
+  await wait(()=>!a.chats.files.find('send',b.me.id,messageId));
+  const dir=path.join(root,'CRAFTCODE LINK','DM-'+a.me.id.slice(0,12));assert.deepEqual(fs.readdirSync(dir),[]);
+  await command(b,a,'download',{messageId});await wait(()=>history(b,a).messages[0].attachment.state==='saved');
+  assert.deepEqual(fs.readFileSync(await command(b,a,'reveal',{messageId})),data);
+  await wait(()=>!b.chats.files.find('download',a.me.id,messageId));
+  assert.deepEqual(fs.readdirSync(dir),['build.iso']);assert.deepEqual(fs.readFileSync(source),data);
 });
 
 test('private attachments require a confirmed peer and a receiver click; TLS transfer, restart, retries, revoke and cleanup use real files',async t=>{

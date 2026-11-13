@@ -48,8 +48,8 @@ async function desktop(){
   try{expected=await offlineManifest(handle,installed);}finally{await handle.close();}
   const signatureByte=expected.offset-1,bodyByte=expected.offset+expected.bytes-1;
   const labels=language==='en'
-    ? {open:'Open update package',cancel:'Cancel',install:'Install',signature:'different publisher',payload:'does not match',active:'leave the game LAN',older:'already installed or older'}
-    : {open:'Открыть пакет обновления',cancel:'Отмена',install:'Установить',signature:'другим издателем',payload:'отличается',active:'выйдите из игровой LAN',older:'уже установлена или устарела'};
+    ? {open:'Open update package',cancel:'Cancel',install:'Install',signature:'different publisher',payload:'does not match',active:'game room has changed',leave:'Leave and install',older:'already installed or older'}
+    : {open:'Открыть пакет обновления',cancel:'Отмена',install:'Установить',signature:'другим издателем',payload:'отличается',active:'комната изменилась',leave:'Выйти и установить',older:'уже установлена или устарела'};
   let scenario='',launches=0,quits=0,js;
   const pickers=[],confirmations=[];
   const joinLan=()=>js("window.craftlink.direct({op:'game-create',title:'Local QA',listed:false}).then(()=>true)");
@@ -68,16 +68,17 @@ async function desktop(){
       await flipByte(copy,bodyByte);
     }
     if(scenario==='join-during-confirmation')await joinLan();
-    return {response:scenario==='cancel-install'?0:1};
+    return {response:['cancel-install','in-LAN','join-during-picker'].includes(scenario)?0:1};
   };
   const release=require('../src/release-update.cjs'),register=release.registerUpdates;
-  let cachedFile;
-  release.registerUpdates=options=>register({...options,
+  let cachedFile,currentRoom;
+  release.registerUpdates=options=>{currentRoom=options.gameRoom;return register({...options,
     allowed:()=>false,
     app:{getVersion:app.getVersion,getPath:app.getPath.bind(app),quit:()=>{quits++;},isPackaged:false},
     launcher:(file,args,options)=>{
       launches++;
-      assert.equal(scenario,'install');
+      assert.ok(!currentRoom(),'Game LAN must be left before launching');
+      assert.equal(scenario,'install-in-LAN');
       assert.equal(path.basename(file),expected.name);
       assert.match(path.basename(path.dirname(file)),/^install-[a-zA-Z0-9]{6}$/);
       assert.equal(path.dirname(path.dirname(file)),path.join(app.getPath('userData'),'update-cache'));
@@ -86,7 +87,7 @@ async function desktop(){
       const child=new EventEmitter();child.unref=()=>{};
       setImmediate(()=>child.emit('spawn'));
       return child;
-    }});
+    }});};
 
   async function exercise(win){
     js=code=>win.webContents.executeJavaScript(code);
@@ -106,11 +107,12 @@ async function desktop(){
     await js("window.craftlink.direct({op:'create',name:'Demo'}).then(()=>true)");
     await js("document.getElementById('networkHelpBtn').click()");
     await until("document.getElementById('networkDialog').open");
-    await js("if(!document.getElementById('updatePanel').open)document.getElementById('updateSummary').click()");
+    await js("document.getElementById('helpOpenUpdates').click()");
+    await until("document.getElementById('updatesDialog').open");
     await until("document.getElementById('openOfflineUpdate').checkVisibility()");
     assert.equal(await js("document.getElementById('openOfflineUpdate').textContent.trim()"),labels.open);
 
-    async function attempt(name,{picker=true,confirm=false,error='',success=false}={}){
+    async function attempt(name,{picker=true,confirm=false,error='',success=false,inRoom=false}={}){
       scenario=name;
       const initialPickers=pickers.length,initialConfirms=confirmations.length;
       assert.equal(await js("document.getElementById('openOfflineUpdate').click();Promise.resolve().then(()=>document.getElementById('openOfflineUpdate').disabled)"),true);
@@ -127,7 +129,8 @@ async function desktop(){
       if(confirm){
         const result=confirmations.at(-1);
         assert.ok(result.message.includes(expected.version));
-        assert.deepEqual(result.buttons,[labels.cancel,labels.install]);
+        assert.deepEqual(result.buttons,[labels.cancel,inRoom?labels.leave:labels.install]);
+        if(inRoom)assert.match(result.detail,language==='en'?/close the room for everyone/:/закроется для всех участников/);
         assert.equal(result.defaultId,0);assert.equal(result.cancelId,0);
       }
       assert.equal(launches,Number(success));assert.equal(quits,Number(success));
@@ -146,10 +149,12 @@ async function desktop(){
     await flipByte(copy,bodyByte);await attempt('bad-body',{error:labels.payload});await flipByte(copy,bodyByte);
     await attempt('replace',{confirm:true,error:labels.payload});
     await fs.copyFile(source,copy);
-    await joinLan();await attempt('in-LAN',{picker:false,error:labels.active});await leaveLan();
-    await attempt('join-during-picker',{error:labels.active});await leaveLan();
-    await attempt('join-during-confirmation',{confirm:true,error:labels.active});await leaveLan();
-    await attempt('install',{confirm:true,success:true});
+    await joinLan();
+    await until("document.getElementById('updateRoomNotice').checkVisibility()");
+    await attempt('in-LAN',{confirm:true,inRoom:true});assert.ok(currentRoom(),'Cancel keeps the room');await leaveLan();
+    await attempt('join-during-picker',{confirm:true,inRoom:true});assert.ok(currentRoom());await leaveLan();
+    await attempt('join-during-confirmation',{confirm:true,error:labels.active});assert.ok(currentRoom());await leaveLan();
+    await joinLan();await attempt('install-in-LAN',{confirm:true,inRoom:true,success:true});
     assert.equal((await fs.stat(cachedFile)).size,expected.bytes);
     const digest=await payloadHash(cachedFile);
     assert.equal(digest,expected.sha);

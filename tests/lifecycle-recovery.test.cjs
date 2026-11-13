@@ -123,7 +123,7 @@ test('replacing a partial download cannot substitute unverified contents or dele
   const {ShelfStorage}=require('../src/files/storage.cjs'),{createHash}=require('node:crypto');
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'link-replaced-part-'));
   const store=new ShelfStorage(root);
-  t.after(async()=>{await store.close();await fs.rm(root,{recursive:true,force:true});});
+  t.after(async()=>{await store.close();await fs.rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
   const expected=Buffer.from('verified attachment'),replacement=Buffer.from('unverified contents');
   const id=await store.begin({name:'build.bin',size:expected.length,sha:createHash('sha256').update(expected).digest('hex')},'Room');
   const dir=path.join(root,'CRAFTCODE LINK','Room'),part=path.join(dir,'.link-'+id+'.part');

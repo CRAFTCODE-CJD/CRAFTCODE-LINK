@@ -147,8 +147,7 @@ const remote=(p,op,fields={})=>p.evaluate(([op,fields])=>window.craftlink.direct
  if(process.env.LINK_QA_FILE_MIB){
    const mib=Number(process.env.LINK_QA_FILE_MIB);assert(Number.isInteger(mib)&&mib>0&&mib<=1024);
    const crypto=require('node:crypto'),chunk=crypto.randomBytes(1024*1024),hash=crypto.createHash('sha256');
-   const update=process.env.LINK_QA_UPDATE==='1';
-   const filename=update?'CRAFTCODE-LINK-0.8.0-Setup-x64.exe':'transfer.zip';
+   const filename='transfer.zip';
    const archive=path.join(root,filename),fd=fs.openSync(archive,'wx');
    try{for(let n=0;n<mib;n++){fs.writeSync(fd,chunk);hash.update(chunk);}}finally{fs.closeSync(fd);}
    const reverse=process.env.LINK_QA_REVERSE==='1',owner=reverse?c:a,recipient=reverse?a:c;
@@ -162,14 +161,7 @@ const remote=(p,op,fields={})=>p.evaluate(([op,fields])=>window.craftlink.direct
      return {frames:rows.find(s=>s.mid==='1')?.framesDecoded||0,voice:rows.find(s=>s.mid==='0')?.bytesReceived||0,connection:qaFilePC.connectionState};
    });
    const mediaBefore=await mediaSample(),start=performance.now();
-   if(update){
-     await clickPath(c,'#networkHelpBtn');await c.click('#helpHome');if(!await c.locator('#updatePanel').evaluate(el=>el.open))await c.click('#updateSummary');
-     await c.locator('#legacyUpdate > summary').click();
-     await c.fill('#releaseCode','LINK-UPDATE 0.8.0 '+'0'.repeat(64));assert(await c.locator('#downloadRelease').isHidden());
-     await c.fill('#releaseCode','LINK-UPDATE 0.8.0 '+digest);await c.click('#downloadRelease');
-     await c.waitForFunction(()=>document.getElementById('downloadRelease').textContent==='Установить',{},{timeout:60000});
-     await c.click('#closeNetworkDialog');console.log('PASS update from Room files: wrong code hides download, matching code downloads, explicit Install remains pending');
-   }else await row.getByRole('button',{name:'Скачать'}).click();
+   await row.getByRole('button',{name:'Скачать'}).click();
    await row.getByText(/Сохранено/).waitFor({timeout:600000});
    const seconds=(performance.now()-start)/1000,mediaAfter=await mediaSample();
    if(seconds>=2){assert.equal(mediaAfter.connection,'connected');assert(mediaAfter.frames>mediaBefore.frames);assert(mediaAfter.voice>mediaBefore.voice);}

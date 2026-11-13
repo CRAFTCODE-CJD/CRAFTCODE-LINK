@@ -3,6 +3,7 @@ const {randomUUID}=require('node:crypto');
 const {exactKeys,validateChat,TokenBucket}=require('../core/protocol.cjs');
 const {tr}=require('../native-language.cjs');
 const {PersonalAttachments,validMeta}=require('./personal-attachments.cjs');
+const {LEGACY_FILE_LIMIT}=require('../files/attachment-meta.cjs');
 const {removeSavedDownload}=require('../files/saved-download.cjs');
 
 const key=id=>typeof id==='string' && /^[a-f0-9]{64}$/.test(id);
@@ -185,13 +186,14 @@ class PersonalChats {
     const now=Date.now();
     const withdrawn=row.attachment && this.storage.attachmentKind(row.seq)==='withdrawn';
     for(const link of links){
-      if(row.attachment && !link.filesCapable && !withdrawn)continue;
+      const shareFile=row.attachment&&link.filesCapable&&(row.attachment.size<=LEGACY_FILE_LIMIT||link.largeFiles);
+      if(row.attachment && !shareFile && !withdrawn)continue;
       const device=link.card.device;
       if((attempt.devices.get(device)||0)>now)continue;
       attempt.devices.set(device,now+5000);
-      const text=withdrawn && !link.filesCapable?tr('Доступ отозван')+' · '+row.text:
+      const text=withdrawn && !shareFile?tr('Доступ отозван')+' · '+row.text:
         row.attachment && !link.captions?row.attachment.name:row.text;
-      if(!link.send({kind:'friend-text',to:person,id:row.id,seq:row.seq,text,...(row.attachment && link.filesCapable?{attachment:row.attachment}:{})}))attempt.devices.delete(device);
+      if(!link.send({kind:'friend-text',to:person,id:row.id,seq:row.seq,text,...(shareFile?{attachment:row.attachment}:{})}))attempt.devices.delete(device);
       else if(link.readReceipts)this.storage.expectRead(row.seq,device);
     }
   }

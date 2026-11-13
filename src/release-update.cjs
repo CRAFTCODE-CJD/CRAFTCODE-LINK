@@ -6,13 +6,7 @@ const {UpdateService}=require('./update-service.cjs');
 const {removeStage}=require('./github-releases.cjs');
 const {cacheDirectory}=require('./update-download.cjs');
 const {offlineManifest,maxSize}=require('./offline-update.cjs');
-const {parseUpdateCode}=require('./renderer/release-code.mjs');
 const invalidFile=message=>Object.assign(Error(tr(message)),{code:'UPDATE_INVALID_PAYLOAD'});
-function release(code,current){
-  const result=parseUpdateCode(code,current);
-  if(result.error)throw Error(tr(result.error));
-  return result;
-}
 async function verifyInstaller(input,expected,output){
   const stat=await input.stat(),offset=expected.offset??0,size=stat.size-offset;
   if(!stat.isFile()||size<2||size>maxSize||(expected.bytes!==undefined&&size!==expected.bytes))throw invalidFile('Неверный файл установщика.');
@@ -43,22 +37,33 @@ async function cleanup(dir,{strict=false}={}){
   for(const e of list)if(e.isDirectory()&&/^install-[a-zA-Z0-9]{6}$/.test(e.name))
     await removeStage(path.join(dir,e.name)).catch(e=>{if(strict)throw e;});
 }
-function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActive,changed,announce,openExternal,
+function registerUpdates({handle,app,dialog,window,allowed,updateBlocker,gameRoom,leaveGame,changed,announce,openExternal,
   supported=process.platform==='win32'&&process.arch==='x64',fetcher,launcher=spawn}){
   const dir=path.join(app.getPath('userData'),'update-cache');
   let busy=false,launching=false,closed=false;
-  function idle(){
-    if(closed || launching)throw Error(tr('Приложение завершает работу.'));
-    if(sessionActive())throw Error(tr('Сначала завершите звонок и выйдите из игровой LAN. Скачанный установщик можно открыть позже.'));
+  function ensureAvailable(){
+    if(closed)throw Error(tr('Приложение завершает работу.'));
+    const blocker=updateBlocker();
+    if(blocker)throw Error(tr(blocker));
   }
   async function confirmInstall(file,expected){
-    idle();
+    ensureAvailable();
+    const room=gameRoom();
+    const detail=room ? (room.host
+      ? 'Вы организатор игровой LAN. При установке комната закроется для всех участников. LINK отключит игровой адаптер и запустит установщик.'
+      : 'При установке вы выйдете из игровой LAN. LINK отключит игровой адаптер и запустит установщик.')
+      : 'LINK проверит установщик и закроется для установки обновления.';
     const {response}=await dialog.showMessageBox(window(),{type:'question',message:tr('Установить CRAFTCODE LINK ')+expected.version+'?',
-      detail:tr('LINK проверит установщик и закроется для установки обновления.'),buttons:[tr('Отмена'),tr('Установить')],defaultId:0,cancelId:0});
+      detail:tr(detail),buttons:[tr('Отмена'),tr(room?'Выйти и установить':'Установить')],defaultId:0,cancelId:0});
     if(response!==1)return false;
-    idle();let copy=await stage(file,dir,expected);
+    ensureAvailable();let copy=await stage(file,dir,expected);
     try{
-      idle();launching=true;
+      ensureAvailable();
+      if(gameRoom() && gameRoom()!==room)throw Error(tr('Игровая комната изменилась. Нажмите «Установить» снова.'));
+      launching=true;
+      if(room && room===gameRoom())await leaveGame();
+      ensureAvailable();
+      if(gameRoom())throw Error(tr('Игровая комната изменилась. Нажмите «Установить» снова.'));
       await new Promise((resolve,reject)=>{const child=launcher(copy,[],{shell:false,detached:true,stdio:'ignore'});child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});});
       copy=null;app.quit();return true;
     }finally{if(copy){launching=false;await removeStage(path.dirname(copy));}}
@@ -72,33 +77,24 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
   // An inaccessible cache is reported by IPC when the update panel is opened.
   ready.catch(()=>{});
   handle('releases',async raw=>{await ready;return hub.command(raw);});
-  handle('install-release',async value=>{
+  handle('install-release',async raw=>{
+    if(raw!==undefined)throw Error(tr('Некорректная команда.'));
     if(!supported)throw Error(tr('Этот установщик предназначен для Windows x64.'));
     if(busy)throw Error(tr('Обновление уже открыто.'));
-    idle();busy=true;
+    ensureAvailable();busy=true;
     try{
       await ready;
-      if(value?.offline===true){
-        const picked=await dialog.showOpenDialog(window(),{title:tr('Открыть пакет обновления'),properties:['openFile'],filters:[{name:'CRAFTCODE LINK',extensions:['linkupdate']}]});
-        if(picked.canceled)return false;
-        idle();
-        const file=picked.filePaths[0],handle=await fs.open(file,'r');
-        let expected;
-        try{
-          expected=await offlineManifest(handle,app.getVersion());
-          await verifyInstaller(handle,expected);
-        }finally{await handle.close();}
-        // The selected file can be replaced while the confirmation dialog is open.
-        // stage() rechecks the signed digest while copying to the private cache.
-        return await confirmInstall(file,expected);
-      }
-      const expected=release(value?.code,app.getVersion());
-      let file;
-      if(value.token){file=completed(value.token);if(!file)throw Error(tr('Выберите сохранённый установщик.'));}
-      else{
-        const picked=await dialog.showOpenDialog(window(),{title:tr('Выберите сохранённый установщик.'),properties:['openFile'],filters:[{name:'CRAFTCODE LINK',extensions:['exe']}]});
-        if(picked.canceled)return false;file=picked.filePaths[0];
-      }
+      const picked=await dialog.showOpenDialog(window(),{title:tr('Открыть пакет обновления'),properties:['openFile'],filters:[{name:'CRAFTCODE LINK',extensions:['linkupdate']}]});
+      if(picked.canceled)return false;
+      ensureAvailable();
+      const file=picked.filePaths[0],handle=await fs.open(file,'r');
+      let expected;
+      try{
+        expected=await offlineManifest(handle,app.getVersion());
+        await verifyInstaller(handle,expected);
+      }finally{await handle.close();}
+      // The selected file can be replaced while the confirmation dialog is open.
+      // stage() rechecks the signed digest while copying to the private cache.
       return await confirmInstall(file,expected);
     }finally{busy=false;}
   });
@@ -108,4 +104,4 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
       busy=true;try{await ready;await hub.clearCache(dir=>cleanup(dir,{strict:true}));}finally{busy=false;}
     }};
 }
-module.exports={release,stage,cleanup,registerUpdates};
+module.exports={stage,cleanup,registerUpdates};

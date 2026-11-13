@@ -253,14 +253,15 @@ function registerIPC() {
   direct=require('./direct/ipc.cjs').directIPC({handle,window:()=>mainWindow,journal:()=>partialJournal,
     downloads:()=>storageLocationController.downloads(),downloadRoots:()=>storageLocationController.downloadRoots(),
     emit:e=>{if(e.type==='game-invited'||e.type==='game-requested')trayController?.ring(e.type==='game-requested'?'game-request':'game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
-  updates=require('./release-update.cjs').registerUpdates({handle,app,dialog,window:()=>mainWindow,completed:token=>shelf?.store.completed.get(token),
-    allowed:()=>direct?.allowsPublicLookup()===true,sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive()),
+  const updateBlocker=()=>currentRoom||roomTransition?'Завершите звонок или закройте приглашение, затем нажмите «Установить» снова.':direct.updateBlocker();
+  updates=require('./release-update.cjs').registerUpdates({handle,app,dialog,window:()=>mainWindow,
+    allowed:()=>direct?.allowsPublicLookup()===true,updateBlocker,gameRoom:()=>direct.gameRoom,leaveGame:()=>direct.leaveGameForUpdate(),
     changed:state=>sendEvent({type:'release-updated',state}),announce:version=>!currentRoom&&!roomTransition&&trayController?.offerUpdate(version),
     openExternal:url=>shell.openExternal(url)});
   if(storageLocationController){
     const storageControls=require('./storage-controls.cjs').createStorageControls({location:storageLocationController,session:()=>mainWindow.webContents.session,updates,openDirectory:folder=>shell.openPath(folder),
       restart:async()=>{mainWindow.webContents.session.flushStorageData();app.relaunch();app.quit();},
-      sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive())});
+      sessionActive:()=>!!(updateBlocker()||direct.gameRoom)});
     handle('storage',raw=>storageControls.command(raw));
   }
   const publicLookups=()=>direct?.allowsPublicLookup()===true;

@@ -1,5 +1,16 @@
 # CRAFTCODE LINK QA
 
+## 0.7.24 game LAN, chat and updates
+
+- PASS. Two Windows game clients in separate Wine prefixes and Linux network namespaces finished a Generals match and a Zero Hour match using the TheSuperHackers weekly-2026-11-06 builds with installed game assets. The LINK room services relayed UDP 8086 for lobby discovery and UDP 8088 during play. In Zero Hour, six host announcements reached the guest adapter while the game listened on a second interface and its game list stayed empty. Correcting the guest's saved LAN IP via the LINK settings writer made the same host visible. After the guest sold its last base, the two clients showed victory and defeat. The classic Generals clients reached the final statistics for both players. BLOCKED for the original Zero Hour binary at its request for a game disc. NOT TESTED on two physical Windows PCs with Wintun.
+- PASS. A file of 4 GiB + 37 bytes transferred between two LINK services and a file of 257 MiB + 37 bytes transferred between two Electron clients by drag and drop. Each downloaded copy matched its source SHA-256. The desktop test checked receiver consent before downloading. A disk-full simulation checked partial-file cleanup and immediate retry.
+- PASS. The same emoji picker displayed full-width search and category controls above a multi-column grid in private messages, rooms, group channels and game LAN. The desktop checks browsed a large category and inserted a search result with Enter.
+
+- PASS. In Russian and English desktop tests, the update button appeared above Help when an update was available. Keyboard activation, Escape, reopening during a download, progress, speed and retry after interruption were checked.
+- PASS. With a temporary Windows profile and a signed offline package, cancelling installation kept the organizer in the same game LAN. Confirming closed the LAN before the installer launch hook ran. A room created or replaced during confirmation required a fresh decision. Host and guest tests checked the different messages and waited for adapter shutdown. An active media call kept its connection.
+- PASS. The updater queried the public GitHub release and found version 0.7.23 and its installer size of 126,891,102 bytes from an older version. Separately, a controlled 0.7.24 release fixture exercised the updater from the published 0.7.23 source archive and the new updater. Both detected the upgrade and verified the downloaded bytes against the expected SHA-256.
+- NOT TESTED in these checks. Installing the update end to end on Windows with a live Wintun adapter. The desktop checks intercepted the installer launch.
+
 ## Windows 0.7.20 game LAN
 
 - PASS. The host selects a free game subnet when another adapter or VPN covers the original range. Mixed 0.7.14 and current room implementations accepted invitations with either version hosting and retained the same addresses.

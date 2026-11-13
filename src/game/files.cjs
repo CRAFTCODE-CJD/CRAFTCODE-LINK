@@ -2,7 +2,7 @@
 const {randomUUID}=require('node:crypto');
 const {ShelfStorage,BLOCK}=require('../files/storage.cjs');
 const {FileWire,lost,uuid}=require('../files/file-wire.cjs');
-const {MAX_FILE,validMeta}=require('../files/attachment-meta.cjs');
+const {MAX_FILE,LEGACY_FILE_LIMIT,validMeta}=require('../files/attachment-meta.cjs');
 const {validateChat,exactKeys,TokenBucket}=require('../core/protocol.cjs');
 const {tr}=require('../native-language.cjs');
 const {removeSavedDownload}=require('../files/saved-download.cjs');
@@ -22,6 +22,13 @@ class GameFiles{
   track(job){
     this.work.add(job);
     const done=()=>this.work.delete(job);job.then(done,done);return job;
+  }
+  get transferring(){
+    if(this.selecting || this.downloads.size)return true;
+    const now=Date.now();
+    for(const item of this.items.values())for(const reader of item.readers.values())
+      if(reader.busy || reader.until>now && reader.pos<item.attachment.size)return true;
+    return false;
   }
   scope(link){
     const r=this.room,c=link?.card,p=member(r,c?.device);
@@ -92,7 +99,7 @@ class GameFiles{
     for(const p of this.room.roster.slice(1)){
       if(p.device===except)continue;
       const link=this.s.game.link(p);
-      if(this.scope(link))this.track(this.round(link,op,args).catch(()=>{}));
+      if(this.scope(link)&&!(args.attachment?.size>LEGACY_FILE_LIMIT&&!link.largeFiles))this.track(this.round(link,op,args).catch(()=>{}));
     }
   }
   publish(author,a){
@@ -118,6 +125,8 @@ class GameFiles{
       }
       let attachment;({id,...attachment}=meta);if(kind)attachment.clip=kind;
       if(r!==this.require(profile,room)||!validMeta(attachment))throw unavailable();
+      if(!r.host&&attachment.size>LEGACY_FILE_LIMIT&&!this.linkTo(r.owner.device)?.largeFiles)
+        throw Error(tr('Для вложений в LAN обновите LINK у организатора.'));
       const author=member(r,this.s.me.device),a={id,attachment,text:caption};
       if(r.host)this.publish(author,a);
       else{

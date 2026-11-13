@@ -27,6 +27,7 @@ export function bindChatEmoji({menu,choices,input,onInput}){
       b.ariaDescription=b.title;return b;
     }));
     more.hidden=visible>=rows.length;notice.hidden=!!rows.length;notice.textContent=rows.length?'':tr('Эмодзи не найдены.');
+    if(choices.matches(':popover-open'))place();
   }
   function reset(){visible=80;grid.scrollTop=0;if(all)render();}
   filter.oninput=reset;category.onchange=()=>{filter.value='';reset();};
@@ -41,7 +42,7 @@ export function bindChatEmoji({menu,choices,input,onInput}){
   };
   function place(){
     const rect=summary.getBoundingClientRect(),box=choices.getBoundingClientRect();
-    choices.style.left=Math.max(6,Math.min(rect.right-box.width,innerWidth-box.width-6))+'px';
+    choices.style.left=Math.max(6,Math.min(rect.left,innerWidth-box.width-6))+'px';
     choices.style.top=Math.max(6,rect.top>=box.height+8?rect.top-box.height-6:Math.min(innerHeight-box.height-6,rect.bottom+6))+'px';
   }
   function outside(e){if(!menu.contains(e.target))menu.open=false;}
@@ -60,6 +61,6 @@ export function bindChatEmoji({menu,choices,input,onInput}){
     try{
       data??=import('./l10n/emoji.json',{with:{type:'json'}}).then(m=>m.default).catch(e=>{data=null;throw e;});
       groups=await data;all??=Object.values(groups).flat();if(menu.open){reset();place();}
-    }catch{notice.hidden=false;notice.textContent=tr('Не удалось загрузить эмодзи. Откройте список ещё раз.');}
+    }catch{notice.hidden=false;notice.textContent=tr('Не удалось загрузить эмодзи. Откройте список ещё раз.');if(menu.open)place();}
   });
 }

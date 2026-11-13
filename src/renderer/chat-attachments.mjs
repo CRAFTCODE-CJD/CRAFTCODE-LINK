@@ -20,7 +20,10 @@ export function chatAttachments({scope,refresh,onError}){
     info.className='chat-file';actions.className='chat-file-actions';
     const line=label('small','',[
       fileSize(a.size),a.state==='saved'?tr('Сохранено'):a.state==='withdrawn'?tr('Доступ отозван'):
-      a.state==='offline'?tr('Устройство отправителя не в сети'):a.state==='failed'?tr('Не удалось скачать файл.'):''
+      a.state==='offline'?tr('Устройство отправителя не в сети'):a.state==='failed'?tr('Не удалось скачать файл.'):
+      a.state==='disk-full'?tr('Недостаточно места в папке загрузок.'):
+      a.state==='update-required'?tr('Другу нужно обновить LINK. Чтобы доставить следующие сообщения раньше, отзовите файл.'):
+      a.originalRequired?tr('Оставьте исходный файл на месте до скачивания.'):''
     ].filter(Boolean).join(' · '));
     if(['sending','receiving'].includes(a.state))info.append(label('div','chat-file-progress',''));
     if(!a.clip && m.text!==a.name)info.append(label('strong','file-name',a.name));
@@ -54,8 +57,8 @@ export function chatAttachments({scope,refresh,onError}){
       player.styleTrigger(trigger,meta,read);
     }
     if(m.own && a.state!=='withdrawn')button('Отозвать доступ','withdraw');
-    if(!m.own && ['offered','failed'].includes(a.state)){
-      const download=button(a.state==='failed'?'Повторить попытку':'Скачать','download');
+    if(!m.own && ['offered','failed','disk-full'].includes(a.state)){
+      const download=button(a.state==='offered'?'Скачать':'Повторить попытку','download');
       if(a.clip==='circle'||a.clip==='voice')player.styleTrigger(download,a);
     }
     if(a.state==='receiving')button('Отмена','cancel');

@@ -1,6 +1,8 @@
 'use strict';
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto'),fs=require('node:fs/promises'),path=require('node:path');
+const {createReadStream,createWriteStream}=require('node:fs');
+const {pipeline}=require('node:stream/promises');
 
 async function dropFile(page,area,source){
   await page.evaluate(()=>{const pick=document.createElement('input');pick.id='qaExplorerFile';pick.type='file';document.body.append(pick);});
@@ -28,6 +30,38 @@ module.exports=async({a,b})=>{
     },png);
   }
   const draft=sender.locator('#attachmentDraft');
+  if(process.env.LINK_QA_LARGE_FILE_MIB){
+    const count=Number(process.env.LINK_QA_LARGE_FILE_MIB);
+    assert(Number.isSafeInteger(count)&&count>256&&count<=4200);
+    const name='large-test-archive.iso',source=path.join(a.base,name),size=count*1024**2+37;
+    const expected=crypto.createHash('sha256');
+    async function* blocks(){
+      for(let pos=0;pos<size;pos+=1024**2){
+        const block=crypto.randomBytes(Math.min(1024**2,size-pos));
+        expected.update(block);yield block;
+      }
+    }
+    await pipeline(blocks(),createWriteStream(source,{flags:'wx'}));
+    await dropFile(sender,'#dmLog',source);
+    await draft.locator('#attachmentDraftSend').click();
+    const row=viewer.locator('#dmLog article').filter({hasText:name});
+    const download=row.locator('[data-action=download]');
+    await download.waitFor({timeout:120000});
+    const root=path.join(b.base,'Downloads');
+    assert.deepEqual(await fs.readdir(root),[]);
+    const start=performance.now();
+    await download.click();
+    try{await row.locator('[data-action=reveal]').waitFor({timeout:Math.max(600000,count*3000)});}
+    catch(error){throw Error('Large transfer did not finish: '+await row.innerText()+' / '+await sender.locator('#dmLog article').last().innerText(),{cause:error});}
+    const saved=(await fs.readdir(root,{recursive:true})).find(p=>path.basename(p)===name);
+    assert(saved);
+    const actual=crypto.createHash('sha256'),filename=path.join(root,saved);
+    assert.equal((await fs.stat(filename)).size,size);
+    for await(const bytes of createReadStream(filename))actual.update(bytes);
+    const sha=actual.digest('hex');assert.equal(sha,expected.digest('hex'));
+    console.log('PASS Electron drag/drop, recipient consent and complete on-disk digest:',JSON.stringify({size,sha,seconds:(performance.now()-start)/1000}));
+    return;
+  }
   await sender.fill('#dmInput','Черновик');
   await paste();await draft.locator('img').waitFor();await draft.locator('#attachmentDraftCancel').click();
   assert.equal(await sender.inputValue('#dmInput'),'Черновик');

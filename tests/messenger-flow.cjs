@@ -40,19 +40,19 @@ module.exports=async({a,b})=>{
   assert.equal(await b.app.evaluate(()=>testClipboard),'https://youtu.be/dQw4w9WgXcQ');
   await card.locator('a').click();assert.equal(await b.app.evaluate(()=>testExternal),'https://youtu.be/dQw4w9WgXcQ');
   await a.page.click('#networkHelpBtn');
-  if(!await a.page.locator('#updatePanel').evaluate(panel=>panel.open))await a.page.click('#updateSummary');
-  await a.page.locator('#githubCheck').waitFor();
   await a.page.locator('#helpDonate').getByText('Угостить кофе').waitFor();
   await a.page.click('#coffeeQR summary');
   assert.equal(await a.page.locator('#coffeeQR img').evaluate(img=>img.complete && img.naturalWidth),150);
   await a.page.click('#helpDonate');
   assert.equal(await a.app.evaluate(()=>testExternal),'https://boosty.to/channel-jonathan-developer/donate');
   await a.page.click('#coffeeQR summary');
+  await a.page.click('#helpOpenUpdates');
   await a.page.uncheck('#releaseAutomatic');
   await a.page.click('#githubCheck');await a.page.locator('#githubDownload').waitFor();
   assert.equal(await a.app.evaluate(()=>globalThis.testInstallerGets||0),0);
   await a.page.click('#githubDownload');await a.page.locator('#githubInstall').waitFor();
   assert.equal(await a.app.evaluate(()=>globalThis.testInstallerGets),1);
+  await a.page.click('#closeUpdatesDialog');
   await a.page.click('#closeNetworkDialog');
   // Disable external ICE discovery for the isolated call and record received RTP.
   for(const page of [a.page,b.page])await page.evaluate(()=>{

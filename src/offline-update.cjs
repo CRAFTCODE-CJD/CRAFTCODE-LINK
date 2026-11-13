@@ -2,7 +2,7 @@
 
 const crypto=require('node:crypto');
 const {tr}=require('./native-language.cjs');
-const {parseUpdateCode}=require('./renderer/release-code.mjs');
+const {stableVersion,newerVersion,installerName}=require('./release-version.cjs');
 const maxSize=512*1024**2;
 const signatureBytes=384;
 const invalid=()=>Object.assign(Error(tr('Пакет обновления повреждён или подписан другим издателем.')),{code:'UPDATE_INVALID_PAYLOAD'});
@@ -28,8 +28,8 @@ async function offlineManifest(handle,current,key){
   if(bytes<2||bytes>maxSize||size!==offset+bytes)throw invalid();
   const publicKey=crypto.createPublicKey({format:'jwk',key:key??require('./offline-release-key.json')});
   if(!crypto.verify('sha256',signed,{key:publicKey,padding:crypto.constants.RSA_PKCS1_PSS_PADDING,saltLength:32},header.subarray(end,offset)))throw invalid();
-  const release=parseUpdateCode('LINK-UPDATE '+version+' '+sha,current);
-  if(release.error)throw Error(tr(release.error));
-  return {...release,bytes,offset};
+  if(!stableVersion(version))throw invalid();
+  if(!newerVersion(version,current))throw Error(tr('Эта версия уже установлена или устарела.'));
+  return {version,sha,name:installerName(version),bytes,offset};
 }
 module.exports={offlineManifest,maxSize};

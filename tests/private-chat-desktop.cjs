@@ -51,7 +51,7 @@ async function run(){
           const home='https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK',prefix=home+'/releases/download/v0.8.0/CRAFTCODE-LINK-0.8.0';
           const bytes=Buffer.from('MZ test bytes only');
           if(String(url)===home+'/releases/latest')return Response.redirect(home+'/releases/tag/v0.8.0',302);
-          if(String(url)===prefix+'-Update-Code.txt')return new Response('LINK-UPDATE 0.8.0 '+require('node:crypto').createHash('sha256').update(bytes).digest('hex'));
+          if(String(url)===prefix+'-SHA256SUMS.txt')return new Response(require('node:crypto').createHash('sha256').update(bytes).digest('hex')+'  CRAFTCODE-LINK-0.8.0-Setup-x64.exe');
           if(String(url)===prefix+'-Setup-x64.exe'){
             if(options.method==='HEAD')return new Response(null,{headers:{'Content-Length':String(bytes.length)}});
             globalThis.testInstallerGets=(globalThis.testInstallerGets||0)+1;return new Response(bytes);

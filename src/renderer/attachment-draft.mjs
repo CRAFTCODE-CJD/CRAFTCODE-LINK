@@ -15,7 +15,7 @@ function attachmentDialog(){
     for(const file of active.files){
       const row=document.createElement('div'),name=document.createElement('span');
       row.className='draft-file';
-      if(/^image\/(?:png|jpeg|webp|gif|avif)$/.test(file.type)){
+      if(file.size<=8*1024**2 && /^image\/(?:png|jpeg|webp|gif|avif)$/.test(file.type)){
         const image=document.createElement('img'),url=URL.createObjectURL(file);
         active.urls.push(url);image.alt='';image.src=url;row.append(image);
       }
@@ -45,7 +45,8 @@ function attachmentDialog(){
       dialog.close();
     }catch(error){
       if(active===draft&&dialog.open){
-        note.textContent=error.message.includes('CLIPBOARD_FILE_TOO_LARGE')?tr('Из буфера можно вставить до 8 МиБ. Перетащите исходный файл из папки.'):error.message;
+        const message=String(error?.message||error).replace(/^Error invoking remote method '[^']+': (?:Error: )?/,'');
+        note.textContent=message.includes('CLIPBOARD_FILE_TOO_LARGE')?tr('Из буфера можно вставить до 8 МиБ. Перетащите исходный файл из папки.'):message;
         draft.busy=false;paint();
       }
     }
