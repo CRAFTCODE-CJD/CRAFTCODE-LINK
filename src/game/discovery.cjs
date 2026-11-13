@@ -79,6 +79,16 @@ function discoveryMessage(data,h){
 class GameDiscovery{
   constructor(){this.queries=new Map();this.listeners=new Map();}
   clear(){this.queries.clear();this.listeners.clear();}
+  forgetSeat(slot){
+    for(const [key,q] of this.queries){
+      if(q.seat===slot||q.target===slot)this.queries.delete(key);
+      else {q.targets.delete(slot);q.responders.delete(slot);}
+    }
+    for(const key of this.listeners.keys()){
+      const [client,host]=key.split('/');
+      if(Number(client)===slot||Number(host)===slot)this.listeners.delete(key);
+    }
+  }
   remember(map,key,value){
     map.delete(key);
     if(map.size>=128)map.delete(map.keys().next().value);
@@ -87,18 +97,27 @@ class GameDiscovery{
   listener(client,host,port){
     return allowedPort(port)&&this.listeners.get(client+'/'+host+'/'+port)>Date.now();
   }
-  observe(message,h,now=Date.now()){
+  observe(message,h,roster=[],now=Date.now()){
     if(!message||message.session?.blocked||!allowedPort(h.sport)||!allowedPort(h.dport))return [];
     if(message.type==='query'){
-      this.remember(this.queries,h.src+'/'+message.key,{seat:h.src,target:h.dst,sport:h.sport,dport:h.dport,key:message.key,expires:now+15000});
+      const key=h.src+'/'+message.key,previous=this.queries.get(key);
+      if(previous&&previous.expires>now&&previous.target===h.dst&&previous.sport===h.sport&&previous.dport===h.dport)return [];
+      const targets=new Set(roster.filter(p=>p.ready===true&&p.slot!==h.src&&(h.dst===255||h.dst===p.slot)).map(p=>p.slot));
+      this.remember(this.queries,key,{seat:h.src,target:h.dst,sport:h.sport,dport:h.dport,key:message.key,expires:now+15000,targets,responders:new Map()});
       return [];
     }
     const matches=[];
     for(const q of this.queries.values()){
-      if(q.key!==message.key||q.expires<=now||q.seat===h.src||q.dport!==h.sport||
-        (q.target!==255&&q.target!==h.src)||(h.dst!==255&&h.dst!==q.seat)||
+      if(q.key!==message.key||q.expires<=now||!q.targets.has(h.src)||q.dport!==h.sport||
+        (h.dst!==255&&h.dst!==q.seat)||
         (q.sport!==h.dport&&!(h.dst===255&&q.dport===h.dport)))continue;
-      matches.push(q);
+      // Bound replies per host and search. Repeated wire packets cannot create new
+      // permissions or flood the game's search socket; a fresh search can retry.
+      const port=message.session?.port;
+      let ports=q.responders.get(h.src);
+      if(!ports){ports=new Map();q.responders.set(h.src,ports);}
+      if(ports.has(port)?now-ports.get(port)<1000:ports.size>=4)continue;
+      ports.set(port,now);matches.push(q);
       if(message.session)this.remember(this.listeners,q.seat+'/'+h.src+'/'+message.session.port,now+90000);
     }
     return matches;

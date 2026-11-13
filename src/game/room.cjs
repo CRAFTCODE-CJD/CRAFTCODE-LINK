@@ -17,8 +17,8 @@ function readRoster(list) {
     ...(ready===true && (isProbePort(probePort)||probePort===0)?{probePort}:{})}));
 }
 class GameRoom {
-  constructor({ self, links, changed, event, quiet, silent=()=>false }) {
-    Object.assign(this,{self,links,changed,event,quiet,silent});
+  constructor({ self, links, changed, event, quiet, silent=()=>false, revokeNetwork=()=>{} }) {
+    Object.assign(this,{self,links,changed,event,quiet,silent,revokeNetwork});
     this.joinRequests=new Map();this.asked=null;this.active=null;this.returnees=new Map();this.invitations=new Map();this.sent=new Map();this.limits=new Map();
     this.departures=new Map();
   }
@@ -303,6 +303,7 @@ class GameRoom {
       const probePort=m.ready?m.probePort:undefined;
       if(!!p.ready!==m.ready || p.probePort!==probePort){
         p.ready=m.ready;p.probePort=probePort;const now=Date.now();
+        if(!p.ready)this.revokeNetwork(p.slot,p.device);
         if(now-(p.lastReady||0)>750){p.lastReady=now;this.announce();return;}
         this.rosterDirty=true;
       }

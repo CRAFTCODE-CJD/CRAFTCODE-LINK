@@ -132,6 +132,9 @@ async function run(){
  }
  assert.throws(()=>host.game.invite(cards[17].id));await until(()=>services[16].game.active.roster.length===17,'seats');
  services[16].game.chat('ready');await until(()=>services.slice(0,17).every(s=>s.game.active.messages.length===1),'chat');
+ const players=services.slice(0,17);
+ for(const s of players)s.game.adapterReady(true);
+ await until(()=>players.every(s=>s.game.active.roster.every(p=>p.ready)),'network opt-in');
  await discoveryRoundTrip(room);
  if(process.env.LINK_QA_DISCOVERY_READY){
    await require('./game-discovery-relay.cjs')({services,room,datagram});

@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),os=requir
 const {GameNetwork}=require('../src/game/network.cjs'),{GameRoom}=require('../src/game/room.cjs');
 const {ShelfStorage,safe,BLOCK}=require('../src/files/storage.cjs');
 const {DirectService}=require('../src/direct/service.cjs'),{seed,publicCard,friend}=require('../src/direct/identity.cjs');
-const members=['A','B','C'].map((name,i)=>({id:String(i+1).repeat(64),device:String(i+4).repeat(64),name,slot:i+1}));
+const members=['A','B','C'].map((name,i)=>({id:String(i+1).repeat(64),device:String(i+4).repeat(64),name,slot:i+1,ready:true}));
 function frame({src=2,dst=1,sport=49000,dport=7000}={}){
  const b=Buffer.alloc(32);b[0]=0x45;b[9]=17;b.writeUInt16BE(b.length,2);b.set([10,90,2,src,10,90,2,dst],12);b.writeUInt16BE(sport,20);b.writeUInt16BE(dport,22);b.writeUInt16BE(b.length-20,24);return b;
 }

@@ -31,7 +31,7 @@ class DirectService {
     this.groups=new (require('../groups/service.cjs').Groups)(this,store);
     this.chats=new PersonalChats(this,store.chatHistory,chatEvent,attachmentIO);
     this.game=new GameRoom({self:()=>this.me, links:id=>this.contact(id)?.state==='friend'&&!this.blocked(id)?this.linksTo(id):[],
-      changed:()=>{this.gameNet?.reconcile();this.game.files?.reconcile();this.announceRooms();this.update();},event:gameEvent,quiet:()=>this.strict||this.paused,silent:()=>this.dnd});
+      changed:()=>{this.gameNet?.reconcile();this.game.files?.reconcile();this.announceRooms();this.update();},revokeNetwork:(slot,device)=>this.gameNet.revokeSeat(slot,device),event:gameEvent,quiet:()=>this.strict||this.paused,silent:()=>this.dnd});
     this.game.files=new (require('../game/files.cjs').GameFiles)(this,attachmentIO);
     this.gameNet=new GameNetwork(this.game,()=>this.update());
     this.network=new Networks({profile:()=>this.profile,canDiscover:()=>!!this.profile&&!this.strict&&!this.paused&&!this.hidden,

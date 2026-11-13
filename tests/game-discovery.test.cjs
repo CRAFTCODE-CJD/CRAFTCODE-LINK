@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {GameNetwork}=require('../src/game/network.cjs');
 const {GameDiscovery,discoveryMessage}=require('../src/game/discovery.cjs');
 
-const members=[1,2,3].map(slot=>({slot,id:'person'+slot,device:'device'+slot}));
+const members=[1,2,3].map(slot=>({slot,id:'person'+slot,device:'device'+slot,ready:true}));
 test('ioquake3 multiport LAN scan only admits the responding server for the querying player',t=>{
   const {net,writes,receive}=harness(t);
   const oob=text=>Buffer.concat([Buffer.from([255,255,255,255]),Buffer.from(text)]);
@@ -44,7 +44,7 @@ function session(port,nonce){
     Buffer.from([1,0,0,0,1,1,1,1,0,0]),word(47537391),word(0)]);
 }
 function harness(t){
-  const room={active:{id:'test',host:true,prefix:'10.90.1',roster:members.slice()},self:()=>members[0],link:()=>null};
+  const room={active:{id:'test',host:true,prefix:'10.90.1',roster:members.map(p=>({...p}))},self:()=>members[0],link:()=>null};
   const net=new GameNetwork(room,()=>{}),writes=[];
   net.adapter={close(){},write:b=>{writes.push(b);return true;}};t.after(()=>net.stop());
   const receive=(from,b)=>net.receive(members[from-1],{room:'test',frames:[b.toString('base64')]});
@@ -89,6 +89,71 @@ test('the Steam LAN layout carries the same local endpoint without requiring a S
   assert.deepEqual([...meta.subarray(s.addressOffset,s.addressOffset+4)],[172,24,1,18]);
 });
 
+test('chat-only members cannot observe broadcasts, inject packets or reuse a revoked return path',t=>{
+  const {net,room,writes,receive}=harness(t);
+  const [host,guest,other]=room.active.roster;
+  const games=Buffer.from('game');
+  net.reconcile();
+  net.route(1,frame(1,255,47011,7000,games),true);
+  assert(net.queues.has(guest.device));
+  net.route(1,frame(1,255,47011,14001,header('SQ',1)),true);
+  receive(2,frame(2,1,14001,47011,session(57001,1)));
+  assert(net.discovery.listener(1,2,57001));
+  guest.ready=false;net.reconcile();
+  assert(!net.queues.has(guest.device));assert(!net.discovery.listener(1,2,57001));
+  writes.length=0;
+  net.route(1,frame(1,255,47012,7000,games),true);
+  net.route(1,frame(1,255,47012,14001,header('SQ',2)),true);
+  assert(!net.queues.has(guest.device));assert(net.queues.has(other.device));
+  receive(2,frame(2,1,47013,7000,games));assert.equal(writes.length,0);
+  guest.ready=true;net.reconcile();
+  receive(2,frame(2,1,7000,47011,games));receive(2,frame(2,1,7000,47012,games));
+  receive(2,frame(2,1,14001,47011,session(57001,1)));receive(2,frame(2,1,14001,47012,session(57002,2)));
+  assert.equal(writes.length,0);
+  receive(3,frame(3,1,7000,47011,games));assert.equal(writes.length,1,'unrelated match still has its return flow');
+  host.ready=false;net.reconcile();net.queues.clear();writes.length=0;
+  receive(2,frame(2,255,47013,7000,games));
+  assert.equal(writes.length,0);assert(net.queues.has(other.device),'the organizer may relay between two ready players');
+});
+
+test('a guest cannot reissue the same discovery answer to fill a client socket or choose unlimited listeners',t=>{
+  const {net,writes,receive}=harness(t);
+  const q=frame(1,255,47011,14001,header('SQ',7));
+  net.route(1,q,true);
+  for(let i=0;i<25;i++){
+    receive(2,frame(2,255,14001,14001,session(57001,7)));
+    receive(2,frame(2,255,14001,14001,session(57001+i,7)));
+  }
+  assert(writes.length>=2,'legitimate independent listeners on one host still work');
+  assert(writes.length<=4,'bounded replies per responder and search');
+  assert(!net.discovery.listener(1,2,57025));
+  net.route(1,frame(1,255,47011,14001,header('SQ',8)),true);
+  receive(2,frame(2,255,14001,14001,session(57025,8)));
+  assert(net.discovery.listener(1,2,57025),'fresh search permits a new lobby');
+});
+
+test('game broadcast flood is bounded per origin and cannot exhaust a different seat or unicast',t=>{
+  const {writes,receive}=harness(t), bytes=Buffer.from('lobby');
+  const b=frame(2,255,49010,8086,bytes);
+  for(let n=0;n<1000;n++)receive(2,b);
+  assert(writes.length>30&&writes.length<650);
+  const count=writes.length;
+  receive(3,frame(3,255,49010,8086,bytes));receive(2,frame(2,1,8088,8088,bytes));
+  assert.equal(writes.length,count+2);
+});
+
+test('service ports cannot be contacted with default or legacy rules or learned advertisements',t=>{
+  const {net,writes,receive}=harness(t),games=Buffer.from('bytes');
+  net.route(1,frame(1,255,47011,14001,header('SQ',13)),true);
+  for(const port of [53,67,137,138,139,445,1900,2049,3389,3702,5350,5351,5353,5355]){
+    for(const proto of ['UDP','TCP']) assert.throws(()=>net.setPorts('test',proto+' '+port));
+    receive(2,frame(2,1,47011,port,games));receive(2,frame(2,255,port,7000,games));
+    receive(2,frame(2,255,14001,14001,session(port,13)));
+    assert(!net.discovery.listener(1,2,port));
+  }
+  assert.equal(writes.length,0);
+});
+
 test('a source-specific discovery response cannot enroll bystanders, cross a room or outlive its search',t=>{
   const {net,room,receive}=harness(t);net.reconcile();
   net.route(1,frame(1,2,42222,14001,header('SQ',89)),true);
@@ -98,8 +163,8 @@ test('a source-specific discovery response cannot enroll bystanders, cross a roo
   receive(2,frame(2,1,14001,42222,session(29117,89)));assert(net.discovery.listener(1,2,29117));
   room.active.roster=room.active.roster.slice(0,1);net.reconcile();assert(!net.discovery.listener(1,2,29117));
   const state=new GameDiscovery();
-  state.observe({type:'query',key:'a'},{src:1,dst:255,sport:14001,dport:14001},0);
-  assert.deepEqual(state.observe({type:'answer',key:'a',session:{port:27381}},{src:2,dst:255,sport:14001,dport:14001},15001),[]);
+  state.observe({type:'query',key:'a'},{src:1,dst:255,sport:14001,dport:14001},members,0);
+  assert.deepEqual(state.observe({type:'answer',key:'a',session:{port:27381}},{src:2,dst:255,sport:14001,dport:14001},members,15001),[]);
 });
 
 test('malformed and unsolicited advertisements cannot reach sockets, open return flows or relay to a bystander',t=>{
@@ -116,7 +181,7 @@ test('malformed and unsolicited advertisements cannot reach sockets, open return
   net.queues.clear();writes.length=0;
   receive(2,frame(2,255,14001,14001,answer));
   assert.equal(writes.length,0);assert.deepEqual([...net.queues.keys()],['device3']);
-  const reply=Buffer.from(net.queues.get('device3').frames[0],'base64');
+  const reply=net.queues.get('device3').frames[0];
   assert.equal(reply[19],3);assert.equal(reply.readUInt16BE(22),49823);
   const {session:parsed}=discoveryMessage(reply.subarray(28),{sport:14001,dport:49823});
   assert.deepEqual([...reply.subarray(28+parsed.addressOffset,32+parsed.addressOffset)],[10,90,1,2]);

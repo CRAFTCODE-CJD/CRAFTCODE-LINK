@@ -120,3 +120,28 @@ test('a peer cannot deliver diagnostic payloads to a port occupied by another ap
   attack(32647, port);
   assert.deepEqual(writes, [port, port], 'no packets are injected after local diagnostics close');
 });
+
+test('only local opt-in enables guest networking and a revoked guest loses permissions before roster rebroadcast',()=>{
+  const [host,guest,other]=members, room=randomUUID(), ticket=randomUUID(), sent=[];
+  const guestRoom=new GameRoom({self:()=>guest,links:()=>[{card:host,send(m){sent.push(m);return true;}}],
+    changed(){},event(){},quiet:()=>false});
+  guestRoom.active={id:room,owner:host,ticket,waiting:true};
+  const list=members.map(p=>({...p}));
+  const announce=()=>guestRoom.receive(host,{action:'roster',room,ticket,prefix:'10.100.5',list});
+  announce();
+  assert.equal(guestRoom.active.roster[1].ready,false,'an organizer cannot opt a guest into the adapter');
+  guestRoom.adapterReady(true);announce();assert(guestRoom.active.roster[1].ready);
+  guestRoom.adapterReady(false);announce();assert.equal(guestRoom.active.roster[1].ready,false);
+  const revoked=[];
+  const game=new GameRoom({self:()=>host,links:()=>[],changed(){},quiet:()=>false,event(){},
+    revokeNetwork:(slot,device)=>revoked.push([slot,device])});
+  game.active={id:room,host:true,roster:list};
+  list[1].ticket=ticket;list[1].lastReady=Date.now();
+  const state={action:'ready',room,ready:false,ticket};
+  game.receive({...guest,device:other.device},state);
+  game.receive(guest,{...state,ticket:randomUUID()});
+  assert(list[1].ready);assert.deepEqual(revoked,[]);
+  game.receive(guest,state);game.receive(guest,{...state,ready:true});
+  assert.deepEqual(revoked,[[2,guest.device]]);
+  assert(game.rosterDirty,'the local revocation ran even while the roster was coalesced');
+});

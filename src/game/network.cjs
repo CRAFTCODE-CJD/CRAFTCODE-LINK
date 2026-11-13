@@ -2,6 +2,7 @@
 const {ipv4Number,interfaceRanges,overlaps,chooseFreePrefix}=require('./subnet.cjs');
 const {launch}=require('./windows.cjs');
 const {tr}=require('../native-language.cjs');
+const {TokenBucket}=require('../core/protocol.cjs');
 const {PathCheck,isProbePort,isProbe,peerProbePort}=require('./path-check.cjs');
 const {GamePorts,allowedPort}=require('./ports.cjs');
 const {GameDiscovery,discoveryMessage,localAnswer}=require('./discovery.cjs');
@@ -25,6 +26,7 @@ class GameNetwork {
       return r?.roster.find(p=>p.device!==this.room.self()?.device && address===r.prefix+'.'+p.slot);
     }});
     this.discovery=new GameDiscovery();this.traffic=newTraffic();this.generation=0;this.phase='off';this.error='';
+    this.seats=new Map();this.broadcastRates=new Map();
   }
   status(){return {phase:this.phase,error:this.error,reason:this.reason||'',traffic:{...this.traffic},ports:this.ports.description,
     path:{...this.pathCheck.result,port:this.pathCheck.port}};}
@@ -37,10 +39,21 @@ class GameNetwork {
     if(this.errorRoom && this.errorRoom!==this.room.active?.id){this.errorRoom=null;this.error='';this.reason='';}
     const r=this.room.active;
     if(this.bound && (this.bound!==r?.id || this.address!==r.prefix+'.'+this.mine()?.slot))this.stop();
-    // Purge queued traffic and return permissions when a seat changes owner.
-    const seats=this.room.active?.roster.map(p=>p.slot+'='+p.device).join('|')||'';
-    if(seats!==this.seats){this.ports.flows.clear();this.discovery.clear();this.traffic.lastMatch=null;this.queues.clear();this.rates.clear();this.seats=seats;}
+    const seats=new Map((r?.roster||[]).filter(p=>p.ready===true).map(p=>[p.slot,p.device]));
+    if(this.seatRoom!==r?.id){
+      this.ports.flows.clear();this.discovery.clear();this.queues.clear();this.rates.clear();this.broadcastRates.clear();this.traffic.lastMatch=null;
+    }else{
+      for(const [slot,device] of this.seats)if(seats.get(slot)!==device)this.revokeSeat(slot,device);
+    }
+    this.seatRoom=r?.id;this.seats=seats;
     if(this.portsRoom && this.portsRoom!==r?.id){this.ports.set('');this.portsRoom=null;}
+  }
+  revokeSeat(slot,device){
+    this.ports.forgetSeat(slot);this.discovery.forgetSeat(slot);
+    if(this.traffic.lastMatch?.seat===slot)this.traffic.lastMatch=null;
+    this.queues.delete(device);
+    // Other peers may already have a broadcast from the revoked slot queued.
+    for(const q of this.queues.values())q.frames=q.frames.filter(b=>b[15]!==slot);
   }
   async start(repair=false){
     const r=this.room.active,me=this.mine();if(!r||!me||r.waiting)throw Error(tr('Сначала войдите в игровую LAN.'));
@@ -80,7 +93,7 @@ class GameNetwork {
       }
     }
     this.abort=null;this.adapter=null;
-    clearTimeout(this.timer);this.timer=null;this.queues.clear();this.ports.flows.clear();this.discovery.clear();this.rates.clear();this.changed();
+    clearTimeout(this.timer);this.timer=null;this.queues.clear();this.ports.flows.clear();this.discovery.clear();this.rates.clear();this.broadcastRates.clear();this.changed();
     return this.release;
   }
   checkPeer(device){
@@ -91,7 +104,7 @@ class GameNetwork {
   receive(card,m){
     const r=this.room.active;if(!r||r.waiting||r.id!==m.room||!Array.isArray(m.frames)||!m.frames.length||m.frames.length>12)return;
     const peer=r.roster.find(p=>p.id===card.id&&p.device===card.device);
-    if(!peer||(!r.host&&peer.slot!==1))return;
+    if(!peer||(r.host?peer.ready!==true:peer.slot!==1))return;
     const now=Date.now();let rate=this.rates.get(peer.slot);
     if(!rate||rate.until<=now){rate={until:now+1000,bytes:0};this.rates.set(peer.slot,rate);}
     for(const s of m.frames){
@@ -102,13 +115,18 @@ class GameNetwork {
   route(from,b,local){
     const r=this.room.active, me=this.mine();if(!r||!me)return;
     const h=inspect(b,r.prefix);if(!h||h.src===h.dst)return;
-    const source=r.roster.find(p=>p.slot===h.src);if(!source)return;
+    const source=r.roster.find(p=>p.slot===h.src);if(source?.ready!==true)return;
     if((local||r.host)&&h.src!==from || !local&&!r.host&&h.src===me.slot)return;
     const broadcast=h.dst===255;
     const destination=broadcast?null:r.roster.find(p=>p.slot===h.dst);
-    if(!broadcast&&!destination)return;
+    if(!broadcast&&destination?.ready!==true)return;
     if(!local&&!r.host&&!broadcast&&h.dst!==me.slot)return;
-    const incomingHere=!local&&(broadcast||h.dst===me.slot);
+    const incomingHere=!local&&me.ready===true&&(broadcast||h.dst===me.slot);
+    if(!local&&broadcast){
+      let bucket=this.broadcastRates.get(h.src);
+      if(!bucket){bucket=new TokenBucket(128,128);this.broadcastRates.set(h.src,bucket);}
+      if(!bucket.take())return;
+    }
     let replyTargets;
     const diagnostic=isProbePort(h.dport) || isProbePort(h.sport);
     const msg=!diagnostic&&h.proto==='UDP'?discoveryMessage(b.subarray(28),h):null;
@@ -129,7 +147,7 @@ class GameNetwork {
         permitted=replyTargets.length>0;
       }else if(msg?.type==='query'){
         permitted=allowedPort(h.sport)&&allowedPort(h.dport)&&(msg.discoveryPort||this.ports.allows(h.proto,h.dport)||learned);
-        if(permitted)this.discovery.observe(msg,h);
+        if(permitted)this.discovery.observe(msg,h,r.roster);
       }else{
         permitted=this.ports.accepts(h,r.roster,learned);
       }
@@ -162,6 +180,7 @@ class GameNetwork {
     if(!r.host&&!local)return;
     for(const p of r.roster){
       if(p.slot===me.slot||p.slot===from)continue;
+      if(r.host&&p.ready!==true)continue;
       if(r.host?!broadcast&&p.slot!==h.dst:p.slot!==1)continue;
       const target=r.host&&replyTargets?.find(query=>query.seat===p.slot);
       if(r.host&&replyTargets&&!target)continue;
@@ -169,7 +188,7 @@ class GameNetwork {
       if(!q){q={p,frames:[]};this.queues.set(p.device,q);}
       if(q.frames.length<48){
         const frame=target?localAnswer(b,target,msg.session):b;
-        q.frames.push(frame.toString('base64'));
+        q.frames.push(frame);
       }
     }
     this.schedule();
@@ -186,7 +205,7 @@ class GameNetwork {
     for(const {p,frames} of this.queues.values()){
       const l=this.room.link(p);if(!r||!l||l.socket.writableLength>=65536){this.queues.delete(p.device);continue;}
       if(frames.length){
-        const batch=frames.splice(0,12);
+        const batch=frames.splice(0,12).map(b=>b.toString('base64'));
         if(l.send({kind:'game-packets',room:r.id,frames:batch})){this.traffic.relayed+=batch.length;this.reportTraffic();}
       }
       if(!frames.length)this.queues.delete(p.device);

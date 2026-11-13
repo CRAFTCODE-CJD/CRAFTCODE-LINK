@@ -3,7 +3,7 @@ const {tr}=require('../native-language.cjs');
 const {isProbePort}=require('./path-check.cjs');
 
 const defaults=new Set([7000,7777,7778,7779,8086,8087,14001,16000,...Array.from({length:51},(_,i)=>27000+i)]);
-const systemPorts=new Set([1900,2869,3389,3702,5353,5355,5357,5358,5985,5986,47001]);
+const systemPorts=new Set([1900,2049,2869,3389,3702,5350,5351,5353,5355,5357,5358,5985,5986,47001]);
 const allowedPort=n=>Number.isInteger(n) && n>=1024 && n<=65535 && !systemPorts.has(n) && !isProbePort(n);
 function parsePorts(text){
   const invalid=()=>Error(tr('Введите до восьми правил TCP или UDP, не более 128 портов в сумме.'));
@@ -37,6 +37,12 @@ class GamePorts{
     if(!this.flows.has(key)&&this.flows.size>=2048)this.flows.delete(this.flows.keys().next().value);
     this.flows.set(key,until);
   }
+  forgetSeat(slot){
+    for(const key of this.flows.keys()){
+      const [,src,,dst]=key.split('/');
+      if(Number(src)===slot||Number(dst)===slot)this.flows.delete(key);
+    }
+  }
   accepts(h,roster,learnedListener=false){
     const {proto,sport,dport,src,dst}=h;
     if(!allowedPort(sport)||!allowedPort(dport))return false;
@@ -62,7 +68,7 @@ class GamePorts{
       return true;
     }
     if(learnedListener)this.remember(direct,now+90000);
-    const destinations=broadcast?roster.map(p=>p.slot):[dst];
+    const destinations=broadcast?roster.filter(p=>p.ready===true&&p.slot!==src).map(p=>p.slot):[dst];
     for(const seat of destinations)this.remember(key(seat,dport,src,sport),now+90000);
     return true;
   }
