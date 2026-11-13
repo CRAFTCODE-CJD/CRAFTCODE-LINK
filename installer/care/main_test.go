@@ -217,7 +217,7 @@ func TestRepairCorruptMissingAndUninstaller(t *testing.T) {
 	// Windows can retain a deleted child briefly after replacing application files.
 	// Clean up this test's private tree before TempDir's single RemoveAll attempt.
 	t.Cleanup(func() {
-		if err := wipe(root); err != nil {
+		if err := wipeStage(root); err != nil {
 			t.Error(err)
 		}
 	})

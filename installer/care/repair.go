@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const backupDir = ".repair-backup"
+
+var cleanupPending = errors.New("temporary files remain")
 
 // The entire new payload is unpacked on the destination volume before any installed file changes.
 func repairStage(p string) (string, error) {
@@ -108,7 +111,32 @@ func repair(p, base string) error {
 		_ = wipe(filepath.Join(s, backupDir))
 		return err
 	}
-	return wipe(s)
+	// From this point all new files, including the uninstaller, are in place.
+	if err := wipeStage(s); err != nil {
+		return fmt.Errorf("%w: %w", cleanupPending, err)
+	}
+	return nil
+}
+
+// Called only for the current wizard's stage after repair reported that all
+// files were committed. Do not use it for aborted transactions.
+func cleanCommitted(p, base string) error {
+	s, err := stagePath(p, base)
+	if err != nil {
+		return err
+	}
+	return wipeStage(s)
+}
+
+// Windows can briefly retain a deleted child or a scanner's handle. Retry
+// only the current transaction's staging directory, including on wizard exit.
+func wipeStage(s string) error {
+	err := wipe(s)
+	for delay := 40 * time.Millisecond; retryStageCleanup(err) && delay <= 640*time.Millisecond; delay *= 2 {
+		time.Sleep(delay)
+		err = wipe(s)
+	}
+	return err
 }
 func discard(p, base string) error {
 	s, err := stagePath(p, base)
@@ -119,5 +147,5 @@ func discard(p, base string) error {
 	if !errors.Is(err, os.ErrNotExist) {
 		return errors.New("retained repair backup")
 	}
-	return wipe(s)
+	return wipeStage(s)
 }

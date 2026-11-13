@@ -1,5 +1,11 @@
 # CRAFTCODE LINK QA
 
+## 0.7.26 Windows installer and repair
+
+- PASS on a disposable Windows Server 2025 runner. The released 0.7.25 installer normally updated the released 0.7.23 application from its tray state. Re-running Setup repaired a missing file, and default uninstall retained the test profile. [Windows run](https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/actions/runs/43375045904).
+- REPRODUCED with the published 0.7.25 installer. Holding the staging directory open without delete sharing left the 0.7.25 files installed, the registry on 0.7.23, and Setup reporting exit code 1. Releasing the handle distinguished this cleanup failure from a failure to copy the payload. [Windows reproduction](https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/actions/runs/43375864297/job/131722088237).
+- PASS in Russian and English. Desktop tests opened Help, found the repair instructions, exercised the keyboard and decoded all four bundled tutorials with subtitles. The installer runs outside the screens shown in those tutorials.
+
 ## 0.7.25 Generals gameplay after joining a visible host
 
 - PASS after publication. The packaged 0.7.23 client used the public GitHub release, downloaded all 126,898,453 installer bytes and offered installation. Its SHA-256 matched the published installer. The packaged 0.7.25 client reported it was current. The 0.7.23 client also verified the signed public offline package and offered installation. The operator cancelled at confirmation to preserve the running Windows installation.

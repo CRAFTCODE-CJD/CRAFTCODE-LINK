@@ -3,15 +3,18 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 )
 
+func writeDiagnostic(err error)             { fmt.Fprintln(os.Stderr, err) }
 func linklike(f os.FileInfo) bool           { return f.Mode()&os.ModeSymlink != 0 }
 func removeDir(p string) error              { return os.NewSyscallError("rmdir", syscall.Rmdir(p)) }
 func removeEmptiedDir(p string) error       { return removeDir(p) }
+func retryStageCleanup(err error) bool      { return false }
 func platformPath(p string) error           { return nil }
 func freeSpace(p string) error              { return nil }
 func shutdownInstallation(dir string) error { return target(dir) }

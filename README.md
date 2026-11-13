@@ -18,6 +18,8 @@ In **Settings → Storage**, choose a drive or folder for your profile and chat 
 
 Fresh Windows installations store data in a dedicated **CRAFTCODE LINK Data** folder beside the application, with only small location and process-control records in the Windows profile. Updating an existing installation keeps its previous data location. If you use the portable ZIP, extract it to a writable folder before launching LINK.
 
+In Windows **Settings → Apps → Installed apps**, open **CRAFTCODE LINK → Uninstall** and choose **Repair application**. This restores the installed version’s program files and keeps your profile and chats. If the original installer has moved, select another copy of the same version. The wizard checks its SHA-256 before opening it.
+
 After uninstalling while keeping the profile, you can reinstall into the same folder. The installer accepts its verified preserved data folder and installs program files beside it without moving the profile. Other occupied folders remain protected.
 
 Drag a file into a private chat, media room chat, Game LAN chat or group text channel. Paste a screenshot with Ctrl+V. Review the image and caption, then choose Send. For multiple files, the caption goes on the first one. Group members offer files to the owner for publication. The Game LAN chat and its attachments work while the game adapter is off.

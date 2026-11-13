@@ -6,6 +6,15 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      setup_asset:
+        description: 'Optional GitHub release asset ID to test instead of building the installer'
+        required: false
+        type: string
+      setup_sha256:
+        description: 'Expected SHA-256 for that installer'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,7 +26,7 @@ concurrency:
 jobs:
   check:
     runs-on: windows-2025
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -73,3 +82,46 @@ jobs:
               Pop-Location
             }
           }
+      - name: Build Windows installer
+        if: ${{ !inputs.setup_asset }}
+        run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+            if (-not (Test-Path -LiteralPath (Join-Path $nsis 'makensis.exe'))) {
+              choco install nsis --yes --no-progress
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot install NSIS.' }
+            }
+            $env:PATH = "$nsis;$env:PATH"
+          }
+          npm run pack:win
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot build Windows payload.' }
+          python scripts/package-setup.py
+      - name: Test the Windows installer, registered repair and uninstall
+        env:
+          ASSET_ID: ${{ inputs.setup_asset }}
+          ASSET_SHA256: ${{ inputs.setup_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $baseline = 'CRAFTCODE-LINK-0.7.23-Setup-x64.exe'
+          $previous = Join-Path $env:RUNNER_TEMP $baseline
+          $url = "https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/releases/download/v0.7.23/$baseline"
+          curl.exe --fail --location --silent --show-error --retry 3 $url --output $previous
+          if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $previous).Hash -ne '89b199d395c13ba51e8ab5e2994a231a0fa60c678284f0bc3ebf0e1ea5cb436d') {
+            throw 'Cannot verify the published baseline installer.'
+          }
+          $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          $name = "CRAFTCODE-LINK-$version-Setup-x64.exe"
+          $candidate = Join-Path 'out' $name
+          if ($env:ASSET_ID -or $env:ASSET_SHA256) {
+            if ($env:ASSET_ID -notmatch '^[1-9][0-9]{0,19}$' -or $env:ASSET_SHA256 -notmatch '^[0-9a-fA-F]{64}$') {
+              throw 'Provide both a numeric asset ID and its SHA-256.'
+            }
+            $asset = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases/assets/$env:ASSET_ID"
+            $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream' }
+            $candidate = Join-Path $env:RUNNER_TEMP $name
+            Invoke-WebRequest -Uri $asset -Headers $headers -OutFile $candidate
+            if ((Get-FileHash -LiteralPath $candidate).Hash -ne $env:ASSET_SHA256) { throw 'Release asset digest mismatch.' }
+          }
+          Remove-Item Env:GH_TOKEN
+          if ((Get-Item -LiteralPath $candidate).VersionInfo.ProductVersion -ne $version) { throw 'Unexpected installer version.' }
+          ./tests/windows-installer-update.ps1 -PreviousSetup $previous -CurrentSetup $candidate -HoldStageOpen

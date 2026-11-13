@@ -20,7 +20,16 @@ const product = "CRAFTCODE LINK"
 const tempPrefix = ".craftcode-install-"
 
 var busy = errors.New("application is running")
-var space = errors.New("insufficient space")
+
+type diskSpaceError struct {
+	volume              string
+	available, required uint64
+}
+
+func (e *diskSpaceError) Error() string {
+	const mib uint64 = 1024 * 1024
+	return fmt.Sprintf("%s  %d / %d MiB", e.volume, e.available/mib, (e.required-1)/mib+1)
+}
 
 func paths() ([]string, error) {
 	names := strings.FieldsFunc(catalog, func(r rune) bool { return r == '\r' || r == '\n' })
@@ -284,19 +293,28 @@ func run(a []string) (string, error) {
 			return "", commit(a[1], a[2])
 		case "discard":
 			return "", discard(a[1], a[2])
+		case "clean-committed":
+			return "", cleanCommitted(a[1], a[2])
 		}
+	}
+	if len(a) == 4 && a[0] == "prepare-repair" {
+		return copyRepairSource(a[1], a[2], a[3])
 	}
 	return "", errors.New("invalid arguments")
 }
 func main() {
 	s, err := run(os.Args[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		writeDiagnostic(err)
 		if errors.Is(err, busy) {
 			os.Exit(2)
 		}
-		if errors.Is(err, space) {
+		var shortage *diskSpaceError
+		if errors.As(err, &shortage) {
 			os.Exit(3)
+		}
+		if errors.Is(err, cleanupPending) {
+			os.Exit(4)
 		}
 		os.Exit(1)
 	}

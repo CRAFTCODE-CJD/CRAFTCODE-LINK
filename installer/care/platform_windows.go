@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +13,13 @@ import (
 )
 
 var kernel = syscall.NewLazyDLL("kernel32.dll")
+
+// nsExec reads the helper's redirected diagnostic as ANSI or UTF-16LE.
+// Emit a single Unicode record so non-Latin folder names survive either locale.
+func writeDiagnostic(err error) {
+	line := utf16.Encode([]rune("\uFEFF" + err.Error()))
+	_ = binary.Write(os.Stderr, binary.LittleEndian, line)
+}
 
 // Do not share DELETE (unlike Go's default OpenFile): the startup/cleanup
 // handshake must remain present until this operation explicitly releases it.
@@ -32,6 +40,11 @@ func linklike(f os.FileInfo) bool {
 	return f.Sys().(*syscall.Win32FileAttributeData).FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 func removeDir(p string) error { return os.NewSyscallError("RemoveDirectory", syscall.Rmdir(p)) }
+
+func retryStageCleanup(err error) bool {
+	return errors.Is(err, syscall.ERROR_DIR_NOT_EMPTY) || errors.Is(err, syscall.ERROR_ACCESS_DENIED) ||
+		errors.Is(err, syscall.Errno(32)) || errors.Is(err, syscall.Errno(33)) // sharing or lock violation
+}
 
 // A child marked for deletion can keep its parent nonempty until the last
 // Windows handle closes. Only retry rmdir on the directory already traversed.
@@ -94,8 +107,12 @@ func freeSpace(p string) error {
 	if r == 0 {
 		return err
 	}
-	if available < requiredBytes {
-		return space
+	return checkFreeSpace(filepath.VolumeName(p), available, requiredBytes)
+}
+
+func checkFreeSpace(volume string, available, required uint64) error {
+	if available < required {
+		return &diskSpaceError{volume, available, required}
 	}
 	return nil
 }
