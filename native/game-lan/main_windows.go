@@ -63,6 +63,15 @@ func setupError(conn net.Conn, code string) error {
 	return errors.New(code)
 }
 
+// Send only the setup step and the numeric Windows error, never paths or command output.
+func windowsSetupError(conn net.Conn, step string, err error) error {
+	var errno syscall.Errno
+	if errors.As(err, &errno) && errno != 0 {
+		step += ":" + strconv.FormatUint(uint64(errno), 10)
+	}
+	return setupError(conn, step)
+}
+
 func run() error {
 	repair := len(os.Args) == 5 && os.Args[4] == "repair"
 	if len(os.Args) != 4 && !repair {
@@ -118,17 +127,17 @@ func run() error {
 	// Deny writes/deletion while both verifying and loading the signed vendor DLL.
 	fd, e := syscall.CreateFile(utf(file), syscall.GENERIC_READ, syscall.FILE_SHARE_READ, nil, syscall.OPEN_EXISTING, 0, 0)
 	if e != nil {
-		return e
+		return windowsSetupError(conn, "driver-file", e)
 	}
 	f := os.NewFile(uintptr(fd), file)
 	defer f.Close()
 	hash := sha256.New()
 	if _, e = io.Copy(hash, f); e != nil {
-		return e
+		return windowsSetupError(conn, "driver-file", e)
 	}
 	want := map[string]string{"amd64": "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce", "arm64": "f7ba89005544be9d85231a9e0d5f23b2d15b3311667e2dad0debd344918a3f80"}
 	if hex.EncodeToString(hash.Sum(nil)) != want[runtime.GOARCH] {
-		return errors.New("dll digest")
+		return setupError(conn, "driver-file")
 	}
 	var sysdir [260]uint16
 	n, _, _ := kernel.NewProc("GetSystemDirectoryW").Call(uintptr(unsafe.Pointer(&sysdir[0])), 260)
@@ -138,7 +147,7 @@ func run() error {
 	system := syscall.UTF16ToString(sysdir[:])
 	raw, _, e := kernel.NewProc("LoadLibraryExW").Call(uintptr(unsafe.Pointer(utf(file))), 0, 0x800)
 	if raw == 0 {
-		return e
+		return windowsSetupError(conn, "driver-file", e)
 	}
 	dll := &syscall.DLL{Handle: syscall.Handle(raw)}
 	defer dll.Release()
@@ -166,7 +175,7 @@ func run() error {
 	}
 	ad, _, e := dll.MustFindProc("WintunCreateAdapter").Call(uintptr(unsafe.Pointer(utf(adapterName))), uintptr(unsafe.Pointer(utf("CRAFTCODE LINK"))), uintptr(unsafe.Pointer(&adapterGUID)))
 	if ad == 0 {
-		return e
+		return windowsSetupError(conn, "driver-create", e)
 	}
 	defer dll.MustFindProc("WintunCloseAdapter").Call(ad)
 	var luid uint64
@@ -175,15 +184,15 @@ func run() error {
 	var assigned syscall.GUID
 	lookup, _, _ := ipHelper.NewProc("ConvertInterfaceLuidToGuid").Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&assigned)))
 	if lookup != 0 || assigned != adapterGUID {
-		return errors.New("unexpected adapter identity")
+		return windowsSetupError(conn, "adapter-identity", syscall.Errno(lookup))
 	}
 	ret, _, _ := ipHelper.NewProc("ConvertInterfaceLuidToIndex").Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&idx)))
 	if ret != 0 || idx == 0 {
-		return errors.New("interface")
+		return windowsSetupError(conn, "adapter-identity", syscall.Errno(ret))
 	}
 	session, _, e := dll.MustFindProc("WintunStartSession").Call(ad, 0x400000)
 	if session == 0 {
-		return e
+		return windowsSetupError(conn, "driver-session", e)
 	}
 	defer dll.MustFindProc("WintunEndSession").Call(session)
 	idxArg := "name=" + strconv.FormatUint(uint64(idx), 10)
@@ -192,7 +201,7 @@ func run() error {
 	cmd := exec.CommandContext(ctx, filepath.Join(system, "netsh.exe"), "interface", "ipv4", "add", "address", idxArg, "address="+ip.String(), "mask=255.255.255.0", "store=active")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if e = cmd.Run(); e != nil {
-		return e
+		return windowsSetupError(conn, "address", e)
 	}
 	// Wintun can advertise a 65535-byte MTU. Match TCP segmentation on
 	// this interface to LINK's 1500-byte authenticated packet envelope.

@@ -5,6 +5,7 @@
 - PASS. The main window loaded and the renderer reached trusted IPC on Windows from both a normal path and a path containing a literal percent escape, a hash and Cyrillic text. Desktop tests that need an external bootstrap now reject a bundled executable before opening a window.
 
 - PASS. Storage settings send the active profile folder and the selected downloads folder to the Windows folder opener, including after a profile move and restart. Tested keyboard activation and Russian and English layouts at 800 pixels with the OS opener intercepted.
+- PASS. After the original 0.7.14 helper authenticated, a missing Wintun DLL produced no diagnostic frame. The same experiment on Windows with the 0.7.19 helper returned `driver-file:2`. A simulated denied Windows launch was visible in the game chat and the diagnostics were copied by keyboard with both adapters off. A virtual clock verified that time spent in the Windows approval prompt no longer consumes the driver startup timeout.
 
 - PASS. Russian and English group navigation at 1426, 940 and 740 pixels. Checked the friends column, channel selection, direct messages, keyboard drawers and return to the current group call. Three isolated desktop clients exchanged voice and screen data while switching between pages.
 - PASS. Two desktop profiles exchanged the same cropped avatar pixels. Cancel, keyboard zoom and pan, profile cards, presence and reopening the app were checked. A group owner also cropped a group photo and the other two members received it.

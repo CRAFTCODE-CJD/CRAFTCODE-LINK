@@ -391,6 +391,7 @@ dialog #requestNotice {position:static;width:auto;margin:0 0 14px;box-shadow:non
 .lan-summary>div{flex:1 1 11rem;min-width:0}
 .lan-summary h2{font-size:clamp(17px,1.6vw,22px);line-height:1.25;margin:2px 0 0;overflow-wrap:anywhere}
 .lan-summary>button{flex:none}
+.lan-summary #gameFailure{flex-basis:100%;margin:0;color:var(--text);border-inline-start:3px solid var(--danger);padding-inline-start:8px}
 #gameNetworkPane .lan-guide{border-top:1px solid var(--border-soft)}
 #gamePortsForm{display:grid;gap:7px;max-width:460px;margin-top:10px}
 #gamePortsForm button{justify-self:start}

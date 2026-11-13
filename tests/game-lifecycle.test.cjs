@@ -49,9 +49,9 @@ test('a late approval after cancellation cannot attach to a retired listener', a
   assert.equal(err.code, 'ECONNREFUSED');
 });
 test('an authenticated helper reports a busy adapter or overlapping subnet before readiness', async () => {
-  for (const [code, error] of [['busy',/уже используется/],['overlap',/Подсеть занята/]]) {
+  for (const [code, error] of [['busy',/уже используется/],['overlap',/Подсеть занята/],['driver-create:5',/не создала/],['driver-file:2',/wintun/]]) {
     const s = setup(), socket = await connectHelper(s.started);
-    const rejected = assert.rejects(s.adapter,error);
+    const rejected = assert.rejects(s.adapter,{message:error,code});
     socket.write(Buffer.concat([Buffer.from([0,code.length]),Buffer.from(code)]));
     await rejected;
     socket.end();
@@ -59,11 +59,13 @@ test('an authenticated helper reports a busy adapter or overlapping subnet befor
   }
 });
 test('declining elevation is distinct from a helper startup error', async () => {
-  const s = setup();
-  await s.started;
-  const failure = assert.rejects(s.adapter,/отменено в Windows/);
-  s.proc.emit('exit',23);
-  await failure;
+  for(const [status,code] of [[23,'cancelled'],[24,'access-denied'],[1,'launcher']]){
+    const s=setup();
+    await s.started;
+    const failure=assert.rejects(s.adapter,{code});
+    s.proc.emit('exit',status);
+    await failure;
+  }
 });
 test('disabling waits for the authenticated helper to release its resource', async () => {
   const s = setup(), socket = await connectHelper(s.started);
@@ -77,6 +79,18 @@ test('disabling waits for the authenticated helper to release its resource', asy
   socket.end();
   await closing;
   assert.equal(released,true);
+});
+test('reading the Windows prompt leaves a fresh startup timeout for the driver', async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const s=setup();
+  await s.started;
+  t.mock.timers.tick(110000);
+  const socket=await connectHelper(s.started);
+  t.mock.timers.tick(80000);
+  socket.write(Buffer.alloc(2));
+  const adapter=await s.adapter;
+  socket.end();
+  await adapter.close();
 });
 function room() {
   const me = {device:'here', slot:1};

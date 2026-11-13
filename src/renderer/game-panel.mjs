@@ -30,6 +30,7 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
       item.tabIndex=selected?0:-1;$(item.getAttribute('aria-controls')).hidden=!selected;
     }
     if(compact){narrowMembers=false;showMembers();}
+    $('gameFailure').hidden=tab!==tabs[0]||!$('gameFailure').textContent;
     if(tab!==tabs[0])closeMedia();
   }
   for(const [i,tab] of tabs.entries()){
@@ -117,16 +118,17 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
   $('gameSendInvite').onclick=()=>command('game-invite',{id:$('gameFriend').value});
   $('gameCopyDiag').onclick=async()=>{
     const d=direct.raw(),g=d.game,r=g?.room,n=g?.network;if(!r||!n)return;
-    const me=r.roster.find(p=>p.device===d.me.device),p=r.roster.find(p=>p.device===$('gameTarget').value),result=n.path||{};
+    const me=r.roster.find(p=>p.device===d.me.device),p=r.roster.find(p=>p.device===$('gameTarget').value)||r.roster.find(p=>p!==me),result=n.path||{};
     const t=n.traffic||{},tested=result.device===p?.device;
     const lines=['CRAFTCODE LINK · LAN · '+new Date().toISOString(),
       tr('Этот ПК')+' '+r.prefix+'.'+(me?.slot??'?')+' / '+n.phase+' · UDP '+(result.port||result.code||result.state),
-      tr('Участник')+' '+(p?r.prefix+'.'+p.slot+' / '+(p.ready?'ready':'off')+' · UDP '+(p.probePort??45879):'—'),
+      tr('Участник')+' '+(p?r.prefix+'.'+p.slot+' / '+(p.ready?'ready · UDP '+(p.probePort??45879):'off'):'—'),
       tr('Проверка UDP')+' '+(result.device&&!tested?'idle':result.state)+(tested&&Number.isFinite(result.ms)?' · '+result.ms+tr(' мс'):''),
       tr('Игровые пакеты')+' · TX '+(t.tx||0)+' / RX '+(t.rx||0)+' · '+tr('Широковещательные')+' TX '+(t.broadcastTx||0)+' / RX '+(t.broadcastRx||0),
       tr('Передано в соединения участников, включая проверку')+' '+(t.relayed||0),
       tr('Отклонено фильтром')+' TX '+(t.blockedTx||0)+' '+(t.lastBlockedTx||'')+' / RX '+(t.blockedRx||0)+' '+(t.lastBlockedRx||''),
       tr('Дополнительные игровые порты')+' · '+(n.ports||'—')];
+    if(n.error)lines.splice(2,0,tr('Включение адаптера')+' · '+(/^[a-z-]+(:[0-9]{1,10})?$/.test(n.reason)?n.reason:'unknown'));
     if(t.queriesTx||t.queriesRx||t.answersTx||t.answersRx){
       lines.push(tr('Поиск матчей')+' TX '+t.queriesTx+' / RX '+t.queriesRx,
         tr('Ответы игры на поиск')+' TX '+t.answersTx+' / RX '+t.answersRx);
@@ -135,7 +137,7 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
     if(t.lastMatch)lines.push(tr('Обнаруженный игровой сервер')+' · '+r.prefix+'.'+t.lastMatch.seat+':'+t.lastMatch.port+
       (Number.isInteger(t.lastMatch.build)?' · build '+t.lastMatch.build:'')+(t.lastMatch.corrected?' · '+tr('Исправлен адрес адаптера'):''));
     if(t.adapterDrops)lines.push(tr('Не передано адаптеру')+' · '+t.adapterDrops);
-    try{await api.copyText(lines.join('\n'));$('gamePathResult').textContent=tr('Скопировано');}catch(e){actionError(e);}
+    try{await api.copyText(lines.join('\n'));$('gameDiagStatus').textContent=tr('Скопировано');}catch(e){actionError(e);}
   };
   $('gameTestPath').onclick=()=>command('game-check-path',{device:$('gameTarget').value});
   $('gameEosPorts').onclick=()=>{
@@ -260,6 +262,9 @@ export function gamePanel({$,api,direct,state,composer,actionError,confirmAction
     $('gameRole').textContent=tr(r.host?'Вы организатор':'Игровая комната');
     $('gameLeave').textContent=tr(r.host&&r.roster.length>1?'Завершить LAN':'Выйти из LAN');
     $('gameConnection').dataset.phase=net.error?'error':net.phase;
+    $('gameFailure').textContent=net.error||'';
+    $('gameFailure').hidden=!net.error||$('gameChatPane').hidden;
+    $('gameDiagStatus').textContent='';
     $('gameStateTitle').textContent=tr(net.error?'Подключение приостановлено':r.waiting?'Вход в комнату':net.phase==='ready'?'Игровая сеть подключена':net.phase==='starting'?'Подключаем игровую сеть':'Подключение к игре');
     $('gameName').textContent=r.title;$('gameCount').textContent=String(r.roster.length);
     $('ueDiscovery').hidden=net.phase!=='ready';

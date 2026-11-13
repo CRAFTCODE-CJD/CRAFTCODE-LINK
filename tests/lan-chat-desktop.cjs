@@ -41,6 +41,25 @@ module.exports=async({a,b})=>{
     assert(!['ready','starting'].includes((await state(client)).game.network.phase));
   }
   const room=(await state(a)).game.room.id;
+  // Substitute the denied system prompt only; use the real activation button and diagnostics.
+  await a.app.evaluate((_,entry)=>{
+    const load=process.getBuiltinModule('node:module').createRequire(entry);
+    const {GameNetwork}=load('./src/game/network.cjs'),start=GameNetwork.prototype.start;
+    GameNetwork.prototype.start=function(...args){
+      this.open=async()=>{throw Object.assign(Error('Windows запретила запуск сетевого помощника LINK.'),{code:'access-denied'});};
+      return start.apply(this,args);
+    };
+  },path.resolve(process.env.LINK_QA_APP_ROOT||path.join(__dirname,'..'),'package.json'));
+  await a.page.click('#gameActivate');
+  await a.page.locator('#gameFailure').waitFor();
+  await a.page.click('#gameNetworkTab');
+  assert(await a.page.locator('#gameFailure').isHidden());
+  await a.page.locator('#gameCopyDiag').focus();await a.page.keyboard.press('Enter');
+  await a.page.waitForFunction(()=>document.querySelector('#gameDiagStatus').textContent==='Скопировано');
+  const report=await a.app.evaluate(()=>globalThis.testClipboard);
+  assert.match(report,/Включение адаптера · access-denied/);
+  assert.match(report,/Участник 10\.\d+\.\d+\.2 \/ off/);
+  await a.page.click('#gameChatTab');
   await b.page.evaluate(()=>localStorage.setItem('craftcode.language','en'));await b.page.reload();
   await b.page.click('#navGame');await b.page.waitForFunction(()=>!document.querySelector('#gameFile').disabled);
   assert.equal(await b.page.getAttribute('html','lang'),'en');

@@ -62,7 +62,7 @@ class GameNetwork {
       try{interfaces=os.networkInterfaces();}catch{throw Error(tr('Не удалось проверить сетевые адаптеры. Повторите попытку.'));}
       // The elevated helper checks every interface again after validating the LINK device identity.
       const otherInterfaces=Object.fromEntries(Object.entries(interfaces).filter(([name])=>name.toLowerCase()!=='craftcode link lan'));
-      if(overlaps(r.prefix,otherInterfaces))throw Error(tr('Подсеть занята. Создайте новую игровую LAN.'));
+      if(overlaps(r.prefix,otherInterfaces))throw Object.assign(Error(tr('Подсеть занята. Создайте новую игровую LAN.')),{code:'overlap'});
       const adapter=await this.open({room:r.id,repair,ip:address,packet:b=>{if(epoch===this.generation)this.route(me.slot,b,true);},
         closed:()=>{if(epoch===this.generation){this.stop();this.error=tr('Игровой адаптер отключён.');this.changed();}},
         abort:fn=>{if(epoch===this.generation)this.abort=fn;else fn();}});
