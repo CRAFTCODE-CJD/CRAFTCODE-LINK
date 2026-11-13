@@ -1,6 +1,7 @@
 'use strict';
 
 const {allowedPort}=require('./ports.cjs');
+const {stkDiscoveryMessage}=require('./stk-discovery.cjs');
 const rakMagic=Buffer.from('00ffff00fefefefefdfdfdfd12345678','hex');
 const bedrockPorts=new Set([19132,19133]);
 const quakePort=port=>port>=27960&&port<=27963;
@@ -55,6 +56,10 @@ function epicSession(data,start,steam){
 }
 
 function discoveryMessage(data,h){
+  if(h.sport===2757||h.dport===2757){
+    const kart=stkDiscoveryMessage(data,h);
+    if(kart)return kart;
+  }
   if(quakePort(h.sport)||quakePort(h.dport)){
     const quake=quakeDiscovery(data,h);
     if(quake)return quake;

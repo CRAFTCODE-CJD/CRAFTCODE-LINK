@@ -1,5 +1,12 @@
 # CRAFTCODE LINK QA
 
+## Windows 0.7.20 game LAN
+
+- PASS. The host selects a free game subnet when another adapter or VPN covers the original range. Mixed 0.7.14 and current room implementations accepted invitations with either version hosting and retained the same addresses.
+- PASS. Two isolated game endpoints can exchange traffic through an organizer in chat-only mode. Chat-only seats cannot inject or receive game traffic. Revoking consent clears pending packets and learned permissions. Regression cases exercise repeated discovery replies, broadcast flooding, malformed advertisements and reserved services.
+- PASS. Godot clients completed a match and agreed on the score. OpenArena answered LAN discovery and the next game challenge. A real SuperTuxKart 1.5 server answered a guest's discovery request through the organizer and completed the ENet connection handshake on the advertised non-default port. See the [game compatibility and troubleshooting guide](docs/LAN_COMPATIBILITY_RU.md) for the precise scope of each test.
+- NOT TESTED. A full match between two physical Windows PCs using the released Portable, licensed cloud-only matchmaking and legacy non-IP games.
+
 ## Windows 0.7.19 release, 2026-11-13
 
 - PASS. The main window loaded and the renderer reached trusted IPC on Windows from both a normal path and a path containing a literal percent escape, a hash and Cyrillic text. Desktop tests that need an external bootstrap now reject a bundled executable before opening a window.

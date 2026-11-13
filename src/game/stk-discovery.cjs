@@ -9,7 +9,6 @@ const {allowedPort}=require('./ports.cjs');
 const port=2757;
 const query=Buffer.from('\x0astk-server','ascii');
 
-
 function stkDiscoveryMessage(data,h){
   if(h.proto!=='UDP')return;
   if(h.dport===port&&h.dst===255&&allowedPort(h.sport)&&data.equals(query)){

@@ -1,4 +1,6 @@
-# CRAFTCODE LINK 0.7.19
+# CRAFTCODE LINK 0.7.20
+
+For Game LAN, everyone joins the same room and enables the Windows game network. One player hosts in the game and the others refresh its LAN list. See the [tested games and connection troubleshooting (in Russian)](docs/LAN_COMPATIBILITY_RU.md).
 
 CRAFTCODE LINK is a Windows messenger with local profiles, private messages, voice rooms, screen sharing and game LAN. Friends exchange a LINK card and confirm the connection. A group runs on its owner's computer.
 
