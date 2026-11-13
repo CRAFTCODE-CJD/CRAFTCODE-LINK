@@ -423,7 +423,7 @@ func TestSecurityAdjacentDataSurvivesRepairAndPayloadRemoval(t *testing.T) {
 func TestSecurityReinstallPreservesAuthorizedAdjacentData(t *testing.T) {
 	for _, reference := range []string{"current", "previous"} {
 		t.Run(reference, func(t *testing.T) {
-			root := t.TempDir()
+			root := tempRepairDir(t)
 			base := filepath.Join(root, "AppData")
 			t.Setenv("APPDATA", base)
 			installed := filepath.Join(root, "installed", product)

@@ -213,14 +213,7 @@ func seedRepair(t *testing.T, p string) string {
 	return base
 }
 func TestRepairCorruptMissingAndUninstaller(t *testing.T) {
-	root := t.TempDir()
-	// Windows can retain a deleted child briefly after replacing application files.
-	// Clean up this test's private tree before TempDir's single RemoveAll attempt.
-	t.Cleanup(func() {
-		if err := wipeStage(root); err != nil {
-			t.Error(err)
-		}
-	})
+	root := tempRepairDir(t)
 	p := filepath.Join(root, "Установка")
 	file(t, filepath.Join(p, "CRAFTCODE-LINK.exe"))
 	os.WriteFile(filepath.Join(p, "CRAFTCODE-LINK.exe"), []byte("broken"), 0644)
@@ -243,6 +236,18 @@ func TestRepairCorruptMissingAndUninstaller(t *testing.T) {
 		exists(t, account, true)
 		exists(t, filepath.Join(root, base), false)
 	}
+}
+func tempRepairDir(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	// Windows can retain a deleted child briefly after replacing application files.
+	// Clean up this test's private tree before TempDir's single RemoveAll attempt.
+	t.Cleanup(func() {
+		if err := wipeStage(root); err != nil {
+			t.Error(err)
+		}
+	})
+	return root
 }
 func TestRepairPreflightPreservesInstallation(t *testing.T) {
 	root := t.TempDir()

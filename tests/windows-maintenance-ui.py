@@ -26,6 +26,9 @@ user.EnumWindows.argtypes = [callback, w.LPARAM]
 user.EnumChildWindows.argtypes = [w.HWND, callback, w.LPARAM]
 user.GetWindowThreadProcessId.argtypes = [w.HWND, c.POINTER(w.DWORD)]
 user.IsWindowVisible.argtypes = user.IsWindowEnabled.argtypes = [w.HWND]
+user.GetDlgCtrlID.argtypes = [w.HWND]
+user.GetParent.argtypes = [w.HWND]
+user.GetParent.restype = w.HWND
 user.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, c.c_int]
 user.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
 user.SendMessageTimeoutW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT, w.UINT, c.POINTER(c.c_size_t)]
@@ -98,8 +101,14 @@ def buttons(pids):
     return result
 
 
-def click(hwnd):
-    if not user.PostMessageW(hwnd, 0x00F5, 0, 0):  # BM_CLICK
+def click(hwnd, *, navigation=False):
+    # NSIS subclasses its Back/Next/Finish buttons. Send the same BN_CLICKED
+    # notification their parent receives on mouse or keyboard activation.
+    if navigation:
+        sent = user.PostMessageW(user.GetParent(hwnd), 0x0111, user.GetDlgCtrlID(hwnd), hwnd)
+    else:
+        sent = user.PostMessageW(hwnd, 0x00F5, 0, 0)  # BM_CLICK
+    if not sent:
         raise c.WinError(c.get_last_error())
     time.sleep(0.25)
 
@@ -141,7 +150,7 @@ def run(exe, action):
             )
             target = next((controls[label] for label in labels if label in controls), None)
             if target:
-                click(target)
+                click(target, navigation=True)
         time.sleep(0.2)
     raise RuntimeError(f"Maintenance {action} did not finish. Visible controls: {sorted(observed)}")
 
