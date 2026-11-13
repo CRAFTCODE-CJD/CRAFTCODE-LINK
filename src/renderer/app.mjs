@@ -16,6 +16,7 @@ import {participantMix} from './participant-mix.mjs';
 import {participantSoundMenu} from './participant-sound-menu.mjs';
 import {attachVideo, bindPlayerControls} from './player-controls.mjs';
 import {localCaptureFormat, outgoingScreens, videoFormat} from './stream-inspector.mjs';
+import {bitrateChoice, streamProfile} from './stream-profile.mjs';
 import { RoomMedia, ROLES } from './peer.mjs';
 import {RoomMicrophoneChoice} from './room-microphone.mjs';
 import { AudioMixer, Microphone, volumeLimit } from './audio.mjs';
@@ -32,7 +33,7 @@ import {language,localizeStatic} from './locale.mjs';
 const api = window.craftlink;
 let internet, direct, workspace, projectUpdates;
 const defaults = { identityMode:"auto",playerPinned:false,dnd:false,systemNotices:true,jabberBlocked:{},directoryFilter:'all',directorySort:'available',jabberFavorites:{},jabberRecent:{}, accountIntroSeen:false, registrationService:'', viewHeight:0, focusAudio:false, accountProvider:'', publicStun:true, cueEnabled:true, cueVolume:35, proxyOnly:false, name: '', profileNames:{}, address: '', port: 45831, micDevice: '', outputDevice: '', roomOutputVolume:100, micGain: 100, streamGain: 100,
-  cueMessages:true,echoCancellation: true, noiseSuppression: true, autoGainControl: true, quality: '1080p30', content: 'motion', bitrate: 8 };
+  cueMessages:true,echoCancellation: true, noiseSuppression: true, autoGainControl: true, quality: '1080p30', content: 'motion', bitrate: 0 };
 let settings = { ...defaults };
 try {
   const saved = JSON.parse(localStorage.getItem('craftlink.settings.v1') || '{}');
@@ -43,7 +44,7 @@ for(const k of ['jabberFavorites','jabberRecent'])if(!settings[k]||Array.isArray
 if (!settings.profileNames || Array.isArray(settings.profileNames)) settings.profileNames={};
 if (!['720p30','720p60','1080p30','1080p60','1440p30','1440p60'].includes(settings.quality)) settings.quality = defaults.quality;
 if (![0,720,1080,1440].includes(settings.viewHeight)) settings.viewHeight=0;
-if (![2, 4, 8, 12, 20, 32].includes(settings.bitrate)) settings.bitrate = defaults.bitrate;
+settings.bitrate = bitrateChoice(settings.bitrate);
 settings.micGain = Math.min(volumeLimit('voice'), Math.max(0, settings.micGain));
 settings.roomOutputVolume = Math.max(0,Math.min(100,settings.roomOutputVolume));
 
@@ -219,9 +220,7 @@ function action(id, callback) {
   $(id).addEventListener('click', () => { Promise.resolve().then(callback).catch(errorToast); });
 }
 function quality(preset=settings.quality,content=settings.content) {
-  const height = parseInt(preset,10);
-  return { width: {720:1280,1080:1920,1440:2560}[height], height,
-    content:content==='detail'?'detail':'motion', fps: preset.endsWith('60') ? 60 : 30, bitrate: settings.bitrate * 1_000_000 };
+  return streamProfile(preset,content,settings.bitrate);
 }
 function captureConstraints({width,height,fps}) {
   return {width:{ideal:width,max:width},height:{ideal:height,max:height},frameRate:{ideal:fps,max:fps}};
@@ -305,7 +304,7 @@ async function prepareMedia(info){
     }
     media.setViewHeight(settings.viewHeight);
     await media.updatePeers(info.peers);
-    if(state.media===media)await media.setQuality(quality());
+    if(state.media===media)await media.setQuality(activeShareQuality());
 }
 
 async function openGroupVoice(group,channel) {
@@ -1443,10 +1442,19 @@ function fillSettings() {
   $('focusAudio').checked = settings.focusAudio;
   fillQualitySettings();
 }
-function fillQualitySettings() {
+function activeShareQuality() {
   const camera=state.captureKind==='camera' ? state.screenStream?.getVideoTracks()[0] : null;
-  $('qualitySelect').value = camera ? captureFormats.get(camera) || '720p30' : settings.quality;
-  $('shareContent').value=camera?.contentHint || quality().content;
+  return camera ? quality(captureFormats.get(camera) || '720p30',camera.contentHint || 'motion') : quality();
+}
+function showAutoBitrate(format) {
+  const auto=streamProfile(format,'motion',0);
+  $('bitrateSelect').options[0].textContent=tr('Авто · до ')+auto.bitrate/1_000_000+tr(' Мбит/с');
+}
+function fillQualitySettings() {
+  const profile=activeShareQuality();
+  $('qualitySelect').value=captureFormat(profile);
+  $('shareContent').value=profile.content;
+  showAutoBitrate($('qualitySelect').value);
   $('bitrateSelect').value = String(settings.bitrate);
 }
 async function openSettings(pane='voice') {
@@ -1461,9 +1469,11 @@ const captureFormats=new WeakMap();
 const captureFormat=q=>q.height+'p'+q.fps;
 let qualityTail=Promise.resolve(),qualityRevision=0;
 function applyQuality(id) {
-  if(id==='qualitySelect')settings.quality=$('qualitySelect').value;
-  if(id==='shareContent')settings.content=$('shareContent').value;
+  const camera=state.captureKind==='camera' && state.screenStream?.getVideoTracks()[0];
+  if(id==='qualitySelect' && !camera)settings.quality=$('qualitySelect').value;
+  if(id==='shareContent' && !camera)settings.content=$('shareContent').value;
   if(id==='bitrateSelect')settings.bitrate=Number($('bitrateSelect').value);
+  showAutoBitrate($('qualitySelect').value);
   saveSettings();
   return setLiveQuality(quality($('qualitySelect').value,$('shareContent').value));
 }

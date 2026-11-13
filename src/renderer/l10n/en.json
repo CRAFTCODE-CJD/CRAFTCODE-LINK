@@ -473,6 +473,7 @@
   "alex или alex@": "alex or alex@",
   "alex или alex@jabber.ru": "alex or alex@jabber.ru",
   "Авто": "Auto",
+  "Авто · до ": "Auto · up to ",
   "Авто · до качества источника": "Auto · up to source quality",
   "Автоматически определять внешний IP через STUN Cloudflare, если аккаунт не предоставил STUN": "Use Cloudflare STUN to discover your external IP if your account does not provide STUN",
   "Автоматическое усиление": "Automatic gain control",

@@ -6,6 +6,23 @@ import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {createGraphics} from '../src/graphics.cjs';
 import {localCaptureFormat,outgoingScreens,videoFormat} from '../src/renderer/stream-inspector.mjs';
+import {bitrateChoice,streamProfile} from '../src/renderer/stream-profile.mjs';
+
+test('automatic screen limits follow the requested format and saved manual limits survive upgrades',()=>{
+  for(const [format,mbps] of [['720p30',8],['720p60',12],['1080p30',8],['1080p60',20],['1440p30',20],['1440p60',32]]){
+    const auto=streamProfile(format,'motion',0);
+    assert.equal(auto.bitrate,mbps*1e6);
+    assert.equal(auto.height+'p'+auto.fps,format);
+    for(const saved of [2,4,8,12,20,32]){
+      assert.equal(bitrateChoice(saved),saved);
+      assert.equal(streamProfile(format,'detail',saved).bitrate,saved*1e6);
+    }
+  }
+  assert.deepEqual(streamProfile('1440p60','motion',undefined),
+    {width:2560,height:1440,fps:60,content:'motion',bitrate:32000000});
+  assert.equal(bitrateChoice(999),0);
+  assert.equal(streamProfile('unknown',null,0).bitrate,8e6);
+});
 
 test('only CPU mode changes the encoder launch switch, pending changes are reversible and invalid values rejected',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cc-graphics-'));

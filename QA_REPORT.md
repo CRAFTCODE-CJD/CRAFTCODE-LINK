@@ -3,19 +3,25 @@
 ## 0.7.27 Windows screen sharing
 
 - REPRODUCED on the 0.7.26 release payload. Two isolated Electron clients shared a deterministic, full-frame moving texture at 1280×720 and 30 FPS through a local UDP test network. On a clear path the viewer remained at 320×180 and 30 FPS for the last 12 seconds. During congestion the viewer fell to 160×90 and 2.1 FPS. Capture rate stayed above 30 FPS.
-- PASS in a controlled before/after comparison using the same tactical game scene, stereo test tone and VP8. Each run used a clear path for 22 s, then 42 s at 1.6 Mbit/s per direction with 45 ms one-way delay, up to 18 ms of jitter, every 97th datagram dropped and a 110 ms queue limit, followed by 70 s on a clear path. This comparison preserved packet order. Reproduce with `node tests/stream-network-desktop.cjs --audio --ordered --game-scene` and an unbundled Electron runtime.
+- PASS with two isolated Electron clients running the 0.7.26 and 0.7.27 sender policies in separate runs. A generated tactical map and stereo tone used the same VP8 path. The network ran clear for 22 s, then 42 s at 1.6 Mbit/s per direction, 45 ms base delay each way, up to 18 ms jitter, every 97th datagram lost and a 110 ms queue limit, then clear for 70 s. Delivered datagrams remained in order on the controlled path. Run `node tests/stream-network-desktop.cjs --audio --ordered --game-scene` with an unbundled Electron runtime.
 
-| Receiver measurement | 0.7.26 | Candidate sender policy |
+| Receiver measurement | 0.7.26 | 0.7.27 |
 | --- | ---: | ---: |
-| First full 1280×720 frame observed on the clear path (2 s sampling) | 14.1 s | Within 2 s |
-| Final 12 s of congestion, decoded size and rate | 320×180 at 11.3 FPS | 640×360 at 20.1 FPS |
-| Frames decoded in all 42 s of congestion | 341 | 794 |
-| Completed freezes during congestion | 9, totalling 8.02 s | 5, totalling 2.46 s |
+| First full 1280×720 on the clear path (2 s sampling) | 14.1 s | Within 2 s |
+| End of congestion, decoded size and rate | 320×180 at 11.4 FPS | 640×360 at 19.9 FPS |
+| Frames decoded in all 42 s of congestion | 320 | 810 |
+| Completed freezes during congestion | 9, totalling 9.79 s | 5, totalling 2.03 s |
 | Contrast of 2 px HUD stripes on decoded picture during congestion (0–1) | 0.00 | 0.49 |
-| First 720p sample after lifting limits | 30.2 s | 14.1 s |
-| Final 12 s after recovery | 720p at 29.9 FPS | 720p at 29.9 FPS |
+| First 720p sample after lifting limits | 40.2 s | 22.1 s |
+| Three consecutive samples at ≥25 FPS after lifting limits, measured from first qualifying interval | 16.1 s | 24.1 s |
+| Final 12 s after recovery | 720p at 30 FPS | 720p at 30 FPS |
 
-Both viewers received non-silent audio in every phase. NOT TESTED across two residential connections in this comparison. The tactical scene is generated to make the A/B test repeatable. The findings apply to this scene and route.
+- PASS with a full-frame panning texture and deliberate packet reordering on 0.7.27. The clear path carried 1280×720 at 29.9 FPS. On the weak path the receiver decoded 799 frames in 42 s, ending at 320×180 and 20.1 FPS. Four freezes totalled 3.07 s. The fixture reordered 2,132 packets during that phase. After recovery the receiver reached 720p again in 48.3 s and finished at 30 FPS. Non-silent audio arrived in every phase of both types of run.
+- PASS for received 2560×1440, with the new Auto bitrate ceiling in the two-client tactical-map test (run with --qhd60 --game-scene --ordered --audio). At the default negotiated VP8 codec, the clear route ended at 39.4 decoded FPS with 41.6 captured FPS. At 1.6 Mbit/s the receiver ended at 480×270 and 19.3 FPS, with 7 freezes totalling 3.10 s during the weak phase. Once the limit was lifted, full resolution returned in 48.4 s and reception settled at 46.7 FPS. Chromium reported a CPU limitation at the end. Sustained 55 FPS was not reached on VP8. The animation requested 60 FPS throughout.
+- EXPERIMENT with hardware H.264 and the same QHD scene and network. NVIDIA reported an active hardware encode session. The clear phase ended at 38.6 FPS. The weak phase ended at 640×360 and 20 FPS, with 7.60 s of freezes. During recovery the receiver regained full size in 58.5 s, finishing at 56.6 FPS but accumulating 8.09 s of freezes (VP8: 1.43 s). The production client retains normal codec negotiation. Use --prefer-h264 only in the desktop test to reproduce this comparison.
+- PASS for an independent clear-route control with generated I420 frames, a moving marker and resolution targets. In the final 12 s of the 2560×1440 test, the generator wrote 60.0 frames/s, WebRTC accepted 54.1 and the viewer decoded 52.1, with no completed freezes. Reproduce with --qhd60 --frame-source --game-scene --audio --startup-only. This simpler scene isolates parts of the path and does not benchmark game capture.
+- LIMITATION on real Windows window capture. A 2560×1440 Direct3D test window presented at a measured 60.0 FPS. With the window positioned outside the visible area of a 1920×1080 desktop, the capture source provided 16.7–17.8 FPS and the viewer decoded 16.7–17.8 FPS at full resolution. The route had no packet loss. An experimental WGC texture switch gave 17.4–18.2 FPS on this setup and is not enabled by the application. A visible game on a physical 1440p monitor remains untested.
+- NOT TESTED across two residential connections in this comparison. Content, hardware, viewer preferences and available bandwidth affect results.
 
 ## 0.7.26 Windows installer and repair
 

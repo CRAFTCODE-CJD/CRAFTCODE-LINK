@@ -6,10 +6,19 @@ async function localNat(){
   const stun=dgram.createSocket('udp4'),port=await bind(stun);
   const mappings=new Map(),sockets=new Set([stun]);
   let forwarded=0,bindings=0,closed=false,profile=null,dropped=0;
-  const queues=new Map(),timers=new Set();
+  const queues=new Map(),timers=new Set(),lastSequence=new Map();
+  let reordered=0;
   let burstStart=0;
   function forward(socket,payload,port){
-    const send=()=>{if(!closed){socket.send(payload,port,'127.0.0.1');forwarded++;}};
+    let sequence;
+    const send=()=>{
+      if(closed)return;
+      if(sequence!==undefined){
+        const last=lastSequence.get(port) || 0;
+        if(sequence<last)reordered++;else lastSequence.set(port,sequence);
+      }
+      socket.send(payload,port,'127.0.0.1');forwarded++;
+    };
     if(!profile){send();return;}
     if(profile.offline){dropped++;return;}
     const now=performance.now();
@@ -25,14 +34,28 @@ async function localNat(){
       timers.add(timer);return;
     }
     const q=queues.get(port) || {next:now,sequence:0};
-    queues.set(port,q);q.sequence++;
+    queues.set(port,q);sequence=++q.sequence;
     if(q.sequence%97===0 || q.next-now>110){dropped++;return;}
     q.next=Math.max(q.next,now)+payload.length*8/1000/profile.mbps;
-    let arrival=q.next+(profile.latencyMs ?? 12)+(q.sequence%7)*3;
+    const arrival=q.next+(profile.latencyMs ?? 12)+(q.sequence%7)*3;
     if(profile.ordered){
-      // Last-mile jitter can vary while packets in a single FIFO still arrive in order.
-      arrival=Math.max(arrival,q.arrival || 0);
-      q.arrival=arrival;
+      // One queue per destination preserves ordering even when Node wakes several
+      // timers on the same tick. Independent packet timers can fire out of order.
+      q.pending ??= [];
+      q.pending.push({arrival,send});
+      if(!q.timer){
+        const drain=()=>{
+          timers.delete(q.timer);q.timer=null;
+          const now=performance.now();
+          while(q.pending.length && q.pending[0].arrival<=now)q.pending.shift().send();
+          if(q.pending.length){
+            q.timer=setTimeout(drain,Math.max(1,Math.ceil(q.pending[0].arrival-now)));
+            timers.add(q.timer);
+          }
+        };
+        drain();
+      }
+      return;
     }
     const delay=arrival-now;
     const timer=setTimeout(()=>{timers.delete(timer);send();},delay);
@@ -61,6 +84,6 @@ async function localNat(){
     reply[25]=1;reply.writeUInt16BE(publicPort^0x2112,26);reply.writeUInt32BE((0x7f000001^0x2112a442)>>>0,28);
     if(!closed){stun.send(reply,from.port,from.address);bindings++;}
   });
-  return {port,shape(value){profile=value;burstStart=performance.now();queues.clear();},stats:()=>({bindings,mappings:mappings.size,forwarded,dropped}),close(){closed=true;for(const timer of timers)clearTimeout(timer);for(const socket of sockets)socket.close();}};
+  return {port,shape(value){profile=value;burstStart=performance.now();queues.clear();lastSequence.clear();},stats:()=>({bindings,mappings:mappings.size,forwarded,dropped,reordered}),close(){closed=true;for(const timer of timers)clearTimeout(timer);for(const socket of sockets)socket.close();}};
 }
 module.exports={localNat};
