@@ -1,5 +1,22 @@
 # CRAFTCODE LINK QA
 
+## 0.7.27 Windows screen sharing
+
+- REPRODUCED on the 0.7.26 release payload. Two isolated Electron clients shared a deterministic, full-frame moving texture at 1280×720 and 30 FPS through a local UDP test network. On a clear path the viewer remained at 320×180 and 30 FPS for the last 12 seconds. During congestion the viewer fell to 160×90 and 2.1 FPS. Capture rate stayed above 30 FPS.
+- PASS in a controlled before/after comparison using the same tactical game scene, stereo test tone and VP8. Each run used a clear path for 22 s, then 42 s at 1.6 Mbit/s per direction with 45 ms one-way delay, up to 18 ms of jitter, every 97th datagram dropped and a 110 ms queue limit, followed by 70 s on a clear path. This comparison preserved packet order. Reproduce with `node tests/stream-network-desktop.cjs --audio --ordered --game-scene` and an unbundled Electron runtime.
+
+| Receiver measurement | 0.7.26 | Candidate sender policy |
+| --- | ---: | ---: |
+| First full 1280×720 frame observed on the clear path (2 s sampling) | 14.1 s | Within 2 s |
+| Final 12 s of congestion, decoded size and rate | 320×180 at 11.3 FPS | 640×360 at 20.1 FPS |
+| Frames decoded in all 42 s of congestion | 341 | 794 |
+| Completed freezes during congestion | 9, totalling 8.02 s | 5, totalling 2.46 s |
+| Contrast of 2 px HUD stripes on decoded picture during congestion (0–1) | 0.00 | 0.49 |
+| First 720p sample after lifting limits | 30.2 s | 14.1 s |
+| Final 12 s after recovery | 720p at 29.9 FPS | 720p at 29.9 FPS |
+
+Both viewers received non-silent audio in every phase. NOT TESTED across two residential connections in this comparison. The tactical scene is generated to make the A/B test repeatable. The findings apply to this scene and route.
+
 ## 0.7.26 Windows installer and repair
 
 - PASS on a disposable Windows Server 2025 runner. The released 0.7.25 installer normally updated the released 0.7.23 application from its tray state. Re-running Setup repaired a missing file, and default uninstall retained the test profile. [Windows run](https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/actions/runs/43375045904).

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {videoSamples} from '../src/renderer/video-stats.mjs';
 import {RoomMedia} from '../src/renderer/peer.mjs';
+import {LinkQuality} from '../src/renderer/link-quality.mjs';
 import recovery from '../src/core/reconnect.cjs';
 
 test('an early bandwidth estimate does not permanently cap outgoing bitrate or cut the configured FPS',async()=>{
@@ -20,10 +21,67 @@ test('an early bandwidth estimate does not permanently cap outgoing bitrate or c
     await media.collectStats();await media.collectStats();
     assert.equal(calls.at(-1).encodings[0].maxFramerate,60);
     assert.equal(calls.at(-1).encodings[0].maxBitrate,12000000);
-    assert.equal(calls.at(-1).degradationPreference,'maintain-framerate');
+    assert.equal(calls.at(-1).degradationPreference,'maintain-resolution');
     assert.equal(forwarded.encodings[0].maxBitrate,32000000);
     assert.equal(forwarded.degradationPreference,'balanced');
   }finally{media.close();}
+});
+
+test('a forwarded adaptive ceiling follows input size for a viewer on Original',async()=>{
+  const media=new RoomMedia({session:{role:'host',selfId:'host'},sendSignal(){}});
+  const inbound={id:'incoming',type:'inbound-rtp',kind:'video',mid:'4',framesDecoded:60,bytesReceived:200000,
+    timestamp:1000,frameHeight:1080};
+  let encoded={encodings:[{}]};
+  const sender={track:{kind:'video',getSettings:()=>({height:1080})},getParameters:()=>structuredClone(encoded),
+    async setParameters(value){encoded=value;}};
+  const transceivers=Array.from({length:4},()=>({sender:{track:null}})).concat({sender,mid:'4'});
+  function endpoint(id,remoteSlot,senders,report){
+    return {id,remoteSlot,viewHeight:0,encodingQueue:Promise.resolve(),videoHistory:new Map(),
+      pc:{getStats:async()=>report,getTransceivers:()=>senders,getConfiguration:()=>({}),
+        remoteDescription:{},signalingState:'stable',close(){}}};
+  }
+  const source=endpoint('source',1,[],new Map([[inbound.id,inbound]]));
+  const viewer=endpoint('viewer',2,transceivers,new Map());
+  viewer.quality=new LinkQuality();
+  const weak={active:1,available:1.1e6,rttMs:45,video:[{sourceFps:30,fps:10,reason:'bandwidth',fractionLost:.08}]};
+  viewer.quality.sample(weak);viewer.quality.sample(weak);
+  media.endpoints.set(source.id,source);media.endpoints.set(viewer.id,viewer);
+  try{
+    await media.collectStats();await viewer.encodingQueue;
+    assert.equal(encoded.encodings[0].scaleResolutionDownBy,2);
+    inbound.frameHeight=360;inbound.framesDecoded+=60;inbound.timestamp+=2000;
+    await media.collectStats();await viewer.encodingQueue;
+    assert.equal(encoded.encodings[0].scaleResolutionDownBy,1);
+  }finally{media.close();}
+});
+
+test('unused audio and video slots release their bandwidth and can resume without renegotiating',async()=>{
+  const room=new RoomMedia({session:{role:'host',selfId:'host'},sendSignal(){}});
+  const source={id:'source',slot:1,sharing:false,micMuted:true};
+  room.peers=[{id:'host',slot:0},source];
+  function transceiver(){
+    let params={encodings:[{active:true}]};
+    return {currentDirection:'sendonly',sender:{track:null,getParameters:()=>structuredClone(params),
+      async setParameters(next){params=next;}}};
+  }
+  const senders=Array.from({length:6},transceiver);
+  const ep={quality:new LinkQuality(),pc:{remoteDescription:{},signalingState:'stable',getTransceivers:()=>senders}};
+  const active=()=>senders.map(t=>t.sender.getParameters().encodings[0].active);
+  try{
+    await room.applyEncodingNow(ep);
+    assert.deepEqual(active(),[false,false,false,false,false,false]);
+    const track={readyState:'live',kind:'video',muted:false,getSettings:()=>({height:720})};
+    senders[1].sender.track=track;senders[4].sender.track={...track,muted:true};
+    senders[3].sender.track={readyState:'live',kind:'audio',muted:false};
+    await room.applyEncodingNow(ep);
+    assert.deepEqual(active(),[false,true,false,false,false,false]);
+    source.sharing=true;source.micMuted=false;senders[4].sender.track.muted=false;
+    await room.applyEncodingNow(ep);
+    assert.deepEqual(active(),[false,true,false,true,true,false]);
+    senders[1].sender.track=null;source.sharing=false;source.micMuted=true;
+    await room.applyEncodingNow(ep);
+    assert.deepEqual(active(),[false,false,false,false,false,false]);
+  }finally{room.close();}
 });
 
 test('interval stats detect a frozen receiver even if its last nominal frame rate remains 60',()=>{

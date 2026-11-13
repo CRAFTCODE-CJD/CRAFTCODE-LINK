@@ -33,19 +33,29 @@ export function videoSamples(report, history) {
     const bytes=outbound?s.bytesSent:s.bytesReceived;
     if(!frames && !bytes)continue;
     const record=history.get(s.id);
-    const prev=record?.ssrc===s.ssrc ? record : undefined;
+    const reset=record && (frames<record.frames || bytes<record.bytes);
+    const continuous=record && record.ssrc===s.ssrc && !reset && s.timestamp>=record.time &&
+      s.timestamp-record.time<=10000;
+    const prev=continuous ? record : undefined;
+    const feedback=outbound?report.get(s.remoteId):s;
+    // A remote-inbound timestamp is the arrival time of a receiver report.
+    // Polling getStats again does not make that packet-loss observation new.
+    const feedbackTime=feedback?.timestamp;
+    const freshFeedback=outbound && Number.isFinite(feedbackTime) &&
+      feedbackTime<=s.timestamp && s.timestamp-feedbackTime<=10000 &&
+      (record?.feedbackTime===undefined || record.ssrc!==s.ssrc || feedbackTime>record.feedbackTime);
     const work=outbound?s.totalEncodeTime:s.totalDecodeTime;
     const emitted=s.jitterBufferEmittedCount,delay=s.jitterBufferDelay;
     const bufferMs=prev && emitted>prev.emitted && delay>=prev.delay
       ? 1000*(delay-prev.delay)/(emitted-prev.emitted) : null;
     const {window,recent} = outbound ? {} : recentReception(s,prev);
-    next.set(s.id,{bytes,frames,work,emitted,delay,window,ssrc:s.ssrc,time:s.timestamp,lost:s.packetsLost,received:s.packetsReceived});
+    next.set(s.id,{bytes,frames,work,emitted,delay,window,ssrc:s.ssrc,time:s.timestamp,
+      feedbackTime:outbound ? (feedbackTime ?? prev?.feedbackTime) : undefined,lost:s.packetsLost,received:s.packetsReceived});
     const workMs=prev && frames>prev.frames && Number.isFinite(prev.work) && Number.isFinite(work) && work>=prev.work
       ? (work-prev.work)*1000/(frames-prev.frames):null;
     const seconds=prev?(s.timestamp-prev.time)/1000:0;
     const delta=(value,old)=>seconds>0&&Number.isFinite(value)&&Number.isFinite(old)&&value>=old?(value-old)/seconds:null;
     const rate=delta(bytes,prev?.bytes);
-    const feedback=outbound?report.get(s.remoteId):s;
     const source=outbound?report.get(s.mediaSourceId):null;
     const mime=String(report.get(s.codecId)?.mimeType||'').split('/')[1];
     const received=delta(s.packetsReceived,prev?.received),lost=delta(s.packetsLost,prev?.lost);
@@ -55,8 +65,10 @@ export function videoSamples(report, history) {
       codec:/^(VP8|VP9|AV1|H264|H265)$/i.test(mime)?mime:null,
       fps:delta(frames,prev?.frames)??nonnegative(s.framesPerSecond),frames,
       mbps:rate===null?null:rate*8/1e6,sourceFps:nonnegative(source?.framesPerSecond),
+      sourceWidth:nonnegative(source?.width),sourceHeight:nonnegative(source?.height),
+      targetBitrate:outbound?nonnegative(s.targetBitrate):null,
       reason:['bandwidth','cpu','none','other'].includes(s.qualityLimitationReason)?s.qualityLimitationReason:null,
-      workMs,bufferMs,recent,fractionLost:outbound?nonnegative(feedback?.fractionLost):inboundLoss,
+      workMs,bufferMs,recent,fractionLost:outbound?(freshFeedback?nonnegative(feedback.fractionLost):null):inboundLoss,
       dropped:nonnegative(s.framesDropped),freezes:nonnegative(s.freezeCount),lost:nonnegative(feedback?.packetsLost),
       jitterMs:nonnegative(feedback?.jitter)===null?null:feedback.jitter*1000});
   }

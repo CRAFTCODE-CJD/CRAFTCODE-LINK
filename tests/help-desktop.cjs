@@ -31,6 +31,9 @@ module.exports=async({a,b})=>{
   await b.page.click('#navFriends');assert(await b.page.locator('#firstSteps').isHidden());
   await a.page.click('#networkHelpBtn');await a.page.click('#helpTutorial');
   await a.page.keyboard.press('Escape');assert(!await a.page.locator('#linkGuide').evaluate(el=>el.open));
+  await a.page.fill('#helpSearch','частоту кадров источника');
+  assert(await a.page.locator('[data-help-topic=screen]').isVisible());
+  assert((await a.page.locator('[data-help-topic=screen]').innerText()).includes('≤'));
   await a.page.fill('#helpSearch','восстановить программу');
   assert(await a.page.getByText('Чтобы исправить установку,', {exact:false}).isVisible());
   await a.page.fill('#helpSearch','видеокруж');
@@ -170,6 +173,9 @@ module.exports=async({a,b})=>{
   await b.page.click('#networkHelpBtn');assert.equal(await b.page.locator('#helpTutorial').innerText(),'First steps');
   assert(!/[А-Яа-я]/u.test(await b.page.locator('#helpArticles').innerText()));
   await b.page.click('#helpTutorial');await screenshot(b,'guide-en');await b.page.click('#guideSkip');
+  await b.page.fill('#helpSearch','source and outgoing frame rates');
+  assert(await b.page.locator('[data-help-topic=screen]').isVisible());
+  assert((await b.page.locator('[data-help-topic=screen]').innerText()).includes('≤'));
   await b.page.fill('#helpSearch','repair application');
   assert(await b.page.getByText('To repair LINK,', {exact:false}).isVisible());
   await b.page.fill('#helpSearch','download');assert(await b.page.locator('[data-help-topic=storage]').isVisible());

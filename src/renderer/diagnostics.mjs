@@ -62,7 +62,7 @@ export function roomReport({ media, selectedPeerId, graphics, environment, sessi
     lines.push(tr('Маршрут ')+(sample.candidateType==='relay'?'TURN':sample.candidateType?tr('прямой'):'—')+
       tr(' · транспорт ')+(sample.protocol || '—')+(sample.relayProtocol?tr(' · до TURN ')+sample.relayProtocol:'')+
       tr(' · оценка доступной отдачи ')+metric(sample.available>0?sample.available/1e6:null,2)+tr(' Мбит/с'));
-    if(sample.adaptiveHeight)lines.push(tr('Защита звука при перегрузке · предел своего показа ')+sample.adaptiveHeight+'p / '+sample.adaptiveFps+' FPS / '+metric(sample.adaptiveRate/1e6,2)+tr(' Мбит/с'));
+    if(sample.adaptiveHeight)lines.push(tr('Предел видео при адаптации · ')+sample.adaptiveHeight+'p / '+sample.adaptiveFps+' FPS'+(Number.isFinite(sample.adaptiveRate)?' / '+metric(sample.adaptiveRate/1e6,2)+tr(' Мбит/с'):''));
     for(const a of sample.audio || []){
       const role=Number(a.mid)%3===0?tr('Голос'):tr('Звук экрана');
       lines.push(role+tr(' · слот ')+Math.floor(Number(a.mid)/3)+tr(' · маскирование потерь ')+metric(a.concealedPct)+tr('% · джиттер ')+metric(a.jitterMs)+tr(' мс · буфер ')+metric(a.bufferMs)+tr(' мс'));
@@ -72,8 +72,13 @@ export function roomReport({ media, selectedPeerId, graphics, environment, sessi
       lines.push((out?tr('Отправка'):tr('Приём'))+tr(' видео · слот ')+Math.floor(Number(v.mid)/3)+' · '+(v.codec || '—')+
         ' · '+(v.width || '—')+'×'+(v.height || '—')+' · '+metric(v.fps)+' FPS · '+metric(v.mbps,2)+tr(' Мбит/с'));
       if(out && v.encoder)lines.push(tr('  Кодировщик WebRTC · ')+v.encoder);
-      const forwarded=out && Math.floor(Number(v.mid)/3)!==localSlot;
-      if(out)lines.push(tr('  Источник ')+metric(v.sourceFps)+tr(' FPS · настройки до адаптации ')+(forwarded?60:sample.fpsLimit)+' FPS / '+metric(forwarded?32:sample.bitrateLimit/1e6)+tr(' Мбит/с · ограничение ')+(reasons[v.reason] || '—'));
+      if(out){
+        const slot=Math.floor(Number(v.mid)/3);
+        const profile=slot===localSlot?{fps:sample.fpsLimit,bitrate:sample.bitrateLimit}:media?.endpoints?.get(peers.find(p=>p.slot===slot)?.id)?.shareProfile;
+        const size=v.sourceWidth>0 && v.sourceHeight>0?v.sourceWidth+'×'+v.sourceHeight+' · ':'';
+        lines.push(tr('  Источник ')+size+metric(v.sourceFps)+tr(' FPS · настройки до адаптации ')+metric(profile?.fps,0)+' FPS / '+metric(profile?.bitrate/1e6)+tr(' Мбит/с · ограничение ')+(reasons[v.reason] || '—'));
+        if(Number.isFinite(v.targetBitrate))lines.push(tr('  Целевой битрейт кодировщика · ')+metric(v.targetBitrate/1e6,2)+tr(' Мбит/с'));
+      }
       else if(v.recent){
         const w=v.recent;
         lines.push(tr('  За последние ')+metric(w.seconds,0)+tr(' с · потеряно пакетов ')+metric(w.lost,0)+' ('+metric(w.lossPct)+'%)'+

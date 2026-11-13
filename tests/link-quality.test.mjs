@@ -35,6 +35,27 @@ test('sustained CPU pressure reduces encoding work; a static screen does not qua
   assert.equal(q.limits('detail').fps,60);
   for(let i=0;i<3;i++)q.sample({active:1,available:0,rttMs:10,video:[{sourceFps:60,fps:12,reason:'cpu'}]});
   assert.equal(q.limits('motion').fps,30);assert.equal(q.limits('motion').bitrate,Infinity);
+  assert.equal(q.limits('motion').height,720);
+});
+test('native spatial adaptation at the requested cadence does not stack a second downscale',()=>{
+  const quality=new LinkQuality();
+  const path={available:850000,active:1,rttMs:18};
+  const healthy={sourceFps:60,fpsLimit:30,fps:30,reason:'bandwidth',fractionLost:0};
+  for(let n=0;n<12;n++)quality.sample({...path,video:[healthy]});
+  assert.deepEqual(quality.limits('motion'),{height:0,fps:60,bitrate:Infinity});
+  const stalled={...healthy,fps:7,fractionLost:.07};
+  quality.sample({...path,video:[stalled]});quality.sample({...path,video:[stalled]});
+  assert.equal(quality.limits('motion').height,360);
+  for(let n=0;n<3;n++)quality.sample({...path,available:12.5e6,video:[healthy]});
+  assert.deepEqual(quality.limits('motion'),{height:0,fps:60,bitrate:Infinity});
+});
+test('slow frames and CPU pressure must belong to the same video sender',()=>{
+  const quality=new LinkQuality();
+  const smooth={sourceFps:30,fps:30,reason:'cpu',fractionLost:0};
+  const slow={sourceFps:60,fps:10,reason:'none',fractionLost:0};
+  for(let n=0;n<5;n++)quality.sample({available:12e6,active:2,rttMs:25,video:[smooth,slow]});
+  assert.equal(quality.limits('motion').height,0);
+  assert.equal(quality.limits('motion').fps,60);
 });
 test('audio playout floor reacts to non-silent concealment and releases on recovery',()=>{
   const rx={jitterBufferTarget:null},receivers=new Map([['0',rx]]);
@@ -138,8 +159,11 @@ test('unchanged encoder limits do not reconfigure the encoder when a participant
       await room.applyEncodingNow(ep);assert.equal(params.degradationPreference,'maintain-resolution');
       assert.equal(params.encodings[0].maxBitrate,4000000);assert.equal(params.encodings[0].maxFramerate,30);
       room.receiveShareProfile(origin,{content:'motion',bitrate:12000000,fps:60});
-      await room.applyEncodingNow(ep);assert.equal(params.degradationPreference,'maintain-framerate');
+      await room.applyEncodingNow(ep);assert.equal(params.degradationPreference,'maintain-resolution');
       assert.equal(params.encodings[0].maxBitrate,12000000);assert.equal(params.encodings[0].maxFramerate,60);
+      const loss={active:1,available:1.1e6,rttMs:45,video:[{sourceFps:30,fps:10,reason:'bandwidth',fractionLost:.08}]};
+      ep.quality.sample(loss);ep.quality.sample(loss);
+      await room.applyEncodingNow(ep);assert.equal(params.degradationPreference,'maintain-framerate');
     }finally{room.endpoints.delete(origin.id);}
 
   }finally{room.close();}

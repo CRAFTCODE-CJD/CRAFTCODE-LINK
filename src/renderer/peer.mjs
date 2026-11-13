@@ -313,6 +313,7 @@ export class RoomMedia {
               for (const role of ROLES) {
                 const t = ep.pc.addTransceiver(role === 'screen' ? 'video' : 'audio', {
                   direction: slot === peer.slot ? 'recvonly' : 'sendonly',
+                  ...(slot === peer.slot ? {} : {sendEncodings: [{active: false}]}),
                   streams: slot !== peer.slot ? this.senderStreams(slot, role) : [],
                 });
                 const track = this.getTrack(slot, role);
@@ -322,6 +323,12 @@ export class RoomMedia {
             await this.offer(ep);
           }
         }
+        const sourceChanged = peers.some(peer => {
+          const before = oldPeers.find(old => old.id === peer.id);
+          return before && peer.id !== this.session.selfId &&
+            (before.sharing !== peer.sharing || before.micMuted !== peer.micMuted);
+        });
+        if(sourceChanged)await Promise.all([...this.endpoints.values()].map(ep=>this.applyEncoding(ep)));
       } else if (!this.endpoints.has(this.session.hostId)) {
         this.createEndpoint(this.session.hostId, 0);
       }
@@ -360,7 +367,17 @@ export class RoomMedia {
       const track = event.track;
       this.watchBuffer.update(this);
       if(this.isHost && role==='screen' && ep.shareProfile)track.contentHint=ep.shareProfile.content;
-      if(this.isHost)this.rawTracks.set(`${slot}:${role}`,track);
+      if(this.isHost && this.rawTracks.get(`${slot}:${role}`)!==track){
+        this.rawTracks.set(`${slot}:${role}`,track);
+        const updateForwarders = () => {
+          if(this.closed || this.getTrack(slot,role)!==track)return;
+          for(const other of this.endpoints.values())if(other!==ep)this.applyEncoding(other);
+        };
+        ep.trackEvents ??= new AbortController();
+        const options={signal:ep.trackEvents.signal};
+        track.addEventListener('mute',updateForwarders,options);
+        track.addEventListener('unmute',updateForwarders,options);
+      }
       if(this.isHost&&!this.allowed(slot,role))return;
       this.tracks.set(`${slot}:${role}`, track);
       this.onTrack({ slot, role, track });
@@ -752,24 +769,35 @@ export class RoomMedia {
     if (this.closed || !ep.pc.remoteDescription || ep.pc.signalingState !== 'stable') return;
     const transceivers = ep.pc.getTransceivers();
     for (let i = 0; i < transceivers.length; i++) {
-      const { sender } = transceivers[i];
-      if (!sender.track) continue;
+      const { sender, currentDirection, direction } = transceivers[i];
+      if(!sender.track && !['sendonly','sendrecv'].includes(currentDirection ?? direction))continue;
       const {role,slot} = trackIdentity(i);
       const forwarded=slot!==this.selfSlot;
+      const peer=forwarded ? this.peers.find(p=>p.slot===slot) : null;
+      const track=sender.track;
+      // Local placeholder transceivers reserve audio/video bandwidth as soon as
+      // DTLS connects. A forwarded receiver can also exist before it has media.
+      const active=Boolean(track && track.readyState!=='ended' &&
+        (!forwarded || (!track.muted && (role==='voice' ? peer?.micMuted!==true : peer?.sharing!==false))));
       const params = sender.getParameters();
       if (!params.encodings?.length) continue;
-      const origin=forwarded ? this.endpoints.get(this.peers.find(p=>p.slot===slot)?.id)?.shareProfile : this;
+      const origin=forwarded ? this.endpoints.get(peer?.id)?.shareProfile : this;
       const limits=ep.quality?.limits(origin?.content || 'motion') || {height:0,fps:60,bitrate:Infinity};
       const ceiling=origin?.bitrate ?? 32000000;
-      const wanted={
+      const wanted=active ? {
+        active,
         maxBitrate:role==='screen'?Math.min(ceiling,limits.bitrate):role==='system'?192000:64000,
         priority:role==='voice'?'high':role==='screen' && limits.height?'low':'medium',
-      };
+      } : {active};
       let changed=false;
-      if(role==='screen'){
+      if(active && role==='screen'){
         wanted.maxFramerate=Math.min(origin?.fps ?? 60,limits.fps);
         wanted.scaleResolutionDownBy=this.scaleFor(ep,slot,sender.track,limits.height);
-        const preference=!origin?'balanced':origin.content==='detail'?'maintain-resolution':'maintain-framerate';
+        // Chromium can stay at 180p after its startup estimate. Keep the
+        // screen at source resolution on a healthy path and favour motion
+        // once the link or encoder is under sustained pressure.
+        const favourMotion = origin?.content!=='detail' && (this.videoSource(slot)==='camera' || limits.height>0);
+        const preference = !origin ? 'balanced' : favourMotion ? 'maintain-framerate' : 'maintain-resolution';
         if(params.degradationPreference!==preference){params.degradationPreference=preference;changed=true;}
       }
       for(const encoding of params.encodings){
@@ -780,7 +808,7 @@ export class RoomMedia {
       if(!changed)continue;
       try { await sender.setParameters(params); } catch (error) {
         // A disappearing sender during leave is benign. Actual parameter failures are surfaced.
-        if (!this.closed && sender.track && ep.pc.connectionState !== 'closed') this.onError(`${tr("Ограничение битрейта не применено: ")}${error.message}`);
+        if (!this.closed && (sender.track || !active) && ep.pc.connectionState !== 'closed') this.onError(`${tr("Ограничение битрейта не применено: ")}${error.message}`);
       }
     }
     this.restoreCameraStreams(ep);
@@ -813,7 +841,12 @@ export class RoomMedia {
         const identity=trackIdentity(Number(sample.mid));
         if(identity?.role==='screen' && identity.slot===ep.remoteSlot && sample.height>0 && this.inputHeights.get(identity.slot)!==sample.height){
           this.inputHeights.set(identity.slot,sample.height);
-          for(const other of this.endpoints.values())if(other!==ep && other.viewHeight)this.applyEncoding(other);
+          // Forwarders scale the video that actually arrived. An outgoing
+          // congestion ceiling applies even to viewers who selected Original.
+          for(const other of this.endpoints.values()){
+            if(other!==ep && (other.viewHeight || other.quality?.limits(ep.shareProfile?.content).height))
+              this.applyEncoding(other);
+          }
         }
       }
       let protocol=null,relayProtocol=null,pairId=null;
@@ -845,13 +878,20 @@ export class RoomMedia {
       const senders=ep.pc.getTransceivers();
       const audio=audioContinuity(report,ep.audioHistory || new Map(),new Map(senders.filter(t=>!this.watchBuffer.applied.get(t.receiver)).map(t=>[t.mid,t.receiver])));
       ep.audioHistory=audio.next;
-      const screens=new Set(senders.filter(t=>t.sender.track?.kind==='video' && t.sender.track.readyState==='live').map(t=>t.mid));
       if(ep.quality && ep.pc.connectionState==='connected'){
-        const outbound=video.filter(v=>v.direction==='out' && screens.has(v.mid) && (v.mbps>0 || v.sourceFps>0));
+        const screens=new Map();
+        for(const {mid,sender} of senders){
+          if(sender.track?.kind!=='video' || sender.track.readyState!=='live')continue;
+          const encoding=sender.getParameters().encodings?.[0];
+          if(encoding?.active!==false)screens.set(mid,encoding?.maxFramerate);
+        }
+        const outbound=video.filter(v=>v.direction==='out' && screens.has(v.mid) && (v.mbps>0 || v.sourceFps>0))
+          .map(v=>({...v,fpsLimit:screens.get(v.mid)}));
+        const active=new Set(outbound.map(v=>v.mid)).size;
         const rough=audio.samples.some(a=>a.concealedPct>1.5) ||
           videos.some(v=>v.fractionLost>0.05 && v.mbps>0 && v.fps<12);
         if((rough || ep.reportedRough) && this.sendControl(ep.id,{kind:'playout-pressure',rough}))ep.reportedRough=rough;
-        const changed=ep.quality.sample({pairId,available,rttMs:rtt===null?null:rtt*1000,active:outbound.length,
+        const changed=ep.quality.sample({pairId,available,rttMs:rtt===null?null:rtt*1000,active,
           video:outbound,receiverPressure:Date.now()<(ep.remotePressureUntil||0)});
         if(changed)await this.applyEncoding(ep);
       }
@@ -876,6 +916,7 @@ export class RoomMedia {
   async removeEndpoint(id, slot) {
     const ep = this.endpoints.get(id);
     if (ep) {
+      ep.trackEvents?.abort();
       clearTimeout(ep.probeTimer);clearTimeout(ep.disconnectedTimer);
       clearTimeout(ep.connectionTimer);
       clearTimeout(ep.videoSourceRetry);
@@ -903,6 +944,7 @@ export class RoomMedia {
     clearInterval(this.statsTimer);
     this.watchBuffer.close();
     for (const ep of this.endpoints.values()) {
+      ep.trackEvents?.abort();
       clearTimeout(ep.probeTimer);clearTimeout(ep.disconnectedTimer);
       clearTimeout(ep.connectionTimer);
       clearTimeout(ep.videoSourceRetry);

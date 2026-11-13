@@ -15,7 +15,7 @@ import {roomPortraits} from './room-portraits.mjs';
 import {participantMix} from './participant-mix.mjs';
 import {participantSoundMenu} from './participant-sound-menu.mjs';
 import {attachVideo, bindPlayerControls} from './player-controls.mjs';
-import {outgoingScreens, videoFormat} from './stream-inspector.mjs';
+import {localCaptureFormat, outgoingScreens, videoFormat} from './stream-inspector.mjs';
 import { RoomMedia, ROLES } from './peer.mjs';
 import {RoomMicrophoneChoice} from './room-microphone.mjs';
 import { AudioMixer, Microphone, volumeLimit } from './audio.mjs';
@@ -218,10 +218,13 @@ function confirmAction(title, message, confirmLabel = tr('Продолжить')
 function action(id, callback) {
   $(id).addEventListener('click', () => { Promise.resolve().then(callback).catch(errorToast); });
 }
-function quality() {
-  const height = parseInt(settings.quality,10);
+function quality(preset=settings.quality,content=settings.content) {
+  const height = parseInt(preset,10);
   return { width: {720:1280,1080:1920,1440:2560}[height], height,
-    content:settings.content==='detail'?'detail':'motion', fps: settings.quality.endsWith('60') ? 60 : 30, bitrate: settings.bitrate * 1_000_000 };
+    content:content==='detail'?'detail':'motion', fps: preset.endsWith('60') ? 60 : 30, bitrate: settings.bitrate * 1_000_000 };
+}
+function captureConstraints({width,height,fps}) {
+  return {width:{ideal:width,max:width},height:{ideal:height,max:height},frameRate:{ideal:fps,max:fps}};
 }
 function self() { return state.peers.find(p => p.id === state.session?.selfId); }
 
@@ -768,7 +771,7 @@ function renderStudio() {
   live.hidden=!state.sharing||!track;
   if(live.hidden)return;
   const capture=track.getSettings();
-  $('studioCapture').textContent=videoFormat(capture.width,capture.height,capture.frameRate)||tr('Определяем…');
+  $('studioCapture').textContent=localCaptureFormat(capture,state.media?.selfSlot,state.stats,state.shareStarted)||tr('Определяем…');
   $('studioSource').textContent=state.shareTitle;
   $('studioSound').textContent=state.withSound?(settings.streamGain===0?tr('Громкость 0%'):tr('Включён')):state.audioLost?tr('Недоступен'):tr('Выключен');
   const send=outgoingScreens(state.peers,state.session,state.stats,state.shareStarted);
@@ -801,7 +804,7 @@ function renderStatistics() {
   if (!participant) { stageFormat('—'); return; }
   if (participant.id === state.session.selfId) {
     const s = screenTrack(participant)?.getSettings() || {};
-    stageFormat(s.width ? videoFormat(s.width,s.height,s.frameRate)+tr(' · захват') : tr('Подготовка…'));
+    stageFormat(s.width ? localCaptureFormat(s,participant.slot,state.stats,state.shareStarted)+tr(' · захват') : tr('Подготовка…'));
   } else {
     const endpoint=state.stats.get(state.session.role==='host'?participant.id:state.session.hostId);
     const video=endpoint?.state==='connected' && endpoint.videos.find(v=>String(v.mid)===String(participant.slot*3+1));
@@ -1084,9 +1087,9 @@ async function startCapture(source) {
   let stream, sound, committed=false;
   try {
     const token=camera?null:(await api.selectSource({id:source.id, withAudio:audioRequested})).token;
-    const q = camera?{...quality(),width:1280,height:720,fps:30,content:'motion'}:quality();
+    const q = camera?quality('720p30','motion'):quality();
     stream = camera?cameraPreview.take():await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: q.width, max: q.width }, height: { ideal: q.height, max: q.height }, frameRate: { ideal: q.fps, max: q.fps } },
+      video: captureConstraints(q),
       audio:false, systemAudio:'exclude', selfBrowserSurface:'exclude',
     });
     if(!stream)return;
@@ -1134,8 +1137,9 @@ async function startCapture(source) {
     state.selectedPeerId=camera&&state.peers.length===2?state.peers.find(p=>p.id!==state.session.selfId&&p.sharing)?.id||state.session.selfId:state.session.selfId;
     video.addEventListener('ended', () => { if (state.screenStream === stream) stopCapture().catch(errorToast); });
     previous?.getTracks().forEach(t => t.stop());
-    await media.setQuality(q);
+    await setLiveQuality(camera ? quality('720p30','motion') : quality());
     if (captureEpoch !== state.captureEpoch) return;
+    if (!$('studioDock').hidden) fillQualitySettings();
     await sendPresence();
     if (captureEpoch !== state.captureEpoch) return;
     closeDialog('sourceDialog');
@@ -1437,8 +1441,12 @@ function fillSettings() {
   for (const id of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) $(id).checked = settings[id];
   $('viewHeight').value = String(settings.viewHeight);
   $('focusAudio').checked = settings.focusAudio;
-  $('qualitySelect').value = settings.quality;
-  $('shareContent').value=quality().content;
+  fillQualitySettings();
+}
+function fillQualitySettings() {
+  const camera=state.captureKind==='camera' ? state.screenStream?.getVideoTracks()[0] : null;
+  $('qualitySelect').value = camera ? captureFormats.get(camera) || '720p30' : settings.quality;
+  $('shareContent').value=camera?.contentHint || quality().content;
   $('bitrateSelect').value = String(settings.bitrate);
 }
 async function openSettings(pane='voice') {
@@ -1450,28 +1458,32 @@ async function openSettings(pane='voice') {
 }
 
 const captureFormats=new WeakMap();
-const captureFormat=q=>[q.width,q.height,q.fps].join('/');
+const captureFormat=q=>q.height+'p'+q.fps;
 let qualityTail=Promise.resolve(),qualityRevision=0;
-function applyQuality() {
-  settings.quality=$('qualitySelect').value;
-  settings.content=$('shareContent').value;
-  settings.bitrate=Number($('bitrateSelect').value);
+function applyQuality(id) {
+  if(id==='qualitySelect')settings.quality=$('qualitySelect').value;
+  if(id==='shareContent')settings.content=$('shareContent').value;
+  if(id==='bitrateSelect')settings.bitrate=Number($('bitrateSelect').value);
   saveSettings();
-  const q=quality(), revision=++qualityRevision;
+  return setLiveQuality(quality($('qualitySelect').value,$('shareContent').value));
+}
+function setLiveQuality(q) {
+  const revision=++qualityRevision;
+  const media=state.media,stream=state.screenStream,track=stream?.getVideoTracks()[0];
+  const current=()=>revision===qualityRevision && media===state.media && stream===state.screenStream;
   const apply=async()=>{
-    if(revision!==qualityRevision)return;
-    const media=state.media,track=state.screenStream?.getVideoTracks()[0];
+    if(!current())return;
     let captureLimited=false;
     if(track){
       if(track.contentHint!==q.content)track.contentHint=q.content;
     }
     if(track && captureFormats.get(track)!==captureFormat(q)){
-      try{await track.applyConstraints({width:{ideal:q.width,max:q.width},height:{ideal:q.height,max:q.height},frameRate:{ideal:q.fps,max:q.fps}});captureFormats.set(track,captureFormat(q));}
+      try{await track.applyConstraints(captureConstraints(q));captureFormats.set(track,captureFormat(q));}
       catch{captureLimited=true;}
     }
-    if(revision!==qualityRevision||media!==state.media)return;
+    if(!current())return;
     await media?.setQuality(q);
-    if(revision!==qualityRevision)return;
+    if(!current())return;
     $('qualityFeedback').textContent=captureLimited?tr('Источник сохранил прежний формат захвата. Лимиты отправки обновлены.'):track?tr('Параметры показа обновлены.'):tr('Выбор сохранён для следующего показа.');
     renderStatistics();
   };
@@ -1725,7 +1737,7 @@ function bindUI() {
       saveSettings();
     } catch (error) { $('outputDevice').value = old; errorToast(error); }
   });
-  for (const id of ['qualitySelect', 'bitrateSelect','shareContent']) $(id).addEventListener('change', () => applyQuality().catch(errorToast));
+  for (const id of ['qualitySelect', 'bitrateSelect','shareContent']) $(id).addEventListener('change', () => applyQuality(id).catch(errorToast));
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.shiftKey && e.code === 'KeyM' && state.session) { e.preventDefault(); enableMicrophone().catch(errorToast); }
   });

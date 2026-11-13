@@ -29,8 +29,13 @@ export class LinkQuality {
     }
     if(Number.isFinite(rttMs))this.baseRtt=Math.min(this.baseRtt??rttMs,rttMs);
     const loss=video.some(v=>v.fractionLost>=0.04);
-    const slow=video.some(v=>v.sourceFps>=12 && Number.isFinite(v.fps) && v.fps<0.65*v.sourceFps);
-    const cpu=slow && video.some(v=>v.reason==='cpu');
+    const missesCadence = sample => {
+      const target = Math.min(sample.sourceFps, sample.fpsLimit ?? Infinity);
+      return target >= 12 && Number.isFinite(sample.fps) && sample.fps < target * .65;
+    };
+    const slow=video.some(missesCadence);
+    const cpu=video.some(v=>v.reason==='cpu' && missesCadence(v));
+    const bandwidthSlow=video.some(v=>v.reason==='bandwidth' && missesCadence(v));
     this.cpuCount=cpu?this.cpuCount+1:0;this.cpuGood=cpu?0:this.cpuGood+1;
     if(this.cpuCount>=3)this.cpu=true;
     if(this.cpuGood>=5)this.cpu=false;
@@ -53,7 +58,9 @@ export class LinkQuality {
         } else this.stableRtts.shift();
       }
     } else this.stableRtts = [];
-    const pressured=receiverPressure || loss || queued || video.some(v=>v.reason==='bandwidth');
+    // Chromium can already be reducing spatial detail while meeting the requested
+    // cadence. A low estimate and that label alone must not impose another ceiling.
+    const pressured=receiverPressure || loss || queued || bandwidthSlow;
     if(receiverPressure && (loss || queued || slow))wanted=Math.min(wanted,Math.max(0,this.level-2));
     else if(loss && (queued || slow))wanted=Math.min(wanted,Math.max(0,this.level-1));
     if(pressured && wanted<this.level){
@@ -61,10 +68,15 @@ export class LinkQuality {
       if(this.bad>=2){this.level=wanted;this.bad=0;}
     }else{
       this.bad=0;
-      const clean=!receiverPressure && !loss && !queued && !cpu;
+      const delivering=video.some(v=>v.fps>0 && (Number.isFinite(v.fractionLost) || Number.isFinite(rttMs)));
+      const clean=delivering && !receiverPressure && !loss && !queued && !cpu && (!bandwidthSlow || headroom);
       this.good=clean?this.good+1:0;
-      if(this.level<levels.length && this.good>=(wanted>this.level?3:7)){
-        this.level++;this.good=0;
+      const measuredHeadroom=available>0 && wanted>this.level;
+      if(this.level<levels.length && this.good>=(measuredHeadroom?3:7)){
+        // A measured recovery can skip intermediate caps. With no independent
+        // capacity estimate, only release one rung at a time as a probe.
+        this.level=measuredHeadroom ? wanted : this.level+1;
+        this.good=0;
       }
     }
     return before!==this.level || oldCpu!==this.cpu;
@@ -72,7 +84,9 @@ export class LinkQuality {
   limits(content){
     const level=levels[this.level];
     const [height,fps]=level?.[content==='detail'?'detail':'motion'] || [0,60];
-    return {height,fps:this.cpu?Math.min(30,fps):fps,bitrate:level?.rate??Infinity};
+    const cpuHeight = content==='detail' ? 1080 : 720;
+    return {height:this.cpu?Math.min(height || Infinity,cpuHeight):height,
+      fps:this.cpu?Math.min(30,fps):fps,bitrate:level?.rate??Infinity};
   }
 }
 

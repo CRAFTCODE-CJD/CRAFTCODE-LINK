@@ -7,6 +7,18 @@ export function videoFormat(width, height, fps) {
   if (numeric(fps)) fields.push(number.format(fps) + ' FPS');
   return fields.join(' · ');
 }
+export function localCaptureFormat(settings, slot, stats, started, now = Date.now()) {
+  const mid = String(slot * 3 + 1);
+  let latest = -Infinity, source;
+  for (const sample of stats.values()) {
+    const time = Date.parse(sample.sampledAt);
+    if (!(time >= started && time >= now - 8000 && time > latest) || sample.state !== 'connected') continue;
+    const video = sample.video?.find(v => v.direction === 'out' && String(v.mid) === mid && numeric(v.sourceFps));
+    if (video) { latest = time; source = video; }
+  }
+  if (source) return videoFormat(source.sourceWidth || settings.width, source.sourceHeight || settings.height, source.sourceFps);
+  return [videoFormat(settings.width, settings.height), numeric(settings.frameRate) ? '≤ ' + number.format(settings.frameRate) + ' FPS' : ''].filter(Boolean).join(' · ');
+}
 export function outgoingScreens(peers, session, stats, started, now = Date.now()) {
   const own = peers.find(p => p.id === session?.selfId);
   if (!own) return [];

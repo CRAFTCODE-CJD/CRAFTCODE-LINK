@@ -119,6 +119,15 @@ async function run({a,b,open,create}){
   await preview(a);await capture(a,'0714-camera-picker-ru');await a.page.setViewportSize({width:800,height:600});await capture(a,'0714-camera-picker-ru-800');await a.page.setViewportSize({width:1440,height:900});
   await a.page.click('#startShare');await a.page.locator('#sourceDialog').waitFor({state:'hidden'});
   evidence.frames.aToB=await frames(b.page);
+  await a.page.click('#studioBtn');
+  assert.equal(await a.page.inputValue('#qualitySelect'),'720p30');
+  assert.equal(await a.page.inputValue('#shareContent'),'motion');
+  const cameraBefore=await a.page.evaluate(()=>window.qaCameraTracks.at(-1).getConstraints());
+  await a.page.selectOption('#bitrateSelect','12');
+  await a.page.waitForFunction(()=>window.qaRoom.bitrate===12000000);
+  assert.deepEqual(await a.page.evaluate(()=>window.qaCameraTracks.at(-1).getConstraints()),cameraBefore);
+  await a.page.click('#closeSettingsDialog');
+  check('the camera keeps its active capture format when only the bitrate changes');
   await preview(b);await b.page.click('#startShare');await b.page.locator('#sourceDialog').waitFor({state:'hidden'});
   evidence.frames.bToA=await frames(a.page);check('both camera directions deliver increasing received bytes and decoded frames');
   for(const client of [a,b]){

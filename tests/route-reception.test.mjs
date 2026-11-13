@@ -66,6 +66,30 @@ test('receiver restart, source change, sleep and missing fields yield a new or u
   tick();assert.equal(tick({timestamp:300000}).recent,null);
   assert.equal(tick({freezeCount:undefined,packetsLost:undefined}).recent.lossPct,null);
 });
+test('polling a previous receiver report does not count one burst of loss repeatedly',()=>{
+  const tx={kind:'video',type:'outbound-rtp',id:'tx',mid:'1',ssrc:12,remoteId:'rr',mediaSourceId:'source',
+    timestamp:2000,framesEncoded:50,bytesSent:10000,frameHeight:180,targetBitrate:165000};
+  const rr={id:'rr',type:'remote-inbound-rtp',timestamp:1800,fractionLost:0.18};
+  const report=new Map([['tx',tx],['rr',rr],['source',{width:1280,height:720,framesPerSecond:30}]]);
+  let history=new Map();
+  const tick=()=>{
+    const result=videoSamples(report,history);
+    history=result.next;
+    return result.samples[0];
+  };
+  const initial=tick();
+  assert.equal(initial.fractionLost,0.18);
+  assert.deepEqual([initial.sourceWidth,initial.sourceHeight,initial.height,initial.targetBitrate],[1280,720,180,165000]);
+  tx.timestamp+=2000;
+  assert.equal(tick().fractionLost,null);
+  rr.timestamp=3900;rr.fractionLost=0;
+  assert.equal(tick().fractionLost,0);
+  tx.timestamp+=60000;tx.framesEncoded+=60;rr.timestamp+=1000;
+  const afterSleep=tick();
+  assert.equal(afterSleep.fractionLost,null);
+  assert.equal(afterSleep.fps,null);
+  assert.equal(afterSleep.mbps,null);
+});
 test('report shows recent reception and current playback dimensions separately from lifetime counters',()=>{
   const {tick}=meter();tick();
   const v=tick({frameWidth:1280,frameHeight:720,packetsLost:2,freezeCount:1,totalFreezesDuration:0.6});
@@ -95,4 +119,16 @@ test('nine hours of two-second samples keep bounded per-stream history and expir
     }
     if(n===8000)input.delete('7');
   }
+});
+
+test('room diagnostics distinguish the forwarded source profile, encoder target and actual picture',()=>{
+  const state={environment:{},session:{role:'host',selfId:'host'},
+    peers:[{id:'host',slot:0},{id:'source',slot:1},{id:'viewer',slot:2}],
+    media:{endpoints:new Map([['source',{shareProfile:{fps:30,bitrate:4000000}}]])},
+    stats:new Map([['viewer',{video:[{mid:'4',direction:'out',width:320,height:180,fps:21,mbps:.6,
+      sourceWidth:1280,sourceHeight:720,sourceFps:30,targetBitrate:620000}],inbound:[]}]])};
+  const report=roomReport(state);
+  assert.match(report,/320×180 · 21.0 FPS/);
+  assert.match(report,/Источник 1280×720 · 30.0 FPS · настройки до адаптации 30 FPS \/ 4.0/);
+  assert.match(report,/Целевой битрейт кодировщика · 0.62/);
 });

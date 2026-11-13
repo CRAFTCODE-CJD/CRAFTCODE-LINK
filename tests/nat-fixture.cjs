@@ -28,7 +28,13 @@ async function localNat(){
     queues.set(port,q);q.sequence++;
     if(q.sequence%97===0 || q.next-now>110){dropped++;return;}
     q.next=Math.max(q.next,now)+payload.length*8/1000/profile.mbps;
-    const delay=q.next-now+(profile.latencyMs ?? 12)+(q.sequence%7)*3;
+    let arrival=q.next+(profile.latencyMs ?? 12)+(q.sequence%7)*3;
+    if(profile.ordered){
+      // Last-mile jitter can vary while packets in a single FIFO still arrive in order.
+      arrival=Math.max(arrival,q.arrival || 0);
+      q.arrival=arrival;
+    }
+    const delay=arrival-now;
     const timer=setTimeout(()=>{timers.delete(timer);send();},delay);
     timers.add(timer);
   }

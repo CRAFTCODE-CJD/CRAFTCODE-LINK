@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {createGraphics} from '../src/graphics.cjs';
-import {outgoingScreens,videoFormat} from '../src/renderer/stream-inspector.mjs';
+import {localCaptureFormat,outgoingScreens,videoFormat} from '../src/renderer/stream-inspector.mjs';
 
 test('only CPU mode changes the encoder launch switch, pending changes are reversible and invalid values rejected',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cc-graphics-'));
@@ -31,4 +31,19 @@ test('inspector selects only own fresh outbound tracks for each endpoint and sep
  sample.sampledAt=new Date(now-10000).toISOString();assert(!view()[0].value.includes('Мбит'));
  assert.equal(outgoingScreens([peers[1]],session,stats,now,now).length,0);
  assert.equal(videoFormat(1280,720,null),'1280 × 720');
+});
+test('local capture shows measured source FPS, including zero, and labels the ceiling without a recent measurement',()=>{
+  const now=Date.now(), settings={width:1920,height:1080,frameRate:60}, stats=new Map();
+  const display=()=>localCaptureFormat(settings,1,stats,now-2000,now);
+  const sample=(age,state,video)=>({sampledAt:new Date(now-age).toISOString(),state,video});
+  const source=(mid,sourceFps)=>({direction:'out',mid,sourceWidth:1920,sourceHeight:1080,width:320,height:180,fps:5,sourceFps});
+  stats.set('before switch',sample(3000,'connected',[source('4',57)]));
+  stats.set('other streams',sample(150,'connected',[source('1',50),{...source('4',21),direction:'in'}]));
+  stats.set('disconnected',sample(100,'disconnected',[source('4',25)]));
+  assert.equal(display(),'1920 × 1080 · ≤ 60 FPS');
+  stats.set('latest',sample(100,'connected',[source('4',29)]));
+  stats.set('older',sample(500,'connected',[source('4',18)]));
+  assert.equal(display(),'1920 × 1080 · 29 FPS');
+  stats.set('latest',sample(50,'connected',[source('4',0)]));
+  assert.equal(display(),'1920 × 1080 · 0 FPS');
 });
