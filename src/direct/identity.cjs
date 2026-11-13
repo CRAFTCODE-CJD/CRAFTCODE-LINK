@@ -92,7 +92,9 @@ class ProfileStore {
       return f.state==='friend'&&Number.isSafeInteger(time)&&time>0&&time<=Date.now()?[[f.id,time]]:[];
     }));
     const contactChecks=require('./identity-verification.cjs').savedChecks({...profile,contactChecks:p.contactChecks});
-    return {...profile,contactChecks,contactSeen,contactAvatars,contactStyles,contactMix,privacy:require('./privacy.cjs').privacyOf(p.privacy),device:p.device,dht:p.dht===true,lan:typeof p.lan==='string'?p.lan:''};
+    const gameLaunch=require('../game/launcher.cjs').launchSelection(p.gameLaunch);
+    const discoverySeeds=p.dht===true&&require('./discovery-seeds.cjs').readSeeds(p.discoverySeeds);
+    return {...profile,contactChecks,contactSeen,contactAvatars,contactStyles,contactMix,...(gameLaunch?{gameLaunch}:{}),...(discoverySeeds?{discoverySeeds}:{}),privacy:require('./privacy.cjs').privacyOf(p.privacy),device:p.device,dht:p.dht===true,lan:typeof p.lan==='string'?p.lan:''};
   }
   erase(){this.chatHistory.erase();require('../groups/store.cjs').eraseGroups(path.dirname(this.file));fs.rmSync(this.file,{force:true});fs.rmSync(this.file+'.tmp',{force:true});}
   write(p){

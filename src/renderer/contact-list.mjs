@@ -2,7 +2,8 @@ import {tr} from './locale.mjs';
 const collator=new Intl.Collator('ru',{sensitivity:'base',numeric:true});
 export function contactStatusLabel(contact){
   if(!contact?.online)return tr('Не в сети');
-  return tr(contact.status==='busy'?'Занят':contact.status==='away'?'Отошёл':'В сети');
+  const status=tr(contact.status==='busy'?'Занят':contact.status==='away'?'Отошёл':'В сети');
+  return contact.inCall===true ? tr('Сейчас в звонке')+(contact.status==='busy'||contact.status==='away'?' · '+status:'') : status;
 }
 const norm=v=>String(v??'').normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е');
 export function selectContacts(items,{query='',filter='all',sort='available'}={}){

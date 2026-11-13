@@ -72,17 +72,21 @@ test('group ACL, channel history, exact attachment bytes and crash recovery of a
   await assert.rejects(cmd(a,'appearance',{id,theme:'light',avatar:'file:///not-an-image'}));
   await assert.rejects(cmd(a,'appearance',{id,theme:'url(https://example.org)'}));
   assert.equal((await cmd(a,'open',args)).theme,'personal','invalid combined edit is atomic');
-  await cmd(a,'appearance',{id,theme:'dusk',avatar});
+  await cmd(a,'appearance',{id,theme:'cobalt',avatar});
   await until(()=>[b,c].every(s=>s.groups.snapshot().items[0]?.avatar===avatar),'both participants cached the exact avatar');
   const legacy=a.groups.localView(a.groups.records.get(id),c.me.id,{groupAppearance:false});
   assert(!('avatarKey' in legacy)&&!('theme' in legacy)&&!('appearanceVersion' in legacy));
+  const limited=a.groups.localView(a.groups.records.get(id),c.me.id,{groupAppearance:true});
+  assert.equal(limited.theme,'default');assert.equal(limited.avatarKey.length,64);assert(!limited.paletteVersion);
+  assert.equal((await cmd(c,'open',args)).theme,'cobalt');
   assert.deepEqual(await cmd(c,'shared-with',shared(a.me.id)),[{id,name:'Evening games',avatar}]);
   const {id:privateRoom}=await cmd(a,'channel-create',{id,type:'voice',name:'Organizers',access:'staff'});
   assert(!(await cmd(c,'open',args)).channels.some(ch=>ch.id===privateRoom));
   assert(!a.groups.voiceAccess(id,privateRoom,c.me.id));
   await assert.rejects(cmd(c,'channel-rename',{id,channel,name:'Wrong'}));
   await cmd(a,'role',{id,person:b.me.id,role:'admin'});
-  await cmd(b,'appearance',{id,theme:'forest'});
+  await cmd(b,'appearance',{id,theme:'terracotta'});
+  await cmd(b,'rename',{id,name:'Weekend squad',profileId:b.me.id});
   assert.equal((await cmd(c,'open',args)).avatar,avatar,'changing the theme preserves the photo');
   assert(b.groups.voiceAccess(id,privateRoom,b.me.id));
   const nonce=crypto.randomUUID();await cmd(c,'send',{id,channel,nonce,text:'Meet at eight'});
@@ -111,7 +115,8 @@ test('group ACL, channel history, exact attachment bytes and crash recovery of a
   await until(()=>c.groups.host(id)?.owner===b.me.id,'signed routing change');
   const history=await cmd(c,'history',{id,channel});assert.equal(history.messages.length,2);
   for(const s of [a,b,c]){
-    const view=await cmd(s,'open',args);assert.equal(view.theme,'forest');assert.equal(view.avatar,avatar);
+    const view=await cmd(s,'open',args);assert.equal(view.theme,'terracotta');assert.equal(view.avatar,avatar);assert.equal(view.name,'Weekend squad');
+    assert.equal(s.groups.snapshot().items.find(g=>g.id===id).name,'Weekend squad');
   }
   await cmd(b,'appearance',{id,avatar:null});
   await until(()=>[a,b,c].every(s=>!s.groups.snapshot().items[0].avatar),'removed photo is evicted from all group views');
@@ -123,4 +128,12 @@ test('group ACL, channel history, exact attachment bytes and crash recovery of a
   assert(!b.groups.voiceAccess(id,privateRoom,c.me.id));
   await assert.rejects(cmd(b,'invite',{id,person:c.me.id}));
   await cmd(a,'clear',{id,channel});assert.deepEqual((await cmd(b,'history',{id,channel})).messages,[]);
+  // This link advertises the palette set understood by the previous Windows release.
+  b.groups.link(a.me.id).groupPalettes=false;
+  await cmd(b,'transfer',{id,person:a.me.id});
+  await until(()=>a.groups.snapshot().transfers.length,'transfer to a legacy palette device');
+  await cmd(a,'transfer-answer',{id,accept:true});
+  await until(()=>a.groups.authority(id)&&!b.groups.records.get(id)?.move,'legacy palette device became owner');
+  assert.equal(a.groups.authority(id).theme,'dusk');
+  assert.equal((await cmd(b,'open',args)).theme,'dusk');
 });

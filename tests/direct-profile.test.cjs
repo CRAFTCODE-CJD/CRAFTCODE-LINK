@@ -87,6 +87,12 @@ test('revoking discovery during TLS setup prevents signed LAN replies and stale 
   const reply=replies[0];
   assert.equal(reply.card.id,s.me.id);
   assert.ok(verify(reply.card.device,['lan-v1',nonce.toString('hex'),reply.port,reply.pin,reply.card.name],reply.proof));
+  sockets.at(-1).emit('error',Error('interface lost'));
+  assert.equal(s.network.nic,null);
+  s.refreshContacts();await wait(()=>s.network.nic && !s.rebinding);
+  query();assert.equal(replies.length,2,'refresh rebinds the same selected interface after a socket failure');
+  s.network.sender.send=(_q,_port,_to,sent)=>sent(Object.assign(Error('no route'),{code:'ENETUNREACH'}));
+  s.network.refresh();assert.equal(s.network.nic,null,'a send callback error also invalidates the bind');
 });
 test('private playback preferences validate membership and room, survive store reopen and disappear on block',async t=>{
   const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');

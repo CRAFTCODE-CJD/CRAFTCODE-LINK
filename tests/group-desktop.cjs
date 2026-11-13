@@ -79,6 +79,7 @@ async function run({a,b,open,create,apps}) {
     await a.page.click('#groupOptions');await button(a.page,'#groupManage','Оформление группы').click();
     await a.page.selectOption('#groupTheme','dusk');
     await a.page.setInputFiles('#groupPhotoFile',path.resolve(__dirname,'../src/renderer/assets/craftlink.png'));
+    await a.page.click('#avatarCrop button[value="apply"]');
     await a.page.locator('#groupPhotoPreview canvas').waitFor();
     await a.page.click('#groupAppearanceSave');await a.page.locator('#groupAppearance').waitFor({state:'hidden'});
     await closeManager(a.page);

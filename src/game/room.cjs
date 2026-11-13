@@ -26,8 +26,8 @@ class GameRoom {
     const r=this.active;
     return {room:r && {id:r.id,title:r.title,prefix:r.prefix,host:r.host,roster:readRoster(r.roster)||[],messages:this.files?r.messages.map(e=>this.files.state(e)):r.messages,
       canShareFiles:!!this.files?.supported(),hasDownloads:!!this.files?.receipts.size,waiting:r.waiting},
-      invitations:[...this.invitations.values()].map(({actionId,title,peer})=>({id:actionId,title,name:peer.name})),
-      requests:[...this.joinRequests.values()].map(({card})=>({id:card.id,name:card.name,device:card.device})),asked:this.asked?.room,askedTitle:this.asked?.title,listed:!!r?.listed,invited:[...this.sent.keys()]};
+      invitations:[...this.invitations.values()].map(({actionId,id,title,peer})=>({id:actionId,room:id,person:peer.id,device:peer.device,title,name:peer.name})),
+      requests:[...this.joinRequests.values()].map(({actionId,card})=>({actionId,id:card.id,name:card.name,device:card.device})),asked:this.asked?.room,askedTitle:this.asked?.title,listed:!!r?.listed,invited:[...this.sent.keys()]};
   }
   link(peer){return this.links(peer.id).find(l=>l.card.device===peer.device);}
   send(peer,kind,fields={}){return this.link(peer)?.send({kind:'game-room',action:kind,room:this.active?.id,...fields})===true;}
@@ -59,8 +59,9 @@ class GameRoom {
     const req=this.asked;if(!req)return;
     this.asked=null;this.send(req.peer,'unask',{room:req.room,ticket:req.ticket});this.changed();
   }
-  review(device,yes){
+  review(device,yes,actionId){
     const req=this.joinRequests.get(device);if(!req)return;
+    if(actionId!==undefined && actionId!==req.actionId)return;
     this.joinRequests.delete(device);
     const ok=yes&&req.expires>Date.now()&&this.active?.listed&&this.active.roster.length<LIMIT&&!this.sent.has(req.card.id);
     if(ok){
@@ -233,8 +234,9 @@ class GameRoom {
         this.send(card,'refused',{room:m.room,ticket:m.ticket});return;
       }
       if(!this.joinRequests.has(card.device)){
-        this.joinRequests.set(card.device,{card,ticket:m.ticket,room:m.room,expires:Date.now()+30000});
-        this.event({type:'game-notice',name:card.name,text:tr('Просится в игровую LAN')});this.changed();
+        const actionId='request-'+randomUUID();
+        this.joinRequests.set(card.device,{actionId,card,ticket:m.ticket,room:m.room,expires:Date.now()+30000});
+        this.event({type:'game-requested',id:actionId,name:card.name});this.changed();
       }return;
     }
     const ask=this.asked;

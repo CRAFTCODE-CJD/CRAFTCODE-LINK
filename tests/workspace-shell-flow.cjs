@@ -4,18 +4,20 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 module.exports=async function checkShell(page,language){
   await page.setViewportSize({width:1426,height:933});
   const images=process.env.LINK_UI_QA_IMAGES;
-  async function shot(name){if(images){await fs.mkdir(images,{recursive:true});await page.screenshot({path:path.join(images,name+'-'+language+'.png')});}}
+  async function shot(name){if(images){await fs.mkdir(images,{recursive:true});await page.screenshot({path:path.join(images,name+'-'+language+'.png'),animations:'disabled'});}}
   await page.evaluate(()=>{
     const peers=['Анна','Борис','Вера','Глеб','Дима','Лена','Маша','Ника','Рома']
       .map((name,i)=>({id:'friend-'+i,name,online:i%3!==0,state:'friend',devices:[],added:Date.UTC(2026,8,14),chat:{supported:true}}));
+    peers[0].status='busy';peers[2].status='busy';peers[4].status='away';
     peers[1].rooms=[{door:'voice',device:'other-pc',count:2}];
-    const channels=[{id:'lobby',name:'общий',type:'text',access:'all',allow:[]}];
+    const channels=[{id:'lobby',name:'общий',type:'text'},{id:'plans',name:'планы',type:'text'},{id:'voice',name:'Вечерний звонок',type:'voice'}]
+      .map(c=>({...c,access:'all',allow:[]}));
     let spaces=['Соседи','Ночной эфир'].map((name,i)=>({id:'space-'+i,name,role:'owner',online:true,epoch:1,revision:0}));
     const original=window.craftlink.direct;
     window.craftlink.direct=async request=>{
       if(request.op==='group-open'){
         const summary=spaces.find(g=>g.id===request.id);
-        return {...summary,owner:'me',members:[{id:'me',role:'owner',name:'Анна'}],channels,bans:[]};
+        return {...summary,owner:'me',members:[{id:'me',role:'owner',name:'Анна'},{id:'friend-7',role:'member',name:'Ника'}],channels,bans:[]};
       }
       if(request.op==='group-shared-with')return request.person==='friend-7'?spaces.slice(0,1):[];
       if(request.op==='chat-history'){
@@ -24,7 +26,10 @@ module.exports=async function checkShell(page,language){
         })):[];
         return {messages,hasMore:false};
       }
-      if(request.op==='group-history')return {messages:[],more:false};
+      if(request.op==='group-history')return {messages:[
+        {id:'plan-1',person:'friend-7',name:'Ника',at:Date.UTC(2026,10,10,15,22),text:'Кто будет сегодня вечером?'},
+        {id:'plan-2',person:'me',name:'Анна',at:Date.UTC(2026,10,10,15,24),text:'Я буду после восьми. Заходите в голосовой.'}
+      ],more:false};
       if(request.op==='group-file-list')return [];
       const state=await original(request);
       if(request.op==='state'){state.friends=peers;state.groups={items:spaces,transfers:[],invites:[]};}
@@ -36,6 +41,10 @@ module.exports=async function checkShell(page,language){
   const spaces=page.locator('#spaceList button');
   await spaces.nth(1).waitFor();
   assert.equal(await page.locator('#quickPeople button').count(),9);
+  const indicator=person=>page.locator('#workspaceContacts [data-person="'+person+'"] .contact-avatar')
+    .evaluate(el=>getComputedStyle(el,'::after').backgroundColor);
+  assert.equal(await indicator('friend-0'),await indicator('friend-3'),'An offline friend with a saved busy status should appear offline');
+  assert.notEqual(await indicator('friend-2'),await indicator('friend-0'));
   const [spacesBox,sectionsBox,friendsBox,mainBox]=await page.evaluate(()=>['groupRail','navRail','friendsContext','directoryPage'].map(id=>{
     const {left,right,top,bottom}=document.getElementById(id).getBoundingClientRect();return {left,right,top,bottom};
   }));
@@ -55,6 +64,8 @@ module.exports=async function checkShell(page,language){
   assert(await page.locator('#dmIntro').isVisible());
   await page.locator('#dmSharedList button').filter({hasText:'Соседи'}).waitFor();
   assert.equal(await page.locator('#dmLog article').count(),3);
+  assert.equal(await page.locator('#navRail [aria-current="page"]').getAttribute('id'),'navChats');
+  assert.equal(await page.locator('#navChats').evaluate(el=>getComputedStyle(el,'::before').content),'""');
   await shot('direct');
   await page.click('#dmProfileToggle');assert(await page.locator('#dmProfile').isHidden());
   await page.click('#dmProfileToggle');await page.click('#dmSharedList button');
@@ -62,12 +73,26 @@ module.exports=async function checkShell(page,language){
   await spaces.nth(1).click();
   await page.locator('#groupName,#groupsTitle').filter({hasText:'Ночной эфир'}).first().waitFor();
   assert.equal(await spaces.nth(1).getAttribute('aria-current'),'page');
-  assert(await page.locator('#navRail').isHidden());
+  assert(await page.locator('#navRail').isVisible());
+  assert(await page.locator('#sidebarSearch #friendContextSearch').isVisible());
   assert(await page.locator('#groupContext').isVisible());
   assert(await page.locator('#dmContext').isHidden());
   const rect=await page.locator('#groupsPage').boundingBox(),context=await page.locator('#groupContext').boundingBox();
+  const personal=await page.locator('#friendsContext').boundingBox(),profile=await page.locator('#profileDock').boundingBox();
+  assert.equal(personal.x,sectionsBox.left);assert.equal(personal.x,profile.x);
+  assert(Math.abs(personal.x+personal.width-context.x)<1);
   assert(Math.abs(context.x+context.width-rect.x)<1);
+  await page.fill('#friendContextSearch','');await page.click('[data-group-channel="plans"]');
   await shot('group');
+  await page.click('#quickPeople [data-person="friend-7"]');
+  await page.locator('#dmTitle').filter({hasText:'Ника'}).waitFor();
+  await spaces.nth(1).click();await page.locator('#groupChannelName').filter({hasText:'планы'}).waitFor();
+  await page.setViewportSize({width:940,height:650});
+  await page.locator('#groupContent.compact-members').waitFor();
+  const chatBounds=await page.locator('#groupScroll').boundingBox();
+  await shot('group-940');
+  assert(chatBounds.width>=410 && await page.locator('#groupScroll').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Group conversation needs readable width at 940px: '+JSON.stringify(chatBounds));
+  await page.setViewportSize({width:1426,height:933});
   await page.click('#navFriends');
   await page.fill('#friendContextSearch','');await page.locator('#bookSort').focus();await shot('home');
   await page.keyboard.press('Space');
@@ -75,6 +100,33 @@ module.exports=async function checkShell(page,language){
   await shot('sort');
   await page.keyboard.press('End');await page.keyboard.press('Enter');
   assert.equal(await page.locator('#bookSort').inputValue(),'recent');
+  await page.click('#welcomeSkip');await page.click('#firstStepsSkip');
+  await page.selectOption('#bookSort','available');
+  await page.locator('#bookFilters button[data-filter="online"]').click();
+  assert.equal(await page.locator('#workspaceContacts .open-person-chat').count(),6);
+  await page.locator('#bookFilters button[data-filter="all"]').click();
+  const aligned=await page.evaluate(()=>{
+    const title=document.getElementById('directoryTitle').getBoundingClientRect();
+    const count=document.getElementById('directoryCount').getBoundingClientRect();
+    return Math.abs((title.top+title.bottom-count.top-count.bottom)/2)<2;
+  });
+  assert(aligned,'Online count and heading should have a shared vertical centre');
+  const bodyBounds=await page.locator('#peopleDirectory').boundingBox();
+  const directoryBounds=await page.locator('#directoryPage').boundingBox();
+  assert.equal(bodyBounds.x,directoryBounds.x);
+  assert(Math.abs(bodyBounds.width-directoryBounds.width)<2,'The directory should use the width of the page');
+  await shot('friends');
+  for(const theme of ['light','dusk','forest','default']){
+    await page.click('#settingsBtn');await page.click('[data-pane="profile"]');
+    await page.selectOption('#profileTheme',theme);await page.click('#closeSettingsDialog');
+    assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
+    if(theme!=='default')await shot('friends-'+theme);
+  }
+  await page.setViewportSize({width:740,height:560});
+  assert(await page.locator('#linkFriends').isVisible());
+  assert(await page.locator('#directoryPage').evaluate(el=>el.scrollWidth<=el.clientWidth));
+  await shot('friends-740');
+  await page.setViewportSize({width:1426,height:933});
   await page.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await page.locator('#linkFriends').evaluate(el=>getComputedStyle(el).transitionDuration),'0s');
   await page.emulateMedia({reducedMotion:'no-preference'});
@@ -110,15 +162,37 @@ module.exports=async function checkShell(page,language){
   await page.click('#contextToggle');await page.locator('#quickPeople button').filter({hasText:'Рома'}).click();
   await page.locator('#dmTitle').filter({hasText:'Рома'}).waitFor();assert(await page.locator('#dmContext').isHidden());
   assert(await page.locator('#dmProfile').isHidden());await page.click('#dmProfileToggle');
-  await page.locator('#dmProfile').waitFor();await page.keyboard.press('Escape');
+  await page.locator('#dmProfile').waitFor();
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'dmCloseProfile');
+  await shot('contact-profile-740');
+  await page.keyboard.press('Enter');
+  assert(await page.locator('#dmProfile').isHidden());
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'dmProfileToggle');
+  await page.keyboard.press('Enter');await page.keyboard.press('Escape');
+  assert(await page.locator('#dmProfile').isHidden());
   assert.equal(await page.evaluate(()=>document.activeElement.id),'dmProfileToggle');
   await page.click('#dmBack');await page.locator('#dmSearch').waitFor();await page.fill('#dmSearch','Вера');
   await page.locator('#dmList button').click();await page.locator('#dmTitle').filter({hasText:'Вера'}).waitFor();
   await page.click('#backToCall');await page.locator('#roomPage').waitFor();
   await shot('voice-740');
   await spaces.nth(1).click();await page.locator('#groupContext').waitFor();await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'contextToggle');
+  assert(await page.locator('#navRail').isVisible());
+  assert.equal(await page.locator('#crumb').innerText(),'Ночной эфир');
+  const channelButton=await page.locator('#contextToggle span').boundingBox();
+  const contactsButton=await page.locator('#contactDrawerToggle').boundingBox();
+  assert(channelButton.x+channelButton.width<=contactsButton.x,'Labels for both drawers must fit side by side');
+  await page.focus('#contactDrawerToggle');await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'friendContextSearch');
+  assert(await page.locator('#groupContext').isHidden());await shot('group-contacts-740');
+  await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'contactDrawerToggle');
+  await page.click('#contextToggle');await page.locator('#groupContext').waitFor();await shot('group-channels-740');
+  await page.click('[data-group-channel="lobby"]');assert(await page.locator('#groupContext').isHidden());
+  await page.click('#contactDrawerToggle');await page.click('#quickPeople [data-person="friend-8"]');
+  await page.locator('#dmTitle').filter({hasText:'Рома'}).waitFor();assert(await page.locator('#backToCall').isVisible());
+  await spaces.nth(1).click();await page.locator('#groupContext').waitFor();await page.keyboard.press('Escape');
   await spaces.nth(1).focus();await page.evaluate(()=>dropSpace());await page.waitForFunction(()=>document.querySelectorAll('#spaceList button').length===1);
   assert(await page.locator('#navFriends').isVisible());
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  console.log('PASS',language,'wide and 740px: home/space rail, every confirmed friend, filtering and private chat, one contextual sidebar, saved group selection, call controls, cinema, narrow drawer, keyboard focus and group removal.');
+  console.log('PASS',language,'persistent home, contacts and group columns; responsive 940px channel, narrow channel and contact drawers, return to selected channel, private chats during calls, themes, keyboard focus and group removal.');
 };

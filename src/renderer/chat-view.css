@@ -107,25 +107,29 @@
 .link-chat-meta .link-chat-time,.link-chat-meta .link-chat-status {float:none;margin:0;font:10px/1.3 var(--mono);color:#b1c0c6}
 .is-own .link-chat-meta :is(.link-chat-time,.link-chat-status) {color:#b1cfc6}
 .link-chat-compose {
-  position:relative;display:flex;align-items:flex-end;flex-wrap:nowrap;gap:5px;min-width:0;
-  padding:5px 6px;background:#18242d;border:1px solid var(--border);border-radius:12px;
+  position:relative;display:flex;align-items:flex-end;flex-wrap:nowrap;gap:4px;min-width:0;
+  padding:5px 6px;background:var(--panel);border:1px solid var(--border-soft);border-radius:12px;
 }
-.link-chat-compose:focus-within {border-color:var(--accent)}
-.link-chat-compose :is(input:not([type=checkbox]),textarea) {
-  flex:1 1 50px;min-width:0;max-width:100%;margin:0;padding:8px 4px;border:0;border-radius:0;
-  background:transparent;color:var(--text);font:inherit;font-size:13px;line-height:1.45;
+.link-chat-compose:focus-within {border-color:var(--border-soft)}
+.link-chat-compose > textarea {
+  flex:1 1 50px;min-width:0;max-width:100%;margin:0;padding:8px;border:0;border-radius:5px;
+  box-sizing:border-box;min-height:36px;max-height:110px;resize:none;field-sizing:content;overflow-y:auto;
+  background:transparent;color:var(--text);font:inherit;font-size:14px;line-height:20px;caret-color:var(--accent);
 }
-.link-chat-compose textarea {resize:none;max-height:88px;field-sizing:content;overflow-y:auto}
-.link-chat-compose :is(input,textarea):focus-visible {outline:none!important}
-.link-chat-compose .send-button {
-  flex:none;width:34px;height:34px;border-radius:10px;background:var(--accent);border:0;color:var(--accent-ink);
+.link-chat-compose > textarea:focus-visible {outline:0;box-shadow:inset 2px 0 var(--accent);background:var(--bg)}
+.link-chat-compose > textarea::placeholder {color:var(--muted);opacity:1}
+.link-chat-compose > button[type=submit] {
+  flex:none;display:grid;place-items:center;width:36px;height:36px;padding:0;border-radius:9px;
+  background:var(--accent);border:0;color:var(--accent-ink);
 }
-.link-chat-compose .send-button:disabled {color:var(--muted);background:var(--surface);opacity:.65}
+.link-chat-compose > button[type=submit]:enabled:hover {color:var(--accent-ink);background:var(--accent-hover)}
+.link-chat-compose > button[type=submit]:disabled {color:var(--muted);background:var(--surface);opacity:.65}
 .quick-record {display:none}
-.link-chat-compose[data-record-ready=true]:not(.chat-draft) .quick-record {display:flex;align-items:stretch;flex:none;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-ink)}
+.link-chat-compose[data-record-ready=true]:not(.chat-draft) .quick-record {display:flex;align-items:stretch;flex:none;height:36px;border-radius:9px;background:var(--soft);color:var(--accent)}
 .link-chat-compose[data-record-ready=true]:not(.chat-draft)>button[type=submit] {display:none}
-.quick-record button {display:grid;place-items:center;padding:0;width:33px;border:0;border-radius:9px;background:transparent;color:inherit;cursor:pointer}
-.quick-record button:last-child {width:20px;font-size:15px;border-inline-start:1px solid #0003;border-radius:0 9px 9px 0}
+.quick-record button {display:grid;place-items:center;padding:0;width:36px;border:0;border-radius:9px 0 0 9px;background:transparent;color:inherit;cursor:pointer}
+.quick-record button:last-child {width:26px;font-size:16px;border-inline-start:1px solid color-mix(in srgb,var(--accent) 23%,transparent);border-radius:0 9px 9px 0}
+.quick-record button:hover {background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .quick-record svg {width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
 .link-chat-emoji,.link-chat-compose .chat-tools details {position:relative;flex:none}
 .link-chat-emoji summary,.link-chat-compose .chat-tools summary {
@@ -143,6 +147,10 @@
 .link-chat-emoji-choices button {padding:0;width:33px;height:32px;border:0;border-radius:5px;color:inherit;background:transparent;cursor:pointer;font-size:17px}
 .link-chat-emoji-choices button:hover,.link-chat-emoji summary:hover {background:var(--surface-hover)}
 .link-chat :is(summary,button):focus-visible {outline:2px solid var(--accent);outline-offset:1px}
+.link-chat-compose :is(summary,button,input,select):focus-visible {outline:2px solid var(--accent);outline-offset:1px}
+@media (forced-colors:active) {
+  .link-chat-compose > textarea:focus-visible {outline:2px solid Highlight;outline-offset:-2px}
+}
 #roomChat:not([hidden]) {
   flex:1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr) auto;
   align-items:start;column-gap:8px;min-height:0;padding:0;
@@ -172,13 +180,9 @@
 #roomChat .chat-attachment.is-own {align-self:flex-end;background:var(--bubble-out,#21433f);border-color:#335853;border-radius:13px 13px 4px 13px}
 #roomChat .chat-attachment.is-own .file-author {color:var(--accent)}
 
-.lan-chat .conversation-heading {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border-soft);padding-bottom:9px}
-.lan-chat .conversation-heading h3 {border:0;padding:0}
-.lan-chat .conversation-heading button {font-size:12px;padding:4px 7px;min-height:28px}
 #gameHistory {padding:10px 0;overscroll-behavior:contain}
 #gameHistory:empty {padding:0}
-#gameComposer {margin-top:auto;padding:5px 6px;border:1px solid var(--border)}
-#gameComposer:focus-within {border-color:var(--accent)}
+#gameComposer {margin-top:auto;padding:5px 6px;border:1px solid var(--border-soft)}
 #gameFileHint {padding:3px 8px;font-size:11px;color:var(--muted);white-space:normal}
 @media(max-width:900px) {
   .app-shell.in-call:not(.cinema) #roomPage:has(#roomSidebar:not([hidden])):not(:has(#studioDock:not([hidden]))) {

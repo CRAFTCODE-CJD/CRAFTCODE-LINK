@@ -34,6 +34,7 @@ test('a second friend cannot replace or reuse the LAN invitation selected by the
   assert.equal(room.state().invitations[0].id, chosen);
   room.receive(other, { ...invitation, ticket: randomUUID() });
   assert.equal(room.state().invitations[0].name, first.name);
+  assert.equal(room.state().invitations[0].person, first.id);
   room.receive(first, { action: 'end', room: id, ticket: invitation.ticket });
   room.receive(other, { ...invitation, ticket: randomUUID() });
   assert.throws(() => room.answer(chosen, true));
@@ -44,6 +45,26 @@ test('a second friend cannot replace or reuse the LAN invitation selected by the
   assert.equal(sent.at(-1).message.room, id);
   assert.equal(sent.at(-1).id, other.id);
   assert.throws(() => room.answer(chosen, false));
+});
+
+test('an expired join request cannot approve a later request from the same device', () => {
+  const [self,guest]=members;
+  const events=[];
+  const game=new GameRoom({self:()=>self,links:()=>[{card:guest,send:()=>true}],changed(){},event:e=>events.push(e),quiet:()=>false});
+  game.create('Evening match',true);
+  const request={room:game.active.id,action:'ask',ticket:randomUUID()};
+  game.receive(guest,request);
+  const first=events.at(-1);
+  assert.equal(first.type,'game-requested');
+  game.receive(guest,{...request,action:'unask'});
+  game.receive(guest,{...request,ticket:randomUUID()});
+  const next=game.state().requests[0];
+  assert.notEqual(next.actionId,first.id);
+  game.review(guest.device,true,first.id);
+  assert.equal(game.state().requests[0].actionId,next.actionId);
+  game.review(guest.device,true,next.actionId);
+  assert.equal(game.state().requests.length,0);
+  assert(game.sent.has(guest.id));
 });
 
 test('a peer cannot deliver diagnostic payloads to a port occupied by another application', async t => {

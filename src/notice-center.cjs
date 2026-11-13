@@ -3,7 +3,7 @@ const {tr}=require('./native-language.cjs');
 
 const titles={
   call:'Входящий звонок', invite:'Приглашение в комнату', join:'Запрос на вход в звонок',
-  game:'Приглашение в игровую LAN', 'friend-direct':'Новая заявка в друзья', 'friend-jabber':'Новая заявка в друзья',
+  game:'Приглашение в игровую LAN', 'game-request':'Запрос на вход в игровую LAN', 'friend-direct':'Новая заявка в друзья', 'friend-jabber':'Новая заявка в друзья',
   message:'Личное сообщение',tray:'CRAFTCODE LINK остаётся в трее',
 };
 
@@ -57,7 +57,7 @@ function createNoticeCenter({window,tray,createNotification,open}) {
   function clear(){for(const key of [...active.keys()])remove(key);}
   return {show,remove,clear,
     clearChat(id){if(id){remove('message/'+id);return;}for(const [key,item] of active)if(item.kind==='message')remove(key);},
-    restrictGame(ids){const item=active.get('game');if(item&&!ids.includes(item.id))remove('game');},
+    restrictGame(ids){for(const key of ['game','game-request']){const item=active.get(key);if(item&&!ids.includes(item.id))remove(key);}},
     policy(on,dnd){enabled=on;quiet=dnd;if(!enabled||quiet)clear();},
   };
 }

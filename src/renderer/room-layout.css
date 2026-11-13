@@ -32,22 +32,42 @@
 #roomPage :is(button,select,summary,input):focus-visible,#participantSoundMenu :is(button,input):focus-visible {outline:2px solid var(--accent);outline-offset:2px}
 #roomPage :is(button,select,summary):not(:disabled) {cursor:pointer}
 #roomPage .stage-column .stream-stage {min-height:0}
-#roomPage .voice-stage {border:0;border-radius:0;background:var(--bg)}
+#roomPage .voice-stage {display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;border:0;border-radius:0;background:var(--bg)}
+#roomPage .voice-stage::before {display:none}
 #streamStage.voice-stage .stage-caption {display:none}
+#streamStage.voice-stage .voice-grid {position:static;flex:1;min-height:0;order:0}
+#streamStage.voice-stage .media-notice:not([hidden]) {
+  position:static;order:1;flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;justify-items:start;gap:3px 12px;max-height:45%;overflow:auto;
+  padding:10px 14px;text-align:start;background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;
+}
+#streamStage.voice-stage .media-notice strong {grid-column:1;font-size:14px}
+#streamStage.voice-stage .media-notice span {grid-column:1;max-width:none;font-size:12px;line-height:1.45}
+#streamStage.voice-stage .media-notice .button {grid-column:2;grid-row:1 / span 2;max-width:100%;white-space:normal}
+#streamStage.voice-stage .media-notice.waiting::before {display:none}
+@container (max-width:490px) {
+  #streamStage.voice-stage .media-notice .button {grid-column:1 / -1;grid-row:auto}
+}
 #streamStage .voice-grid {
   grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr));padding:12px 0;gap:10px;
   align-content:safe center;box-sizing:border-box;scrollbar-width:thin;
 }
 #streamStage .voice-grid:has(>:only-child) {grid-template-columns:minmax(0,490px)}
 #streamStage .voice-grid:has(>:nth-child(2)):not(:has(>:nth-child(3))) {grid-template-columns:repeat(2,minmax(0,1fr))}
+@container (max-width:319px) {
+  #streamStage .voice-grid:has(>:nth-child(2)):not(:has(>:nth-child(3))) {grid-template-columns:minmax(0,1fr)}
+}
 .voice-tile {border-radius:12px;background:var(--surface);overflow:hidden;transition:border-color 160ms ease}
 @media(prefers-reduced-motion:reduce){.voice-tile {transition:none}}
-#streamStage .voice-tile {min-height:clamp(125px,23vh,240px);padding:30px 10px 42px}
+#streamStage .voice-tile {
+  min-height:clamp(138px,23vh,240px);padding:30px 10px 42px;
+  background:radial-gradient(ellipse at 50% 27%,color-mix(in srgb,var(--accent) 9%,var(--surface)),var(--surface) 75%);
+}
 .voice-tile.is-speaking {border-color:color-mix(in srgb,var(--accent) 50%,var(--border-soft))}
 .tile-caption {text-align:left;min-width:0}
 #streamStage .tile-caption {position:absolute;bottom:10px;left:12px;right:10px}
 .tile-caption .voice-name,.tile-caption .voice-state {display:block;line-height:1.45;min-height:0}
-.tile-caption .voice-name {font-size:13px}
+.tile-caption .voice-name {font-size:14px}
 .tile-caption .voice-state:empty {display:none}
 .tile-actions .tile-sound-button {border-color:transparent;background:color-mix(in srgb,var(--bg) 70%,transparent)}
 .tile-actions .tile-sound-button:is(:hover,:focus-visible) {border-color:var(--accent)}

@@ -1,0 +1,38 @@
+.invite-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  margin-block: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: linear-gradient(125deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel) 75%);
+}
+.invite-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 650;
+}
+.invite-avatar.group-mark {border-radius: 10px}
+.invite-copy {min-width: 0; display: grid; gap: 3px; align-self: center; overflow-wrap: anywhere}
+.invite-copy strong {font-size: 14px; line-height: 1.35}
+.invite-copy small {color: var(--muted); font-size: 11px; line-height: 1.4}
+.invite-copy .invite-kind {color: var(--accent); font-weight: 600}
+.invite-actions {grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px}
+.invite-actions .button {min-height: 32px; padding: 6px 10px}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.reduce-motion) .invite-card {animation: invite-arrive .2s ease-out}
+}
+@keyframes invite-arrive {
+  from {opacity: 0; transform: translateY(4px)}
+  to {opacity: 1; transform: translateY(0)}
+}

@@ -1,12 +1,25 @@
 'use strict';
 const assert=require('node:assert/strict');
+const path=require('node:path');
+const fs=require('node:fs/promises');
 
 module.exports=async function checkSounds(page,ids){
   await page.bringToFront();
-  await page.evaluate(([me,friend])=>{
+  const capture=async name=>{
+    const dir=process.env.LINK_UI_QA_IMAGES;
+    if(!dir)return;
+    await fs.mkdir(dir,{recursive:true});
+    await page.screenshot({animations:'disabled',path:path.join(dir,name+'-'+(process.env.LINK_QA_LANG==='en'?'en':'ru')+'.png')});
+  };
+  await page.evaluate(async ([me,friend])=>{
     const original=craftlink.direct,play=HTMLMediaElement.prototype.play;
     const peer={id:friend,name:'Мила',state:'friend',online:true,devices:[],chat:{supported:true}};
-    const fixture=window.cues={played:[],incoming:null,blocked:false};
+    const sample=new Image();sample.src='assets/craftlink.png';await sample.decode();
+    const bitmap=document.createElement('canvas');bitmap.width=bitmap.height=48;
+    const ctx=bitmap.getContext('2d');ctx.fillStyle='#24433f';ctx.fillRect(0,0,48,48);ctx.drawImage(sample,0,0,48,48);
+    const rgba=ctx.getImageData(0,0,48,48).data;
+    peer.avatar=btoa(String.fromCharCode(...rgba.filter((_,i)=>i%4!==3)));
+    const fixture=window.cues={played:[],incoming:null,outgoing:null,blocked:false};
     HTMLMediaElement.prototype.play=function(){
       const name=this.src.match(/\/assets\/(\w+)\.wav$/)?.[1];
       if(name)fixture.played.push(name);
@@ -15,17 +28,18 @@ module.exports=async function checkSounds(page,ids){
     craftlink.direct=async request=>{
       if(request.op==='chat-history')return {messages:[],hasMore:false};
       if(request.op==='reject'){fixture.incoming=null;roomFixture.refresh();return;}
+      if(request.op==='cancel'){fixture.outgoing=null;roomFixture.refresh();return;}
       if(request.op==='take'){fixture.incoming.taken=true;roomFixture.refresh();return;}
       const result=await original(request);
       if(request.op==='state'){
         result.friends=[peer];result.blocked=fixture.blocked?[{id:friend}]:[];
-        result.incoming=fixture.incoming;
+        result.incoming=fixture.incoming;result.outgoing=fixture.outgoing;
       }
       return result;
     };
     fixture.message=(extra={})=>roomFixture.emit({type:'direct-chat-updated',incoming:true,id:friend,profile:me,...extra});
     fixture.call=()=>{
-      fixture.incoming={id:'call',key:crypto.randomUUID(),mode:'call',name:peer.name};
+      fixture.incoming={id:'call',peer:friend,key:crypto.randomUUID(),mode:'call',name:peer.name};
       roomFixture.refresh();
     };
     roomFixture.refresh();
@@ -55,8 +69,50 @@ module.exports=async function checkSounds(page,ids){
   await page.waitForFunction(()=>cues.played.includes('message'));
   assert.deepEqual(await played(),['message'],'one chime for a burst');
 
+  await page.evaluate(friend=>{cues.outgoing={id:'out',peer:friend,name:'Мила'};roomFixture.refresh();},ids[1]);
+  await page.waitForSelector('#peerCallDialog[open]');
+  assert.equal(await page.locator('#peerAccept').isHidden(),true);
+  assert.equal(await page.locator('#peerAvatar canvas').count(),1);
+  assert.equal(await page.locator('#peerCallTitle').textContent(),process.env.LINK_QA_LANG==='en'?'Outgoing call':'Исходящий звонок');
+  await capture('outgoing');await page.keyboard.press('Escape');
+  await page.waitForSelector('#peerCallDialog',{state:'hidden'});
   await page.evaluate(()=>cues.call());
   await page.waitForSelector('#peerCallDialog[open]');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'peerCaller');
+  const ripple=()=>page.locator('#peerCallDialog .call-portrait').evaluate(avatar=>getComputedStyle(avatar,'::before').animationName);
+  assert.equal(await ripple(),'call-ripple');
+  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await ripple(),'none');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.evaluate(()=>document.documentElement.classList.add('reduce-motion'));assert.equal(await ripple(),'none');
+  await page.evaluate(()=>document.documentElement.classList.remove('reduce-motion'));
+  await capture('incoming');
+  const contrasts=await page.evaluate(()=>{
+    const root=document.documentElement,dialog=document.querySelector('#peerCallDialog'),original=root.dataset.theme;
+    const ctx=document.createElement('canvas').getContext('2d',{willReadFrequently:true});
+    function luminance(color){
+      ctx.fillStyle=color;ctx.fillRect(0,0,1,1);
+      const rgb=ctx.getImageData(0,0,1,1).data.slice(0,3);
+      return Array.from(rgb,v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+    }
+    function ratio(a,b){a=luminance(a);b=luminance(b);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);}
+    const results=[];
+    root.classList.add('reduce-motion');
+    try{
+      for(const {value} of document.querySelectorAll('#profileTheme option')){
+        root.dataset.theme=value;
+        const bg=getComputedStyle(dialog).backgroundColor;
+        const colors=['#peerCaller','#peerCallTitle','#peerAccept','#peerReject'].map(selector=>{
+          const el=dialog.querySelector(selector),style=getComputedStyle(el);
+          return ratio(style.color,el.tagName==='BUTTON'?style.backgroundColor:bg);
+        });
+        results.push([value,Math.min(...colors)]);
+      }
+    }finally{root.dataset.theme=original;root.classList.remove('reduce-motion');}
+    return results;
+  });
+  for(const [theme,ratio] of contrasts)assert(ratio>=4.5,theme+' call text contrast: '+ratio);
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'peerAccept');
   await page.waitForFunction(()=>cues.played.includes('ring'));
   await page.waitForFunction(()=>cues.played.filter(name=>name==='ring').length===2);
   await page.evaluate(()=>{cues.message();cues.blocked=true;roomFixture.refresh();});
@@ -85,6 +141,8 @@ module.exports=async function checkSounds(page,ids){
   await page.waitForSelector('#peerCallDialog[open]');
   await page.click('#peerAccept');
   await page.waitForSelector('#peerAccept',{state:'hidden'});
+  assert.equal(await ripple(),'none');
+  assert.equal(await page.locator('#peerCallTitle').textContent(),process.env.LINK_QA_LANG==='en'?'Connecting…':'Подключаемся…');
   const measures=await page.evaluate(async()=>{
     const ctx=new OfflineAudioContext(1,1,32000);
     return Promise.all(['message','ring'].map(async name=>{
@@ -104,5 +162,20 @@ module.exports=async function checkSounds(page,ids){
   // The call is still negotiating, but taking it must stop every ring.
   await new Promise(resolve=>setTimeout(resolve,4300));
   assert.deepEqual(await played(),['message','ring','ring','message','ring']);
+  await page.click('#peerReject');
+  await page.waitForSelector('#peerCallDialog',{state:'hidden'});
+  await page.evaluate(()=>roomFixture.enter());
+  await page.locator('#leaveBtn').waitFor();
+  await page.evaluate(()=>{cues.call();cues.incoming.mode='switch';roomFixture.refresh();});
+  await page.waitForSelector('#peerCallDialog[open]');
+  await capture('incoming-during-call');
+  await page.click('#peerAccept');
+  await page.locator('#confirmYesBtn').waitFor();
+  assert.equal(await page.locator('.call-switch-peer strong').textContent(),'Мила');
+  assert.equal(await page.locator('.call-switch-peer canvas').count(),1);
+  await capture('confirm-switch');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#peerCallDialog',{state:'hidden'});
+  assert(await page.locator('#leaveBtn').isVisible());
   console.log('PASS notification cues: foreground DM, unknown and blocked senders, profile change, bursts, incoming ring repeats and stops, settings, DND, real decoded WAV.',JSON.stringify(measures));
 };

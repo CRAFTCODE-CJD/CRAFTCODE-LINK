@@ -1,6 +1,8 @@
-# CRAFTCODE LINK 0.7.14
+# CRAFTCODE LINK 0.7.17
 
 CRAFTCODE LINK is a Windows messenger with local profiles, private messages, voice rooms, screen sharing and game LAN. Friends exchange a LINK card and confirm the connection. A group runs on its owner's computer.
+
+In a wide window, opening a group keeps your friends and direct messages on the left and places the group’s channels beside them. In Settings, preview your personal theme and chat wallpaper. Each local profile remembers its own choices. The animated wallpaper respects reduced motion in LINK and Windows.
 
 Download the Windows x64 installer or portable ZIP from [Releases](https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK/releases/latest). Each release includes its source archive and SHA-256 checksums. The application code uses the MIT license. Bundled dependencies have their own [licenses and notices](THIRD_PARTY_NOTICES.md).
 
@@ -8,7 +10,7 @@ Read the [Russian guide](README_RU.md), [contribution guide](CONTRIBUTING.md) an
 
 On first use, Home offers a theme and a shortcut to edit the local profile. Owners and administrators can choose a group picture and theme. Opening a group or its voice channel applies that theme. Home and private chats restore the personal theme.
 
-The optional **Show first steps** card introduces friends, messages and calls. Choose Later to dismiss it for this profile. Open **? → Help** at any time to search the guide or watch three short examples with subtitles. The videos are included in the application and play on request.
+The optional **Show first steps** card introduces friends, messages and calls. Choose Later to dismiss it for this profile. Open **? → Help** at any time to search the guide or watch four short examples with subtitles: direct messages, calls, Game LAN and group navigation. The videos are included in the application and play on request.
 
 In **Settings → Storage**, choose a drive or folder for your profile and chat history, or change the folder for new downloads. Profile data moves after an explicit restart; existing downloads stay where they are. The move may take some time and LINK opens when it finishes. You can inspect used/free space and clear cache without removing your history or attachments. Uninstalling clears temporary cache in both modes; deleting the profile requires the checkbox, and user-saved downloads remain.
 

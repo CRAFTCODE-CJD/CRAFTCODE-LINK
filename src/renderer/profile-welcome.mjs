@@ -17,7 +17,8 @@ export function bindProfileWelcome({$,storage,openProfile,openGuide,flush}){
   for(const option of theme.options){
     const label=document.createElement('label'),swatch=document.createElement('span'),input=document.createElement('input');
     input.type='radio';input.name='welcome-theme';input.value=option.value;
-    swatch.className='welcome-swatch';swatch.dataset.palette=option.value;swatch.ariaHidden='true';
+    swatch.className='welcome-swatch theme-preview';swatch.dataset.theme=option.value;swatch.ariaHidden='true';
+    input.onchange=()=>{if(input.checked)card.dataset.theme=input.value;};
     label.append(input,swatch,document.createTextNode(option.textContent));choices.append(label);
   }
   function finish(apply){
@@ -45,7 +46,7 @@ export function bindProfileWelcome({$,storage,openProfile,openGuide,flush}){
       if(storage.getItem(key(id))||storage.getItem('craftlink.appearance.theme.'+id)||
         me.avatar||me.cardStyle?.about||me.cardStyle?.cover && me.cardStyle.cover!=='default')return;
     }catch{return;}
-    choices.querySelector('input[value="'+theme.value+'"]').checked=true;
+    choices.querySelector('input[value="'+theme.value+'"]').checked=true;card.dataset.theme=theme.value;
     offered=true;card.hidden=false;
   };
 }

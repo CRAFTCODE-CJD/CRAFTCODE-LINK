@@ -59,51 +59,88 @@ module.exports=async({a,b})=>{
   }
   async function click(client,selector){await point(client,selector);await client.page.locator(selector).first().click();}
   async function record(name,client,actions){
-    if(process.env.LINK_RECORD_TUTORIALS!=='1'){await actions();return;}
+    const selection=(process.env.LINK_RECORD_TUTORIALS||'').split(',');
+    if(!selection.includes('1')&&!selection.includes(name)){await actions(()=>{},()=>{});return;}
     const dir=path.join(output,name+'-frames');await fs.mkdir(dir,{recursive:true});
-    let running=true,index=0;
+    let running=true,index=0,posterFrame,screen=client;
     await capture(client,path.join(dir,'00000.png'));await pause(350);
-    const loop=(async()=>{while(running){const started=Date.now();await capture(client,path.join(dir,String(index++).padStart(5,'0')+'.png'));await pause(Math.max(0,250-(Date.now()-started)));}})();
-    try{await actions();}finally{running=false;await loop;}
+    const loop=(async()=>{while(running){const started=Date.now();await capture(screen,path.join(dir,String(index++).padStart(5,'0')+'.png'));await pause(Math.max(0,250-(Date.now()-started)));}})();
+    try{await actions(()=>{posterFrame=index;},other=>{screen=other;console.log('Camera cut',name,index/4);});}finally{running=false;await loop;}
     const asset=path.resolve('src/renderer/assets/tutorials');await fs.mkdir(asset,{recursive:true});
     const ffmpeg=process.env.LINK_FFMPEG||'ffmpeg';
-    const converted=spawnSync(ffmpeg,['-hide_banner','-loglevel','error','-y','-framerate','4','-i',path.join(dir,'%05d.png'),'-vf','scale=1280:-2:flags=lanczos','-c:v','libx264','-preset','medium','-crf','23','-pix_fmt','yuv420p','-movflags','+faststart',path.join(asset,name+'.mp4')],{encoding:'utf8',windowsHide:true});
+    const converted=spawnSync(ffmpeg,['-hide_banner','-loglevel','error','-y','-framerate','4','-i',path.join(dir,'%05d.png'),'-frames:v',String(index),'-vf','scale=1280:-2:flags=lanczos','-c:v','libx264','-preset','medium','-crf','23','-pix_fmt','yuv420p','-movflags','+faststart',path.join(asset,name+'.mp4')],{encoding:'utf8',windowsHide:true});
     assert.equal(converted.status,0,converted.stderr);
-    const poster=spawnSync(ffmpeg,['-hide_banner','-loglevel','error','-y','-i',path.join(asset,name+'.mp4'),'-frames:v','1','-q:v','3',path.join(asset,name+'.jpg')],{encoding:'utf8',windowsHide:true});
+    assert(posterFrame>0&&posterFrame<index,'the example needs a poster from its demonstrated action');
+    const poster=spawnSync(ffmpeg,['-hide_banner','-loglevel','error','-y','-ss',String(posterFrame/4),'-i',path.join(asset,name+'.mp4'),'-frames:v','1','-q:v','3',path.join(asset,name+'.jpg')],{encoding:'utf8',windowsHide:true});
     assert.equal(poster.status,0,poster.stderr);
     console.log('Recorded',name,index/4,'seconds');
   }
   await a.page.click('#navFriends');
-  await record('chat',a,async()=>{
+  await record('chat',a,async markPoster=>{
     await pause(1500);await click(a,'#workspaceContacts .open-person-chat');await pause(2000);
     await point(a,'#dmInput');await a.page.locator('#dmInput').pressSequentially('Привет! Соберёмся вечером?',{delay:70});await pause(700);
     await a.page.press('#dmInput','Enter');await pause(2000);
-    await point(a,'#dmLog article');await a.page.locator('#dmLog article').first().click({button:'right'});await pause(2500);
+    await point(a,'#dmLog article');await a.page.locator('#dmLog article').first().click({button:'right'});markPoster();await pause(2500);
     await a.page.keyboard.press('Escape');await pause(1000);
   });
-  await record('call',a,async()=>{
-    await pause(1000);await click(a,'#dmCall');await b.page.locator('#peerAccept').waitFor();await pause(2000);
-    await b.page.click('#peerAccept');await a.page.waitForFunction(()=>document.querySelector('#participantsCount').textContent==='2 / 8');await pause(2000);
+  await record('call',a,async(markPoster,show)=>{
+    await pause(1000);await click(a,'#dmCall');await b.page.locator('#peerAccept').waitFor();await pause(1500);
+    show(b);await point(b,'#peerAccept');markPoster();await pause(2000);
+    await b.page.click('#peerAccept');await a.page.waitForFunction(()=>document.querySelector('#participantsCount').textContent==='2 / 8');show(a);await pause(2000);
     await click(a,'#roomConversation');await pause(1500);await a.page.fill('#dmInput','Я здесь, связь не прерывается.');await a.page.press('#dmInput','Enter');await pause(1500);
     await click(a,'#navRoom');await pause(2000);
   });
   await a.page.click('#leaveBtn');await a.page.click('#confirmYesBtn');
   for(const client of [a,b])await client.page.click('#navGame');
-  await record('lan',a,async()=>{
+  await record('lan',a,async(markPoster,show)=>{
     await pause(1000);await point(a,'#gameTitle');await a.page.fill('#gameTitle','Вечерний матч');await pause(1000);
     await click(a,'#gameCreate button');await pause(1500);await click(a,'#gameSendInvite');
-    await b.page.locator('#gameInvites').getByRole('button',{name:'Принять',exact:true}).click();
-    await a.page.waitForFunction(()=>document.querySelector('#gameCount').textContent==='2');await pause(2000);
+    const accept=b.page.locator('#gameInvites').getByRole('button',{name:'Принять',exact:true});
+    await accept.waitFor();show(b);await pause(2000);await accept.click();
+    await a.page.waitForFunction(()=>document.querySelector('#gameCount').textContent==='2');show(a);await pause(2000);
     await point(a,'#gameMessage');await a.page.fill('#gameMessage','Кто создаёт матч?');await a.page.press('#gameMessage','Enter');
-    await b.page.fill('#gameMessage','Я создам.');await b.page.press('#gameMessage','Enter');await a.page.locator('#gameHistory').getByText('Я создам.',{exact:true}).waitFor();await pause(3500);
+    await b.page.fill('#gameMessage','Я создам.');await b.page.press('#gameMessage','Enter');await a.page.locator('#gameHistory').getByText('Я создам.',{exact:true}).waitFor();markPoster();await pause(3500);
+  });
+  await a.page.click('#navFriends');await a.page.click('#groupCreate');
+  await a.page.fill('#groupField-name','Вечерняя мастерская');await a.page.click('#groupEditSubmit');
+  await a.page.locator('#groupInput:enabled').waitFor();
+  await a.page.fill('#groupInput','Встречаемся в голосовом после восьми.');
+  await a.page.press('#groupInput','Enter');
+  await a.page.locator('#groupLog').getByText('Встречаемся в голосовом после восьми.',{exact:true}).waitFor();
+  await a.page.click('#navFriends');
+  const demoGroup='#spaceList button';
+  await record('group',a,async markPoster=>{
+    await pause(1000);await click(a,demoGroup);await a.page.locator('#groupInput:enabled').waitFor();
+    await pause(1500);await click(a,'#groupOptions');
+    const appearance=a.page.locator('#groupManage').getByRole('button',{name:'Оформление группы',exact:true});
+    await appearance.click();await point(a,'#groupTheme');await a.page.selectOption('#groupTheme','terracotta');
+    await pause(1500);await click(a,'#groupAppearanceSave');await a.page.locator('#groupAppearance').waitFor({state:'hidden'});
+    if(await a.page.locator('#groupManage').isVisible())await a.page.click('#groupManageClose');
+    await a.page.locator('html[data-theme=terracotta] #groupInput').waitFor();
+    await point(a,'#groupChannels [aria-current=true]');markPoster();await pause(1350);
+    await click(a,'#quickPeople button');await a.page.locator('#dmTitle').filter({hasText:'Борис'}).waitFor();
+    await pause(1500);await click(a,demoGroup);await a.page.locator('#groupInput:enabled').waitFor();await pause(1500);
   });
   for(const client of [a,b]){
     assert(!['ready','starting'].includes((await client.page.evaluate(()=>window.craftlink.direct({op:'state'}))).game.network.phase));
     await client.page.evaluate(()=>document.querySelector('#tutorial-pointer')?.remove());
   }
   // Real local media must decode, not only return a successful file URL.
+  async function checkCaptions(page,name,language){
+    await page.waitForFunction(({name,language})=>{
+      const video=document.querySelector('#helpVideo'),track=video.textTracks[0];
+      return video.currentSrc.endsWith('/'+name+'.mp4') && Number.isFinite(video.duration) &&
+        track?.language===language && track.cues?.length>0;
+    },{name,language},{timeout:6000});
+    const times=await page.locator('#helpVideo').evaluate(video=>{
+      const cues=Array.from(video.textTracks[0].cues);
+      return {duration:video.duration,end:cues.at(-1).endTime,first:cues[0].startTime};
+    });
+    assert.equal(times.first,0);
+    assert(Math.abs(times.end-times.duration)<=0.25,'captions must cover the example: '+name+' '+language);
+  }
   await a.page.click('#networkHelpBtn');await a.page.click('#helpExamplesTitle');
-  for(const name of ['chat','call','lan']){
+  for(const name of ['chat','call','lan','group']){
     await a.page.click('[data-clip='+name+']');
     const playback=await a.page.locator('#helpVideo').evaluate(async video=>{
       await video.play();await new Promise(resolve=>setTimeout(resolve,900));
@@ -111,6 +148,7 @@ module.exports=async({a,b})=>{
       video.pause();return result;
     });
     assert(playback.width>0 && playback.frames>0 && playback.time>0,'tutorial must decode '+JSON.stringify(playback));
+    await checkCaptions(a.page,name,'ru');
     console.log('PASS tutorial decoded',name,JSON.stringify(playback));
   }
   await screenshot(a,'tutorial-lan');
@@ -132,6 +170,11 @@ module.exports=async({a,b})=>{
   }
   await b.page.emulateMedia({reducedMotion:'reduce'});await b.page.click('#helpExamplesTitle');
   assert(await b.page.locator('#helpVideo').evaluate(video=>video.paused && !video.autoplay));
+  for(const name of ['chat','call','lan','group']){
+    await b.page.click('[data-clip='+name+']');
+    await b.page.locator('#helpVideo').evaluate(async video=>{await video.play();video.pause();});
+    await checkCaptions(b.page,name,'en');
+  }
   await b.page.click('#closeNetworkDialog');
   console.log('PASS first-run guide is optional, per-profile and persistent; Help search, RU/EN, keyboard dismissal, responsive dialog, manual-only tutorials, no live network adapter.');
 };

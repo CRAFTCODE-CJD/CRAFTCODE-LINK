@@ -1,4 +1,5 @@
 import {tr} from './locale.mjs';
+import {chooseCrop} from './avatar-crop.mjs';
 import {bindPersonalTheme} from './theme.mjs';
 
 const side=48;
@@ -47,7 +48,7 @@ export function imageBounds(bytes){
   }
   return null;
 }
-export async function thumbnail(file){
+export async function thumbnail(file,signal,round){
   const invalid=()=>new Error(tr('Выберите PNG или JPEG до 8 МБ и 16 мегапикселей.'));
   if(!file.size||file.size>8*1024*1024)throw invalid();
   const bytes=new Uint8Array(await file.arrayBuffer()),bounds=imageBounds(bytes);
@@ -55,20 +56,15 @@ export async function thumbnail(file){
   let bitmap;
   try{
     bitmap=await createImageBitmap(new Blob([bytes],{type:bounds.type}));
-    const crop=Math.min(bitmap.width,bitmap.height);
-    const canvas=document.createElement('canvas');canvas.width=canvas.height=side;
-    const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#263444';ctx.fillRect(0,0,side,side);
-    ctx.imageSmoothingQuality='high';
-    ctx.drawImage(bitmap,(bitmap.width-crop)/2,(bitmap.height-crop)/2,crop,crop,0,0,side,side);
-    const rgba=ctx.getImageData(0,0,side,side).data;let rgb='';
-    for(let i=0;i<rgba.length;i+=4)rgb+=String.fromCharCode(rgba[i],rgba[i+1],rgba[i+2]);
-    return btoa(rgb);
-  }catch{throw invalid();}finally{bitmap?.close();}
+  }catch{throw invalid();}
+  try{return await chooseCrop(bitmap,side,signal,round);}
+  finally{bitmap.close();}
 }
 
 export function bindProfileAppearance({$,api,direct,onError}){
-  const input=$('avatarFile');let busy=false;
-  const syncTheme=bindPersonalTheme($('profileTheme'));
+  const input=$('avatarFile');let busy=false,editPhoto;
+  $('settingsDialog').addEventListener('close',()=>editPhoto?.abort());
+  const syncTheme=bindPersonalTheme($('profileTheme'),$('chatWallpaper'),$('chatAppearancePreview'));
   const about=$('profileAboutInput'),choices=$('profileCoverChoices'),saveStyle=$('saveProfileStyle');
   let editOwner,savedStyle,cover='default',saving=false;
   const coverNames={default:'Как в теме',lagoon:'Лагуна',twilight:'Сумерки',ember:'Янтарь',glacier:'Ледник',blossom:'Цветение'};
@@ -82,6 +78,7 @@ export function bindProfileAppearance({$,api,direct,onError}){
   about.oninput=()=>refresh();
   function refresh(){
     const local=direct()?.active(),me=local?direct().raw().me:null;
+    if(editOwner!==me?.id)editPhoto?.abort();
     syncTheme(me?.id);
     $('avatarEditor').hidden=!me;
     paintAvatar($('avatarPreview'),me?.name,me?.avatar);
@@ -112,17 +109,15 @@ export function bindProfileAppearance({$,api,direct,onError}){
     if(!owner||busy)return;
     busy=true;refresh();
     try{
-      const pixels=file?await thumbnail(file):null;
+      editPhoto=new AbortController();
+      const pixels=file?await thumbnail(file,editPhoto.signal,true):null;
+      if((file&&!pixels)||editPhoto.signal.aborted||direct()?.raw().me?.id!==owner)return;
       await api.direct({op:'set-avatar',owner,pixels});
       await direct().sync();
-    }catch(e){onError(e);}finally{busy=false;refresh();}
+    }catch(e){onError(e);}finally{editPhoto=null;busy=false;refresh();}
   }
   $('chooseAvatar').onclick=()=>input.click();
   input.onchange=()=>{const file=input.files[0];input.value='';if(file)change(file);};
   $('removeAvatar').onclick=()=>change(null);
-  const wallpaper=$('chatWallpaper'),options=['plain','dots','mesh'],key='craftlink.appearance.wallpaper';
-  let value=options[0];try{const stored=localStorage.getItem(key);if(options.includes(stored))value=stored;}catch{}
-  document.documentElement.dataset.wallpaper=wallpaper.value=value;
-  wallpaper.onchange=()=>{if(options.includes(wallpaper.value)){document.documentElement.dataset.wallpaper=wallpaper.value;try{localStorage.setItem(key,wallpaper.value);}catch{}}};
   return refresh;
 }

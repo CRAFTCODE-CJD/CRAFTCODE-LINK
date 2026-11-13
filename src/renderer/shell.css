@@ -8,10 +8,11 @@
   grid-template-areas:"spaces sections main" "spaces context main" "spaces profile dock";
 }
 .app-shell[data-scope="group"] {
-  --context-width:clamp(205px,18.5vw,282px);
-  grid-template-columns:var(--space-width) var(--context-width) minmax(0,1fr);
-  grid-template-rows:minmax(0,1fr) auto;
-  grid-template-areas:"spaces context main" "spaces profile dock";
+  grid-template-columns:var(--space-width) var(--context-width) clamp(174px,16vw,246px) minmax(0,1fr);
+  grid-template-areas:"spaces sections channels main" "spaces context channels main" "spaces profile dock dock";
+}
+@media (min-width:881px) {
+  .app-shell[data-scope="group"]:not(.in-call) #groupContext {grid-row:1/-1}
 }
 .app-shell:not(.in-call) :is(#directoryPage,#groupsPage,#messagesPage,#roomPage) {grid-row:1/-1}
 #groupRail,#navRail,#friendsContext,#groupContext,#dmContext,#profileDock {min-width:0;min-height:0;box-sizing:border-box}
@@ -43,15 +44,19 @@
 #sidebarSearch .dm-search {margin:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:7px;min-height:32px}
 #sidebarSearch .icon {flex:none;width:15px;height:15px}
 #navRail nav {gap:2px}
-#navRail .nav-item {padding:8px;min-height:36px;gap:9px}
+#navRail .nav-item {position:relative;padding:8px 11px;min-height:36px;gap:10px}
 #navRail .nav-item>span {display:inline;min-width:0;overflow:hidden;text-overflow:ellipsis}
 #navRail nav button {justify-content:flex-start}
-#navRail #homeDirectory[data-active] {color:var(--accent);background:var(--soft)}
-.app-shell[data-scope="group"] #navRail {display:none}
+#navRail .nav-item[aria-current="page"] {color:var(--accent);background:var(--soft);font-weight:600}
+#navRail .nav-item[aria-current="page"]::before {
+  content:"";position:absolute;inset-inline-start:0;width:3px;height:16px;border-radius:2px;background:var(--accent);
+}
 :is(#friendsContext,#dmContext,#groupContext) {
-  grid-area:context;overflow:auto;scrollbar-width:thin;
+  overflow:auto;scrollbar-width:thin;
   border-inline-end:1px solid var(--border-soft);background:var(--nav);
 }
+#friendsContext,#dmContext {grid-area:context}
+#groupContext {grid-area:channels;background:color-mix(in srgb,var(--nav) 80%,var(--panel))}
 :is(#friendsContext,#dmContext,#groupContext)[hidden],#profileDock [hidden],#contextScrim[hidden] {display:none!important}
 #friendsContext {display:flex;flex-direction:column;padding:0 8px}
 .context-heading {flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 5px 10px}
@@ -97,12 +102,12 @@
 #voiceDockStatus {display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border-soft)}
 #voiceDockStatus #statusBadge {min-width:0;margin-right:auto;font-size:10px;overflow:hidden;text-overflow:ellipsis}
 #voiceDockStatus button {padding:3px 5px;min-height:25px;height:auto;font-size:10px}
-.app-shell>.app-header,#contextScrim {display:none}
+.app-shell>.app-header,#contextScrim,#contextToggle span,#contactDrawerToggle[hidden] {display:none}
 :is(#groupRail,#navRail,#profileDock,#friendsContext,#dmContext) button:focus-visible {outline:2px solid var(--accent);outline-offset:-1px}
 @media (max-width:880px) {
   .app-shell {--section-width:53px;--space-width:54px}
   #navRail {align-items:center;padding:12px 5px;max-height:none}
-  #navRail .nav-item {justify-content:center}
+  #navRail .nav-item {justify-content:center;padding:8px}
   #sidebarSearch,#navRail .nav-item>span {display:none}
   #navRail .request-count {position:absolute;right:0;top:0}
 }
@@ -113,14 +118,20 @@
     grid-template-rows:38px minmax(0,1fr) auto;
     grid-template-areas:"spaces sections header header" "spaces sections main main" "profile profile profile dock";
   }
-  .app-shell[data-scope="group"] {--section-width:0px}
   .app-shell:not(.in-call) :is(#directoryPage,#groupsPage,#messagesPage,#roomPage) {grid-row:2}
   .app-shell>.app-header {display:flex;gap:8px;padding:0 8px;background:var(--bg);border-block-end:1px solid var(--border-soft);align-items:center}
-  #contextToggle {width:29px;height:29px}
+  .app-shell[data-scope="personal"] #contextToggle {width:29px;height:29px}
+  .app-shell[data-scope="group"] .app-header>button {
+    display:inline-flex;align-items:center;gap:6px;width:auto;height:30px;padding:3px 8px;
+    background:transparent;border:0;border-radius:6px;color:var(--muted);font-size:12px;
+  }
+  .app-shell[data-scope="group"] .app-header>button:is(:hover,[aria-expanded="true"]) {background:var(--soft);color:var(--accent)}
+  .app-shell[data-scope="group"] #contextToggle span {display:inline}
+  .app-shell[data-scope="group"] #crumb {flex:1;min-width:0;text-align:end}
   #crumb {font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .app-shell:not(.context-open)>:is(#friendsContext,#groupContext,#dmContext) {display:none}
-  .app-shell.context-open>:is(#friendsContext,#groupContext,#dmContext):not([hidden]) {
-    position:absolute;z-index:16;inset-block:38px 0;inset-inline-start:calc(var(--space-width) + var(--section-width));
+  .app-shell>:is(#friendsContext,#groupContext,#dmContext):not(.drawer-open) {display:none}
+  .app-shell>:is(#friendsContext,#groupContext,#dmContext).drawer-open {
+    grid-area:auto;position:absolute;z-index:16;inset-block:38px 0;inset-inline-start:calc(var(--space-width) + var(--section-width));
     width:min(285px,calc(100% - var(--space-width) - var(--section-width) - 20px));height:auto;max-height:none;
     box-shadow:5px 0 18px #0004;
   }
@@ -133,8 +144,6 @@
   #groupContext {align-content:start}
   #profileDock {z-index:2}
   #voiceDockStatus {max-height:62px;overflow-y:auto}
-  .app-shell[data-scope="group"] .profile-tools {gap:1px;padding-inline:3px}
-  .app-shell.in-call[data-scope="group"] #profileBtn>span:not(.local-avatar) {display:none}
 }
 .app-shell.cinema {grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"main" "dock"}
 .app-shell.cinema>:is(#groupRail,#navRail,#friendsContext,#groupContext,#dmContext,#profileDock,.app-header) {display:none}
@@ -145,56 +154,70 @@
 }
 #directoryPage .directory-heading,#peopleDirectory {max-width:none}
 :is([data-view="friends"],[data-view="requests"]) .directory-heading {
-  gap:15px;min-height:57px;margin:0;padding:10px 20px;justify-content:flex-start;
-  border-bottom:1px solid var(--border-soft);flex-wrap:wrap;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 12px;
+  padding:18px clamp(14px,2.1cqw,28px) 0;margin:0;
+  border-bottom:1px solid var(--border-soft);
 }
-:is([data-view="friends"],[data-view="requests"]) .directory-heading>div:first-child {display:flex;align-items:center;gap:8px;flex:none}
-:is([data-view="friends"],[data-view="requests"]) .directory-heading h1 {font-size:17px;letter-spacing:-.02em;margin:0}
-#directoryCount {color:var(--muted);font-size:11px}
-.app-shell #bookFilters {margin:0;gap:2px}
+.app-shell[data-view="requests"] .directory-heading {padding-bottom:15px}
+:is([data-view="friends"],[data-view="requests"]) .directory-heading>div:first-child {display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px}
+:is([data-view="friends"],[data-view="requests"]) .directory-heading h1 {font-size:24px;line-height:1.15;letter-spacing:-.03em;margin:0}
+#directoryCount {display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;line-height:1.3;margin:0}
+#directoryCount:not(:empty)::before {content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.app-shell #bookFilters {grid-column:1/-1;grid-row:2;display:flex;flex-wrap:nowrap;overflow-x:auto;margin:0;gap:6px;scrollbar-width:thin}
 .app-shell #bookFilters[hidden] {display:none}
-#bookFilters button {font-size:13px;min-height:30px;padding:3px 9px}
-#bookFilters button[aria-pressed="true"] {background:var(--surface);color:var(--text)}
-.directory-heading #linkFriends {min-height:30px;padding:4px 10px;font-size:12px}
-#peopleDirectory {align-items:stretch;gap:0;grid-template-columns:minmax(0,1fr) minmax(190px,26%);min-height:calc(100% - 60px)}
+#bookFilters button {position:relative;flex:none;min-height:34px;padding:4px 10px 9px;font-size:13px;border-radius:6px 6px 0 0}
+#bookFilters button:hover {color:var(--text);background:var(--surface-hover)}
+#bookFilters button[aria-pressed="true"] {color:var(--accent);background:transparent;font-weight:650}
+#bookFilters button[aria-pressed="true"]::after {content:"";position:absolute;inset:auto 5px 0;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+#bookFilters button:focus-visible {outline-offset:-2px}
+.directory-heading #linkFriends {grid-column:2;grid-row:1;min-height:34px;padding:6px 13px;font-size:13px}
+#peopleDirectory {flex:1;margin:0;align-items:stretch;gap:0;grid-template-columns:minmax(0,1fr) minmax(210px,26%)}
+.app-shell:is([data-view="friends"],[data-view="requests"]) #directoryPage:not([hidden]) {display:flex;flex-direction:column}
 #workspaceBook,#workspaceRequests {padding:16px clamp(13px,2.1cqw,28px);background:transparent;border:0;border-radius:0}
 #workspaceRequests {align-content:start}
 #workspaceRequests .surface {border:0;background:transparent;padding:0}
-#workspaceBook .book-tools {padding-bottom:16px;align-items:center}
-#workspaceBook .book-tools input,#workspaceBook .book-tools select {border-color:var(--border-soft);height:34px;font-size:13px;background:var(--nav)}
+#workspaceBook .book-tools {padding-bottom:10px;align-items:center}
+#workspaceBook .book-tools input,#workspaceBook .book-tools select {border-color:var(--border);height:36px;font-size:13px;background:var(--nav)}
+#workspaceBook .book-tools .book-search {position:relative;flex:1;min-width:0}
+.book-search .icon {position:absolute;left:11px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+#workspaceBook .book-search input {width:100%;padding-inline-start:35px}
 #workspaceBook .book-tools select {max-width:40%;color:var(--muted)}
-#workspaceContacts .contact-card {flex-wrap:nowrap;gap:6px;border:0;border-top:1px solid var(--border-soft);padding:7px 3px;min-height:58px}
-#workspaceContacts .contact-card:hover,#workspaceContacts .contact-card:focus-within {background:color-mix(in srgb,var(--surface) 60%,transparent)}
+#workspaceContacts .contact-card {flex-wrap:nowrap;gap:4px;border:0;border-bottom:1px solid var(--border-soft);padding:5px 6px;min-height:57px}
+#workspaceContacts .contact-card:is(:hover,:focus-within) {background:var(--panel);border-radius:8px}
 #workspaceContacts .contact-copy {text-align:start}
 #workspaceContacts .contact-avatar {position:relative;width:37px;flex:0 0 37px;height:37px;border-radius:50%;overflow:visible;background:var(--soft);color:var(--accent)}
 #workspaceContacts .contact-avatar canvas {border-radius:inherit}
-#workspaceContacts [data-online] .contact-avatar::after {content:"";position:absolute;bottom:0;right:0;background:var(--dim);width:9px;height:9px;border:2px solid var(--bg);border-radius:50%}
-#workspaceContacts [data-online="true"] .contact-avatar::after {background:var(--accent)}
+#workspaceContacts [data-online] .contact-avatar::after {content:"";position:absolute;bottom:0;right:0;box-sizing:border-box;background:var(--bg);width:10px;height:10px;border:2px solid var(--dim);border-radius:50%;box-shadow:0 0 0 2px var(--bg)}
+#workspaceContacts [data-online="true"] .contact-avatar::after {background:var(--accent);border-color:transparent}
 #workspaceContacts .open-person-chat {padding:3px 6px 3px 1px;gap:11px}
 #workspaceContacts .open-person-chat:hover {background:transparent}
-#workspaceContacts .contact-copy strong {font-size:14px}
+#workspaceContacts .contact-copy strong {font-size:15px;line-height:1.3}
 #workspaceContacts .contact-copy small {font-size:12px;color:var(--muted)}
 #workspaceContacts .contact-card>.button {min-height:30px;padding:3px 8px;border:0;border-radius:7px;background:var(--surface);color:var(--muted)}
 #workspaceContacts .contact-card>.button:not(:disabled):hover {background:var(--surface-hover);color:var(--text)}
-#workspaceContacts .contact-card>.directory-icon {width:31px;height:31px;padding:0;border-radius:50%}
+#workspaceContacts .contact-card>.directory-icon {flex:none;width:32px;height:32px;padding:0;border-radius:8px;background:transparent}
 #workspaceContacts .contact-card>.directory-icon svg {width:16px;height:16px}
-#workspaceContacts [aria-pressed="true"] {color:var(--accent)}
-#peopleDirectory .directory-side {border-left:1px solid var(--border-soft);padding:19px 14px;display:flex;flex-direction:column;gap:7px}
+#workspaceContacts .directory-icon[aria-pressed="true"] {color:var(--accent)}
+#workspaceContacts .directory-icon[aria-pressed="true"] svg {fill:currentColor}
+#peopleDirectory .directory-side {border-left:1px solid var(--border-soft);background:color-mix(in srgb,var(--nav) 65%,var(--bg));padding:18px 14px;display:flex;flex-direction:column;gap:5px}
 .home-activity {padding:0 0 16px;margin:0 0 6px;border-bottom:1px solid var(--border-soft)}
 .home-activity h2 {font-size:16px;letter-spacing:-.02em;margin:0 4px 10px}
-#homeActivities .context-contact {padding:10px 7px;background:var(--panel);margin-top:5px}
+#homeActivities .context-contact {padding:11px 9px;background:var(--panel);border:1px solid var(--border-soft);margin-top:5px}
+#homeActivities .context-contact::after {content:"";width:6px;height:6px;border:solid var(--muted);border-width:1.5px 1.5px 0 0;transform:rotate(45deg);margin-inline:2px;flex:none}
 #homeActivities .context-contact:hover {background:var(--surface-hover)}
 #homeActivities .collection-empty {padding:4px 2px;margin:0;font-size:12px}
 #peopleDirectory .directory-side .fallback {margin:9px 0 0;padding:9px 3px;border:0;border-radius:0;border-top:1px solid var(--border-soft);background:transparent}
 #peopleDirectory .directory-side .fallback summary {font-size:12px;color:var(--muted)}
-.directory-side :is(.home-card-action,.home-room-action) .button {min-height:30px;background:transparent;border:0;padding:5px 7px;justify-content:flex-start;color:var(--muted)}
+.directory-side :is(.home-card-action,.home-room-action) .button {display:flex;align-items:center;gap:8px;min-height:34px;width:100%;background:transparent;border:0;padding:5px 8px;justify-content:flex-start;color:var(--text);font-size:13px}
+.directory-side :is(.home-card-action,.home-room-action) .icon {width:16px;height:16px;color:var(--muted)}
 .directory-side :is(.home-card-action,.home-room-action) .button:hover {color:var(--text);background:var(--surface-hover)}
 .directory-side .home-card-action span {display:block;overflow-wrap:anywhere}
 @container (max-width:670px) {
   #peopleDirectory {display:flex;flex-direction:column;min-height:0}
   #peopleDirectory .directory-side {border-left:0;border-top:1px solid var(--border-soft);padding:14px}
   #workspaceBook,#workspaceRequests {padding:12px 14px}
-  :is([data-view="friends"],[data-view="requests"]) .directory-heading {gap:6px 10px;padding:8px 14px}
+  :is([data-view="friends"],[data-view="requests"]) .directory-heading {gap:8px;padding:12px 14px 0}
+  :is([data-view="friends"],[data-view="requests"]) .directory-heading h1 {font-size:21px}
 }
 @media (min-width:881px) {
   #navRail nav button.nav-item {justify-content:flex-start}
@@ -204,6 +227,6 @@
 
 #profileAvatar[data-status] {position:relative;overflow:visible}
 #profileAvatar[data-status]::after {content:"";position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;background:var(--accent);border:2px solid var(--nav);border-radius:50%}
-#profileAvatar[data-status="away"]::after,.dm-avatar[data-status="away"]::after,#workspaceContacts [data-status="away"] .contact-avatar::after,.feed-presence.away {background:#e6b854}
-#profileAvatar[data-status="busy"]::after,.dm-avatar[data-status="busy"]::after,#workspaceContacts [data-status="busy"] .contact-avatar::after,.feed-presence.busy {background:#ed777b}
+#profileAvatar[data-status="away"]::after,.dm-avatar[data-online="true"][data-status="away"]::after,#workspaceContacts [data-online="true"][data-status="away"] .contact-avatar::after,.feed-presence.away {background:#e6b854}
+#profileAvatar[data-status="busy"]::after,.dm-avatar[data-online="true"][data-status="busy"]::after,#workspaceContacts [data-online="true"][data-status="busy"] .contact-avatar::after,.feed-presence.busy {background:#ed777b}
 #profileAvatar[data-status="invisible"]::after {background:var(--dim)}

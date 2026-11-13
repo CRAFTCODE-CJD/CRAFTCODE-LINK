@@ -119,7 +119,9 @@ const soundMenu=participantSoundMenu({state,mixer,mix,createRow:createMixerRow,c
   micDisabled:()=>$('micBtn').disabled,canViewPerson:()=>direct?.active(),openPerson:peer=>{
     const session=state.session,data=direct.raw();
     const person=(session?.direct||session?.groupVoice)&&data.mixRoom&&data.mixRoom===session.mixRoom?data.roomContacts?.[peer.id]:undefined;
-    direct.participant({id:person||undefined,name:peer.name},()=>state.session===session&&state.peers.some(p=>p.id===peer.id));
+    const introduced=session?.direct&&data.mixRoom===session.mixRoom?data.roomPeople?.[peer.id]:null;
+    const card=introduced&&(!person||introduced.id===person)?introduced:{id:person||undefined,name:peer.name};
+    direct.participant(card,()=>state.session===session&&state.peers.some(p=>p.id===peer.id));
   }});
 const portraits=roomPortraits({grid:$('voiceGrid'),state,direct:()=>direct,mixer,mix,soundMenu,
   watch:id=>{if(id!==state.session?.selfId)closeStudio();state.selectedPeerId=id;renderStage();},
@@ -147,10 +149,10 @@ function saveSettings() {
   try { localStorage.setItem('craftlink.settings.v1', JSON.stringify(settings)); } catch {}
 }
 let toastTimer;
-function toast(message, isError = false, onOpen) {
+function toast(message, isError = false, onOpen,actionLabel='Открыть приглашение') {
   $('toast').textContent = String(message);
   if(onOpen){
-    const button=node('button','button button-secondary',tr('Открыть приглашение'));
+    const button=node('button','button button-secondary',tr(actionLabel));
     button.onclick=()=>{$('toast').hidden=true;onOpen();};
     $('toast').append(' ',button);
   }
@@ -176,13 +178,16 @@ function node(tag, className, text) {
 }
 function showDialog(id) { const d = $(id); if (!d.open) d.showModal(); }
 function closeDialog(id) { $(id).close(); }
-function confirmAction(title, message, confirmLabel = tr('Продолжить'), destructive=false, option) {
+function confirmAction(title, message, confirmLabel = tr('Продолжить'), destructive=false, option, signal) {
   return new Promise(resolve => {
+    if(signal?.aborted){resolve(false);return;}
     const dialog = node('dialog', 'modal');
     const heading = node('h2', '', title);
     heading.id = 'confirmActionTitle';
     dialog.setAttribute('aria-labelledby', heading.id);
     const text = node('p', 'modal-description', message);
+    text.id = 'confirmActionDetail';
+    dialog.setAttribute('aria-describedby',text.id);
     const actions = node('div', 'modal-actions');
     const cancel = node('button', 'button button-secondary', tr('Отмена'));
     const confirm = node('button', destructive ? 'button button-danger' : 'button button-primary', confirmLabel);
@@ -191,10 +196,13 @@ function confirmAction(title, message, confirmLabel = tr('Продолжить')
     const finish = result => {
       if (settled) return;
       settled = true;
+      signal?.removeEventListener('abort',cancelReview);
       if (dialog.open) dialog.close();
       dialog.remove();
       resolve(result);
     };
+    const cancelReview = () => finish(false);
+    signal?.addEventListener('abort',cancelReview,{once:true});
     cancel.addEventListener('click', () => finish(false));
     confirm.addEventListener('click', () => finish(true));
     dialog.addEventListener('cancel', () => finish(false));
@@ -246,7 +254,7 @@ const roomChat=createChatView({
   }
 });
 const composer=chatComposer({$,room:()=>state.media?.files,onError:errorToast,micDevice:()=>settings.micDevice});
-bindAttachmentDraft({area:$('roomSidebar'),input:$('chatInput'),onError:errorToast,
+const validateRoomAttachment=bindAttachmentDraft({area:$('roomSidebar'),input:$('chatInput'),onError:errorToast,
   scope:()=>state.media?.files?.scope && !$('roomPage').hidden && !$('roomSidebar').hidden ?
     {type:'room',scope:state.media.files.scope,key:state.media.files.scope}:null,
   async publish(target,file,caption){
@@ -475,6 +483,7 @@ async function disconnectRoom(notify = true, nativeAlreadyClosed = false) {
   $('sourcesGrid').replaceChildren();
   state.media?.close();
   state.media = null;
+  validateRoomAttachment();
   state.screenStream?.getTracks().forEach(t => t.stop());
   state.screenStream = null;
   state.sharing = false;
@@ -1487,6 +1496,7 @@ function drawChatPanel(){
   const visible=!!state.session && (chatPreference??!compactRoom);
   const shown=visible && $('studioDock').hidden;
   chat.hidden=!visible;toggle.hidden=!state.session;
+  validateRoomAttachment();
   toggle.setAttribute('aria-expanded',String(shown));
   const label=tr(shown?'Закрыть чат комнаты':'Открыть чат комнаты');
   toggle.title=label;toggle.setAttribute('aria-label',label);
@@ -1812,7 +1822,7 @@ async function init() {
   internet=internetPanel({showRequests:()=>workspace.navigate('requests'),routeCue: sound => state.session && mixer.routeLocal(sound),localActive:()=>direct?.active(),switchFromLink,identityChanged,notifyRequests,contactMenu,api,$,node,showDialog,closeDialog,confirmAction,action,state,settings,saveSettings,connect:connectRoom,disconnect:disconnectRoom,openManual:openRoomDialog,
     event:e=>{if(!state.ready){if(state.starting)state.queuedEvents.push(e);}else if(state.session?.internet)enqueueEvent(e);},errorToast,toast,connectionChanged:renderAvailability});
   direct=directPanel({openChat:id=>workspace.openChat(id),showProfile:()=>openSettings('profile'),showFriends:filter=>workspace.showFriends(filter),showRequests:id=>workspace.showRequests(id),setMethod,identityChanged,inviteFriends:()=>workspace.invite(),notifyRequests,contactMenu,disconnect:disconnectRoom,api,$,state,settings,saveSettings,connect:connectRoom,internet:()=>internet,node,showDialog,closeDialog,confirmAction,toast});
-  workspace=createWorkspace({$, state, direct, internet, composer, closeStudio, confirmAction, action, actionError:errorToast, openGroupVoice, removeRequest:async(c,local)=>{
+  workspace=createWorkspace({$, state, direct, internet, composer, closeStudio, openSettings, confirmAction, action, actionError:errorToast, openGroupVoice, removeRequest:async(c,local)=>{
     try{
       if(!await confirmAction(tr('Убрать отправленную заявку?'),c.name+' · '+tr('Друг мог уже получить уведомление.'),tr('Убрать из списка')))return;
       if(local && direct.active() && direct.raw().friends.some(f=>f.id===c.id && f.state==='invited')){await api.direct({op:'forget',id:c.id});await direct.sync();}
@@ -1837,7 +1847,7 @@ async function init() {
     if(event.type==='release-updated'){projectUpdates?.draw(event.state);return;}
     if(event.type==='window-hidden'){composer.stopCapture();cameraPreview.stop();return;}
     if(event.type==='window-focused'){workspace.windowFocused();return;}
-    if(event.type==='tray-game'){workspace.navigate('game');return;}
+    if(event.type==='tray-game'){void direct.sync().then(()=>workspace.openGameNotice(event.id)).catch(errorToast);return;}
     if(event.type==='tray-chat'){
       void direct.sync().then(()=>{
         const data=direct.raw();
@@ -1846,7 +1856,11 @@ async function init() {
       return;
     }
     if(event.type==='game-notice'){toast(event.name+' · '+event.text);return;}
-    if(event.type==='game-invited'){if(!settings.dnd && document.hasFocus() && !document.fullscreenElement)toast(event.name+' · '+tr('Приглашение в игровую LAN'),false,()=>workspace.navigate('game'));return;}
+    if(event.type==='game-invited'||event.type==='game-requested'){
+      const request=event.type==='game-requested';
+      if(!settings.dnd&&document.hasFocus()&&!document.fullscreenElement)toast(event.name+' · '+tr(request?'Просится в игровую LAN':'Приглашение в игровую LAN'),false,()=>workspace.openGameNotice(event.id),request?'Открыть заявку':'Открыть приглашение');
+      return;
+    }
     if(event.type==='game-ended')return;
     if(event.type==='tray-requests'){
       workspace.navigate('requests',!document.querySelector('dialog:modal'));

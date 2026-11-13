@@ -1,7 +1,8 @@
 'use strict';
 const {randomUUID,createHash}=require('node:crypto'),{tr}=require('../native-language.cjs');
 const {validPixels}=require('../direct/avatars.cjs');
-const themes=new Set(['personal','default','light','dusk','forest']);
+const extendedThemes=new Map([['cobalt','default'],['terracotta','dusk'],['paper','light']]);
+const themes=new Set(['personal','default','light','dusk','forest',...extendedThemes.keys()]);
 const avatarKey=pixels=>createHash('sha256').update(pixels,'ascii').digest('hex');
 const uuid=v=>typeof v==='string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 const key=v=>typeof v==='string' && /^[a-f0-9]{64}$/.test(v);
@@ -28,7 +29,7 @@ function access(g,channel,person,type){
 function project(g,person){
   const m=member(g,person);if(!m)throw denied();
   if(g.theme!==undefined&&!themes.has(g.theme)||g.avatar!=null&&!validPixels(g.avatar))throw invalid();
-  return {id:g.id,name:g.name,owner:g.owner,device:g.device,epoch:g.epoch,revision:g.revision,role:m.role,appearanceVersion:1,
+  return {id:g.id,name:g.name,owner:g.owner,device:g.device,epoch:g.epoch,revision:g.revision,role:m.role,appearanceVersion:1,paletteVersion:1,renameVersion:1,
     ...(g.theme&&g.theme!=='personal'?{theme:g.theme}:{}),...(g.avatar?{avatarKey:avatarKey(g.avatar)}:{}),
     members:g.members,channels:g.channels.filter(c=>access(g,c.id,person)).map(c=>staff(m)?c:{...c,allow:c.allow.includes(person)?[person]:[]}),
     bans:staff(m)?g.bans:[]};
@@ -85,6 +86,9 @@ function change(g,person,action,a,friend){
   if(!staff(me))throw denied();
   const target=member(g,a.person);
   switch(action){
+    case 'rename':
+      if(Object.keys(a).length!==1 || !Object.hasOwn(a,'name'))throw invalid();
+      g.name=label(a.name);return true;
     case 'appearance':{
       if(!Object.keys(a).length||Object.keys(a).some(k=>k!=='theme'&&k!=='avatar'))throw invalid();
       if(Object.hasOwn(a,'theme')&&!themes.has(a.theme)||Object.hasOwn(a,'avatar')&&a.avatar!==null&&!validPixels(a.avatar))throw invalid();
@@ -128,7 +132,7 @@ function validateView(v){
     !Number.isSafeInteger(v.revision)||v.revision<1||!roles.includes(v.role)||!Array.isArray(v.members)||v.members.length>32||
     !Array.isArray(v.channels)||v.channels.length>24||!Array.isArray(v.bans)||v.bans.length>64)throw invalid();
   const {theme,avatarKey:badge,appearanceVersion,...base}=v;
-  if(appearanceVersion!==undefined&&appearanceVersion!==1||theme!==undefined&&!themes.has(theme)||badge!==undefined&&!key(badge)||
+  if(appearanceVersion!==undefined&&appearanceVersion!==1||v.paletteVersion!==undefined&&v.paletteVersion!==1||v.renameVersion!==undefined&&v.renameVersion!==1||theme!==undefined&&!themes.has(theme)||badge!==undefined&&!key(badge)||
     Object.hasOwn(v,'avatar')||Object.hasOwn(v,'avatarRev'))throw invalid();
   label(v.name);const people=new Set(),channels=new Set();
   for(const m of v.members){
@@ -144,4 +148,4 @@ function validateView(v){
   if(Buffer.byteLength(JSON.stringify(base))>35000)throw full();
   return v;
 }
-module.exports={uuid,key,denied,invalid,full,roles,staff,member,label,create,access,project,append,page,change,removeMember,validateView,avatarKey};
+module.exports={uuid,key,denied,invalid,full,roles,staff,member,label,create,access,project,append,page,change,removeMember,validateView,avatarKey,extendedThemes};

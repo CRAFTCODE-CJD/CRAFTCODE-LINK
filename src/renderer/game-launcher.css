@@ -1,0 +1,11 @@
+.lan-launcher { min-width:0; margin-top:16px; }
+.lan-launch-body { display:grid; gap:10px; margin-top:10px; }
+.lan-launcher p { margin:0; overflow-wrap:anywhere; }
+.lan-launcher select { width:100%; min-width:0; }
+#gameLaunchOptions { display:grid; gap:10px; min-width:0; }
+.lan-launch-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.lan-launch-actions .button { min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.lan-preparation { display:grid; gap:6px; margin:10px 0 0; padding:0; list-style:none; }
+.lan-preparation li { display:flex; align-items:flex-start; gap:8px; min-width:0; overflow-wrap:anywhere; }
+.lan-preparation li::before { content:'○'; flex:0 0 1em; }
+.lan-preparation li[data-ready=true]::before { content:'✓'; color:var(--accent,#c8f069); }

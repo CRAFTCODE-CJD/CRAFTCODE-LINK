@@ -7,15 +7,17 @@ import {bindChatTools} from './chat-record.mjs';
 function element(tag,text,cls){
   const el=document.createElement(tag);if(text)el.textContent=text;if(cls)el.className=cls;return el;
 }
-export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
+export function gamePanel({$,api,direct,state,composer,actionError,confirmAction}){
   let last='',noticeIds,chatRoom,visible=false;
   const tabs=[$('gameChatTab'),$('gameNetworkTab')],session=$('gameSession'),members=$('gameMembers');
   const memberToggle=$('gameMembersToggle');
   let compact=false,wideMembers=true,narrowMembers=false;
   function showMembers(){
     const open=compact?narrowMembers:wideMembers;
+    if(!open && members.contains(document.activeElement))memberToggle.focus();
     members.hidden=!open;session.classList.toggle('show-members',open);
     memberToggle.setAttribute('aria-expanded',String(open));
+    $('gameChatPane').inert=$('gameNetworkPane').inert=compact&&open;
   }
   new ResizeObserver(([entry])=>{
     if(entry.contentRect.width){compact=entry.contentRect.width<710;session.classList.toggle('lan-compact',compact);showMembers();}
@@ -38,6 +40,7 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
     };
   }
   const pending=new Set();
+  let launchWorking=false;
   async function command(op,args={}){
     if(pending.has(op))return false;pending.add(op);
     try{await api.direct({op,...args});await direct.sync();return true;}catch(e){
@@ -146,10 +149,76 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
     if(await command('game-ports',{room:room.id,ports:$('gamePorts').value}))
       $('gamePorts').value=direct.raw().game.network.ports||'';
   };
-  $('ueJoin').onclick=()=>command('game-launch-unreal',{device:$('gameTarget').value,port:$('gameLaunchPort').valueAsNumber});
+  async function launcherCommand(op,fields={}){
+    if(launchWorking)return;
+    const d=direct.raw(),room=d.game?.room?.id;if(!room)return;
+    const launcher=$('gameLauncher'),origin=document.activeElement;
+    launchWorking=true;last='';draw();
+    try{await command(op,{profileId:d.me?.id,room,...fields});}
+    finally{
+      launchWorking=false;last='';draw();
+      const now=direct.raw();
+      if(visible&&now.me?.id===d.me?.id&&now.game?.room?.id===room&&launcher.open&&launcher.contains(origin)&&
+        document.hasFocus()&&document.activeElement===document.body&&!$('gameNetworkPane').hidden){
+        const target=origin.checkVisibility()&&!origin.disabled?origin:$('gameChooseExe');
+        target.focus({preventScroll:true});
+      }
+    }
+  }
+  $('gameChooseExe').onclick=()=>launcherCommand('game-launcher-select');
+  $('gameForgetExe').onclick=()=>launcherCommand('game-launcher-forget');
+  $('gameLaunchMode').onchange=()=>launcherCommand('game-launcher-mode',{mode:$('gameLaunchMode').value});
+  $('ueJoin').onclick=()=>launcherCommand('game-launch-saved',{device:$('gameTarget').value,port:$('gameLaunchPort').valueAsNumber});
   $('gameTarget').onchange=()=>{last='';draw();};
-  $('ueLaunch').onclick=()=>command('game-launch-unreal',{port:$('gameLaunchPort').valueAsNumber});
+  $('ueLaunch').onclick=()=>launcherCommand('game-launch-saved',{port:$('gameLaunchPort').valueAsNumber});
   $('gameProfile').onclick=()=>direct.open('home');
+  function renderInvitations(container,items,contacts,inCall){
+    const request=container.id==='lanRequests',owner=direct.raw().me?.id;
+    const live=new Map([...container.children].map(card=>[card.dataset.key,card]));
+    for(const item of items){
+      const key=request?item.actionId:item.id,person=request?item.id:item.person;
+      const friend=contacts.get(person),name=friend?.name||item.name;
+      let card=live.get(key);
+      if(!card){
+        card=element('article','','invite-card');
+        card.dataset.key=key;
+        const avatar=element('button','','invite-avatar');
+        avatar.type='button';
+        const portrait=element('span');avatar.append(portrait);
+        const copy=element('div','','invite-copy');
+        copy.append(element('strong'),element('span'),element('small'));
+        const actions=element('div','','invite-actions');
+        const answer=async yes=>{
+          if(card.getAttribute('aria-busy')==='true')return;
+          card.setAttribute('aria-busy','true');
+          try{
+            await command(request?'game-review':'game-answer',request?{device:item.device,actionId:key,yes}:{id:key,yes});
+            if(visible&&!card.isConnected&&document.activeElement===document.body&&document.hasFocus()){
+              const target=container.querySelector('.invite-actions button')||(request?memberToggle:$(direct.raw().game?.room?'gameName':'directoryTitle'));
+              target.focus({preventScroll:true});
+            }
+          }finally{card.removeAttribute('aria-busy');}
+        };
+        const yes=button('Принять',()=>answer(true));yes.className='button button-primary';
+        actions.append(yes,button('Отклонить',()=>answer(false)));
+        card.append(avatar,copy,actions);container.append(card);
+      }
+      live.delete(key);
+      const [avatar,copy]=card.children;
+      paintAvatar(avatar.firstElementChild,name,friend?.avatar);
+      avatar.disabled=!friend;
+      avatar.title=tr('Карточка участника')+' · '+name;avatar.setAttribute('aria-label',avatar.title);
+      avatar.onclick=()=>direct.participant({id:person,name},()=>card.isConnected&&owner===direct.raw().me?.id&&
+        direct.raw().friends.some(f=>f.id===person&&f.state==='friend'));
+      const [title,detail,call]=copy.children;
+      const message=request?tr('Просится в игровую LAN'):tr('Приглашает в LAN «{room}»').replace('{room}',()=>item.title);
+      if(title.textContent!==name)title.textContent=name;
+      if(detail.textContent!==message)detail.textContent=message;
+      call.hidden=request||!inCall;
+      if(!call.hidden&&!call.textContent)call.textContent=tr('Ваш звонок продолжится');
+    }
+    for(const card of live.values())card.remove();
+  }
   function draw(show=visible){
     if(visible&&!show)closeMedia();
     visible=show;
@@ -157,25 +226,28 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
     const d=direct.raw(),g=d.game||{},r=g.room,net=g.network||{},invites=g.invitations||[],friends=(d.friends||[]).filter(c=>c.state==='friend'&&c.online&&c.game);
     const contacts=new Map((d.friends||[]).filter(c=>c.state==='friend').map(c=>[c.id,c]));
     const likeness=r?.roster.map(p=>p.id===d.me?.id?d.me?.avatar:contacts.get(p.id)?.avatar);
-    const sig=JSON.stringify([visible,d.me?.id,d.paused,$('strictProxy').checked,g,likeness,friends.map(c=>[c.id,c.name])]);if(sig===last)return;last=sig;
-    const ids=invites.map(i=>i.id);if(noticeIds!==ids.join(',')){noticeIds=ids.join(',');api.internet({op:'sync-game-notices',ids}).catch(()=>{});}
+    const requests=g.requests||[],inCall=!!state.session;
+    const portraits=[...invites.map(i=>i.person),...requests.map(i=>i.id)].map(id=>{const c=contacts.get(id);return c&&[c.name,c.avatarRev??c.avatar];});
+    const sig=JSON.stringify([visible,d.me?.id,d.paused,$('strictProxy').checked,g,likeness,inCall,portraits,friends.map(c=>[c.id,c.name])]);if(sig===last)return;last=sig;
+    const ids=[...invites.map(i=>i.id),...requests.map(i=>i.actionId)];if(noticeIds!==ids.join(',')){noticeIds=ids.join(',');api.internet({op:'sync-game-notices',ids}).catch(()=>{});}
     const ready=direct.active();
-    $('gameBadge').hidden=!invites.length;$('gameBadge').textContent=String(invites.length);
+    const awaiting=invites.length+requests.length;
+    $('gameBadge').hidden=!awaiting;$('gameBadge').textContent=String(awaiting);
     $('gameProfile').hidden=ready;$('gameCreate').hidden=!ready||!!r;
     $('gameLobby').hidden=!!r;
-    $('gameSession').hidden=!r;$('gameInvites').replaceChildren();
-    for(const i of invites){
-      const row=element('div','','game-row');row.append(element('strong',i.name+' · '+i.title),
-        button('Принять',()=>command('game-answer',{id:i.id,yes:true})),button('Отклонить',()=>command('game-answer',{id:i.id,yes:false})));$('gameInvites').append(row);
-    }
-    const returns=$('gameReturns');returns.hidden=!ready || (!!r && !g.returns?.length);
+    $('gameSession').hidden=!r;
+    renderInvitations($('gameInvites'),invites,contacts,inCall);
+    renderInvitations($('lanRequests'),r?.host?requests:[],contacts,inCall);
+    $('lanRequestCount').hidden=!requests.length;$('lanRequestCount').textContent=String(requests.length);
+    const listings=(g.returns||[]).filter(item=>!invites.some(i=>i.room===item.id&&i.person===item.person&&i.device===item.device));
+    const returns=$('gameReturns');returns.hidden=!ready||(!g.asked&&!listings.length&&(!!r||!!invites.length));
     if(r && returns!==$('gamePage').lastElementChild)$('gamePage').append(returns);
-    else if(!r && returns.nextElementSibling!==$('gameInvites'))$('gamePage').insertBefore(returns,$('gameInvites'));
+    else if(!r && returns.previousElementSibling!==$('gameInvites'))$('gameInvites').after(returns);
     returns.replaceChildren();
     if(!returns.hidden)returns.append(element('h3',tr('Игровые сети друзей')));
     if(!returns.hidden && g.asked){const pending=element('div','','game-row');pending.append(element('span',tr('Запрос отправлен')+' · '+g.askedTitle),button('Отменить запрос',()=>command('game-cancel-request')));returns.append(pending);}
-    if(!returns.hidden && !g.asked && !g.returns?.length)returns.append(element('p',tr('Сейчас у друзей нет открытых игровых сетей.'),'field-help'));
-    if(!returns.hidden)for(const item of [...(g.returns||[])].sort((a,b)=>Number(b.again)-Number(a.again)||a.name.localeCompare(b.name))){
+    if(!returns.hidden && !g.asked && !listings.length)returns.append(element('p',tr('Сейчас у друзей нет открытых игровых сетей.'),'field-help'));
+    if(!returns.hidden)for(const item of listings.sort((a,b)=>Number(b.again)-Number(a.again)||a.name.localeCompare(b.name))){
       if(item.id===g.asked)continue;
       const row=element('div','','game-row surface'),full=item.count>=17;
       const back=button(full?'Мест нет':item.again?'Вернуться в LAN':'Попроситься в LAN',()=>command(item.again?'game-return':'game-ask',{id:item.id,device:item.device,person:item.person}));
@@ -185,19 +257,6 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
     if(chatRoom!==roomKey){chatRoom=roomKey;$('gameLaunchPort').value='7777';attachments.clear();closeMedia();chat.reset();showTab(tabs[0]);delete history.dataset.key;}
     if(!r)return;
     $('lanVisibility').hidden=!r.host;$('lanVisible').checked=!!g.listed;
-    const requests=$('lanRequests'),requestsKey=JSON.stringify((g.requests||[]).map(req=>[req,contacts.get(req.id)?.avatar]));
-    if(requests.dataset.key!==requestsKey){
-      requests.dataset.key=requestsKey;
-      requests.replaceChildren(...(g.requests||[]).map(req=>{
-        const row=element('div','','lan-request'),caption=element('div','','lan-request-title'),actions=element('div','','lan-request-actions');
-        const avatar=element('span','','lan-request-avatar'),who=element('div');
-        paintAvatar(avatar,req.name,contacts.get(req.id)?.avatar);
-        who.append(element('strong',req.name),element('small',tr('Просится в игровую LAN')));
-        caption.append(avatar,who);
-        actions.append(button('Принять',()=>command('game-review',{device:req.device,yes:true})),button('Отклонить',()=>command('game-review',{device:req.device,yes:false})));
-        row.append(caption,actions);return row;
-      }));
-    }
     $('gameRole').textContent=tr(r.host?'Вы организатор':'Игровая комната');
     $('gameLeave').textContent=tr(r.host&&r.roster.length>1?'Завершить LAN':'Выйти из LAN');
     $('gameConnection').dataset.phase=net.error?'error':net.phase;
@@ -220,7 +279,26 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
       EADDRNOTAVAIL:'Адрес игрового адаптера пока недоступен. Повторите проверку.'};
     $('gamePathResult').textContent=check.state==='unavailable'?tr(bindErrors[check.code]||'Не удалось открыть диагностический сокет игрового адаптера.'):
       check.state==='binding'?tr('Ждём адрес игрового адаптера…'):chosen && messages[check.state]?tr(messages[check.state])+(check.state==='ok'?' · '+check.ms+tr(' мс'):''):'';
-    target.disabled=waiting;$('ueJoin').hidden=!others.length;
+    target.disabled=waiting;
+    const launch=g.launcher||{selected:false,mode:'plain'},unreal=launch.mode==='unreal';
+    $('gameSelectedName').textContent=launch.selected?launch.name:tr('Выберите игру для быстрого запуска или откройте её самостоятельно.');
+    $('gameChooseExe').textContent=tr(launch.selected?'Выбрать другую игру…':'Выбрать игру…');
+    $('gameChooseExe').disabled=launchWorking||!!r.waiting;
+    $('gameForgetExe').hidden=!launch.selected;$('gameForgetExe').disabled=launchWorking||!!r.waiting;
+    $('gameLaunchOptions').hidden=!launch.selected;
+    $('gameLaunchMode').value=launch.mode;$('gameLaunchMode').disabled=launchWorking||!!r.waiting;
+    $('gameUnrealOptions').hidden=!unreal;
+    $('gameLaunchHint').textContent=tr(unreal?'LINK передаст игре адрес адаптера и порт. Этот режим предназначен для совместимых игр на Unreal Engine.':'Игра запускается без дополнительных параметров. Создайте матч или подключитесь через LAN-меню самой игры.');
+    $('ueLaunch').disabled=launchWorking||!!r.waiting||net.phase!=='ready'||!launch.selected;
+    $('ueJoin').hidden=!unreal||!others.length;
+    $('ueJoin').disabled=$('ueLaunch').disabled||waiting;
+    $('gameLaunchAvailability').textContent=net.phase==='ready'?'':tr('Для запуска через LINK сначала включите игровую сеть Windows.');
+    const steps=[
+      [!r.waiting,tr(r.waiting?'Ожидаем допуска в игровую LAN.':'Вы подключены к игровой LAN.')],
+      [net.phase==='ready',tr(net.phase==='ready'?'Игровой адаптер этого ПК включён.':'Включите игровой адаптер этого ПК.')],
+      [others.length>0,others.length?tr('Другие игроки с включённым адаптером')+': '+others.length:tr('Ждём включения адаптера у других игроков.')]
+    ];
+    $('gamePreparation').replaceChildren(...steps.map(([ready,text])=>{const li=element('li',text);li.dataset.ready=String(ready);return li;}));
     const counts=net.traffic||{};
     const match=counts.lastMatch;
     const selected=others.find(p=>p.device===target.value);
@@ -260,9 +338,9 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
         return row;
       }));
     }
-    const available=friends.filter(c=>!r.roster.some(p=>p.id===c.id)&&!(g.invited||[]).includes(c.id));
+    const available=friends.filter(c=>!r.roster.some(p=>p.id===c.id)&&!requests.some(req=>req.id===c.id)&&!(g.invited||[]).includes(c.id));
     $('gameInviteBox').hidden=!r.host||r.roster.length>=17||!available.length;
-    $('gameInviteHint').hidden=!r.host||r.roster.length>=17||!!available.length||(!g.invited?.length && friends.some(c=>r.roster.some(p=>p.id===c.id)));
+    $('gameInviteHint').hidden=!r.host||r.roster.length>=17||!!available.length||(!g.invited?.length && (!!requests.length||friends.some(c=>r.roster.some(p=>p.id===c.id))));
     $('gameInviteHint').textContent=tr(g.invited?.length?'Приглашение отправлено. Ждём ответа.':'Когда друзья будут в сети, вы сможете их пригласить.');
     const select=$('gameFriend'),previous=select.value;
     const options=JSON.stringify(available.map(c=>[c.id,c.name]));
@@ -286,5 +364,13 @@ export function gamePanel({$,api,direct,composer,actionError,confirmAction}){
     $('gameAttach').hidden=!!r.waiting;
     $('gameEmoji').hidden=!!r.waiting;$('gameClearChat').hidden=!r.messages.length&&!r.hasDownloads;
   }
-  return {draw};
+  return {draw,openNotice(id){
+    const data=direct.raw().game;
+    const request=data?.requests?.some(item=>item.actionId===id);
+    if(!request&&!data?.invitations?.some(item=>item.id===id))return;
+    if(request){narrowMembers=true;wideMembers=true;showMembers();}
+    const list=$(request?'lanRequests':'gameInvites');
+    const row=[...list.children].find(card=>card.dataset.key===id);
+    if(row){row.scrollIntoView({block:'nearest'});row.querySelector('.invite-avatar').focus({preventScroll:true});}
+  }};
 }

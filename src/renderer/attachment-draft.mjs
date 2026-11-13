@@ -35,19 +35,19 @@ function attachmentDialog(){
     draft.busy=true;paint();note.textContent=tr('Отправка…');
     try{
       while(draft.files.length){
-        if(draft.scope()?.key!==draft.target.key){dialog.close();throw Error(tr('Чат изменился. Выберите вложение снова.'));}
+        if(draft.scope()?.key!==draft.target.key){dialog.close();return;}
         const sent=await draft.publish(draft.target,draft.files[0],caption.value.trim());
+        if(active!==draft||!dialog.open)return;
         if(sent===false)throw Error(tr('Не удалось отправить вложение.'));
         draft.consumeText?.();draft.consumeText=null;
         draft.files.shift();caption.value='';
       }
       dialog.close();
     }catch(error){
-      if(dialog.open){
+      if(active===draft&&dialog.open){
         note.textContent=error.message.includes('CLIPBOARD_FILE_TOO_LARGE')?tr('Из буфера можно вставить до 8 МиБ. Перетащите исходный файл из папки.'):error.message;
         draft.busy=false;paint();
       }
-      else draft.onError(error);
     }
   };
   caption.addEventListener('keydown',e=>{
@@ -79,7 +79,7 @@ export function bindAttachmentDraft({area,input,scope,publish,onError}){
       }
     };
     openDraft??=attachmentDialog();
-    openDraft({target,scope,files,publish,onError,consumeText},useDraft?original:text);
+    openDraft({target,scope,files,publish,consumeText},useDraft?original:text);
   }
   area.addEventListener('dragover',event=>{
     if(!hasFiles(event.dataTransfer))return;

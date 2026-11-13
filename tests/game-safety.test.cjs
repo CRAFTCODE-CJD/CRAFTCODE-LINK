@@ -42,6 +42,23 @@ test('overlapping adapter ranges detected including VPN /8',()=>{
  const nic=mask=>({n:[{family:'IPv4',address:'10.90.2.50',netmask:mask}]});
  assert(overlaps('10.90.2',nic('255.255.255.0')));assert(overlaps('10.90.88',nic('255.0.0.0')));assert(!overlaps('10.90.88',nic('255.255.255.0')));
 });
+test('Generals lobby broadcasts and fixed-port match traffic cross the LAN between admitted peers',async t=>{
+ const id=crypto.randomUUID(),peers=members.slice(0,2),received=[[],[]];
+ const networks=peers.map((me,i)=>new GameNetwork({
+   active:{id,host:i===0,roster:peers,prefix:'10.90.2'},self:()=>me,
+   link:()=>({socket:{writableLength:0},send:packet=>{networks[1-i].receive(me,packet);return true;}})
+ },()=>{}));
+ networks.forEach((network,i)=>{network.adapter={write:b=>{received[i].push(Buffer.from(b));return true;},close(){}};});
+ t.after(()=>networks.forEach(n=>n.stop()));
+ const lobby=frame({src:1,dst:255,sport:8086,dport:8086});lobby.fill(255,16,20);
+ const match=frame({src:2,dst:1,sport:8088,dport:8088}),reply=frame({src:1,dst:2,sport:8088,dport:8088});
+ match.writeUInt32BE(0x12345678,28);reply.writeUInt32BE(0x7265706c,28);
+ for(const [i,b] of [[0,lobby],[1,match],[0,reply],[1,frame({src:2,dst:255,sport:8088,dport:8088})],[1,frame({src:2,dst:1,sport:49123,dport:8088})]])
+   networks[i].route(i+1,b,true);
+ await new Promise(resolve=>setTimeout(resolve,35));
+ assert.deepEqual(received,[[match],[lobby,reply]]);
+ assert.equal(networks[1].status().traffic.blockedTx,2);
+});
 test('explicit per-room ports admit a TCP handshake and exact game bytes, enforce revocation and protect system listeners',t=>{
  const id=crypto.randomUUID(),host=members[0],guest=members[1],delivered=[];
  const room={active:{id,host:true,roster:members,prefix:'10.90.2'},self:()=>host,link:()=>null};

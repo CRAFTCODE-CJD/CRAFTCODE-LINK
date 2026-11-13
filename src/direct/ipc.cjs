@@ -226,7 +226,7 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
       if(op==='game-create')g.create(raw.title,raw.listed!==false);
       else if(op==='game-visibility')g.setListed(raw.listed===true);
       else if(op==='game-cancel-request')g.cancelAsk();
-      else if(op==='game-review')g.review(raw.device,raw.yes===true);
+      else if(op==='game-review')g.review(raw.device,raw.yes===true,raw.actionId);
       else if(op==='game-return'||op==='game-ask'){
         const item=s.gameReturns().find(x=>x.id===raw.id && x.person===raw.person && x.device===raw.device);
         if(!item)throw Error(tr('Эта комната уже недоступна.'));
@@ -250,6 +250,22 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
       else if(op==='game-enable'||op==='game-repair')await s.gameNet.start(op==='game-repair');
       else if(op==='game-check-path')s.gameNet.checkPeer(raw.device);
       else if(op==='game-ports')s.gameNet.setPorts(raw.room,raw.ports);
+      else if(['game-launcher-select','game-launcher-mode','game-launcher-forget','game-launch-saved'].includes(op)){
+        if(locked)throw Error(tr('Дождитесь завершения операции.'));
+        locked=true;
+        try{
+          const launcher=require('../game/launcher.cjs');
+          launcher.current(s,raw.profileId,raw.room);
+          if(op==='game-launcher-select')await launcher.selectGame(s,dialog,window(),raw.profileId,raw.room);
+          else if(op==='game-launcher-mode')launcher.configureGame(s,raw.profileId,raw.room,raw.mode);
+          else if(op==='game-launcher-forget')launcher.forgetGame(s,raw.profileId,raw.room);
+          else{
+            const choice=launcher.launchSelection(s.profile?.gameLaunch);
+            if(!choice)throw Error(tr('Сначала выберите игру на этом ПК.'));
+            await require('../game/unreal-launch.cjs').launchUnreal(s,dialog,window(),undefined,raw.device??null,raw.port??7777,choice);
+          }
+        }finally{locked=false;}
+      }
       else if(op==='game-launch-unreal'){if(locked)throw Error(tr('Дождитесь завершения операции.'));locked=true;try{await require('../game/unreal-launch.cjs').launchUnreal(s,dialog,window(),undefined,raw.device??null,raw.port??7777);}finally{locked=false;}}
       else if(op==='game-disable')await s.gameNet.stop();
       else throw Error(tr('Неизвестная команда.'));
@@ -263,6 +279,7 @@ function directIPC({handle,window,emit,room,roomToken,openRoom,closeRoom,busy,ri
     else if(op==='copy')clipboard.writeText(s.card());
     else if(op==='refresh'){s.refreshContacts();}
     else if(op==='add'){const addResult=s.add(raw.value,raw.expectedPerson);return {...s.snapshot(),addResult};}
+    else if(op==='room-add')return s.roomPeople.add(raw);
     else if(op==='answer')s.answer(raw.id,raw.yes===true);
     else if(op==='favorite'){const f=s.contact(raw.id);if(f)s.setFriend({...f,favorite:!f.favorite});}
     else if(op==='forget'||op==='block')s.forget(raw.id,op==='block');

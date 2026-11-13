@@ -112,7 +112,24 @@ async function run(){
     }
     const a=await open('qa-portrait-anna','Анна','127.0.0.2'),b=await open('qa-portrait-boris','Борис','127.0.0.3');
     await a.page.click('#profileBtn');
-    await a.page.setInputFiles('#avatarFile',path.join(root,'src/renderer/assets/craftlink.png'));
+    const demoPhoto=path.join(root,'src/renderer/assets/craftlink.png');
+    const crop=a.page.locator('#avatarCrop');
+    await a.page.setInputFiles('#avatarFile',demoPhoto);
+    await crop.waitFor();await a.page.keyboard.press('Escape');
+    await crop.waitFor({state:'hidden'});assert.equal(await a.page.locator('#avatarPreview canvas').count(),0);
+    await a.page.locator('#chooseAvatar:enabled').waitFor();
+    await a.page.setInputFiles('#avatarFile',demoPhoto);await crop.waitFor();
+    await a.page.locator('#avatarCropZoom').press('End');
+    assert.equal(await a.page.locator('#avatarCropScale').textContent(),'300%');
+    const preview=a.page.locator('#avatarCropPreview');
+    const beforeMove=await preview.evaluate(el=>el.toDataURL());
+    await preview.press('Shift+ArrowRight');
+    assert.notEqual(await preview.evaluate(el=>el.toDataURL()),beforeMove);
+    if(process.env.LINK_VISUAL_DIR){
+      await fs.mkdir(process.env.LINK_VISUAL_DIR,{recursive:true});
+      await a.page.screenshot({path:path.join(process.env.LINK_VISUAL_DIR,'photo-crop.png')});
+    }
+    await crop.locator('button[value=apply]').click();
     await a.page.locator('#avatarPreview canvas').waitFor();
     await a.page.check('#profileCoverChoices [value="lagoon"]');await a.page.fill('#profileAboutInput','Играем по вечерам');
     assert.equal(await a.page.locator('#profileAboutPreview').textContent(),'Играем по вечерам');
@@ -144,10 +161,18 @@ async function run(){
     await b.page.click('#navFriends');await b.page.locator('#workspaceContacts .contact-avatar canvas').waitFor();
     await b.page.locator('#workspaceContacts .open-person-chat').click();
     await b.page.locator('#dmAvatar canvas').waitFor();
+    const avatarPixels=canvas=>canvas.toDataURL();
+    assert.equal(await b.page.locator('#dmAvatar canvas').evaluate(avatarPixels),
+      await a.page.locator('#profileAvatar canvas').evaluate(avatarPixels),'friend receives the selected crop');
     await a.page.click('#profileBtn');
     for(const [status,label] of [['away','Отошёл'],['busy','Занят'],['invisible','Не в сети'],['online','В сети']]){
       await a.page.selectOption('#directStatus',status);
-      await b.page.waitForFunction(label=>document.querySelector('#dmPresence').textContent===label,label);
+      await b.page.waitForFunction(({status,label})=>{
+        const presence=document.querySelector('#dmPresence');
+        if(status==='invisible')return !presence.classList.contains('available') &&
+          (presence.textContent===label||presence.textContent.startsWith('Был на связи · '));
+        return presence.textContent===label;
+      },{status,label});
     }
     console.log('PASS two desktop clients: Away, Busy, Invisible and Online propagate to the selected conversation.');
     await a.page.click('#closeSettingsDialog');

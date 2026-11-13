@@ -17,7 +17,7 @@ function attachTray({ window, tray, menu, quit, isQuitting, stopSharing, leaveRo
     if(kind==='message' && !canOpenChat?.(item.profile,item.id))return;
     show();
     if(kind==='message')openChat?.(item.profile,item.id);
-    else if(kind==='game')openGame?.();
+    else if(kind==='game'||kind==='game-request')openGame?.(item.id);
     else if(kind.startsWith('friend-'))openRequests?.(kind);
   }});
   tray.setToolTip('CRAFTCODE LINK');

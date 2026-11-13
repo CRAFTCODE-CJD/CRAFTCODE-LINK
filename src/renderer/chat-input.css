@@ -1,13 +1,16 @@
 .accepts-drop {outline:2px dashed var(--accent);outline-offset:-4px;background-color:var(--soft)}
-#attachmentDraft {width:min(440px,90vw);box-sizing:border-box;color:var(--text);background:var(--panel);padding:20px;border:1px solid var(--border);border-radius:16px}
+#attachmentDraft {width:min(440px,90vw);max-height:calc(100dvh - 32px);box-sizing:border-box;color:var(--text);background:var(--panel);padding:20px;border:1px solid var(--border);border-radius:16px;overflow:auto;scrollbar-width:thin}
+#attachmentDraft[open] {display:flex;flex-direction:column}
+#attachmentDraft > :is(h2,label,.dialog-actions) {flex:none}
 #attachmentDraft h2 {margin:0 0 12px;font-size:21px}
-#attachmentDraftItems {display:grid;gap:6px;max-height:45vh;overflow:auto;margin:8px 0 16px}
+#attachmentDraftItems {display:grid;flex:0 1 auto;min-height:0;gap:6px;max-height:45dvh;overflow:auto;margin:8px 0 16px;overscroll-behavior:contain;scrollbar-gutter:stable}
 .draft-file {display:grid;grid-template-columns:minmax(0,1fr) 30px;align-items:center;gap:8px;background:var(--soft);padding:8px;border-radius:8px;overflow-wrap:anywhere}
 .draft-file img {grid-column:1/-1;max-height:22vh;max-width:100%;object-fit:contain;margin:auto}
 .draft-file button {border:0;border-radius:50%;height:28px;background:var(--panel);color:var(--text);font-size:18px}
-#attachmentCaption {width:100%;box-sizing:border-box;resize:vertical;padding:9px;border-radius:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);font:inherit}
+#attachmentCaption {width:100%;flex:none;min-height:58px;max-height:min(140px,22dvh);box-sizing:border-box;resize:vertical;overflow-y:auto;margin-block-start:6px;padding:9px;border-radius:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);font:inherit}
+#attachmentDraftStatus {flex:none;max-height:min(96px,16dvh);overflow:auto;overflow-wrap:anywhere;margin:8px 0 0}
 #attachmentDraftStatus:empty {display:none}
-#attachmentDraft .dialog-actions {display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+#attachmentDraft .dialog-actions {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:14px}
 .link-chat-emoji[open] .emoji-picker:popover-open {position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(324px,94vw);height:min(348px,72vh);padding:10px;display:grid;grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 9px 24px #0005}
 .emoji-picker :is(input,select) {font:inherit;min-width:0;width:100%;box-sizing:border-box;padding:6px 8px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:6px}
 .emoji-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));align-content:start;justify-items:center;gap:2px;min-height:0;overflow:auto;overscroll-behavior:contain}

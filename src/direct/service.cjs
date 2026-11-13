@@ -8,6 +8,7 @@ const {friend,publicCard,shareCard,parseCard,seed,nameOf,hex32,seal,unseal,sign,
 const {Networks,interfaces}=require('./networks.cjs');
 const {ContactLink}=require('./links.cjs');
 const {privacyOf,validPrivacy,contactStatus}=require('./privacy.cjs');
+const {routingSeeds,refreshAfter}=require('./discovery-seeds.cjs');
 const {validAvatar,validPixels,validStyle,validStyleRecord,publicStyle,newer,roomTag,memberTag,validRoomMap,witnessFields}=require('./avatars.cjs');
 const {PersonalChats}=require('./personal-chats.cjs');
 const {GroupVoice}=require('../groups/voice.cjs');
@@ -21,9 +22,10 @@ class DirectService {
   constructor({store,gameEvent=()=>{},chatEvent=()=>{},attachmentIO,changed=()=>{},incoming=()=>{},notice=()=>{},hostRoom,roomInfo=()=>null,busy=()=>false,dhtFactory,nics=interfaces}){
     Object.assign(this,{store,changed,incoming,notice,hostRoom,roomInfo,busy,nics});
     this.profile=store.read();this.links=new Set();this.allSockets=new Set();this.near=new Map();this.requests=new Map((this.profile?.requests||[]).map(c=>[c.id,c]));
-    this.grants=new Map();this.returning=new Map();this.tunnels=new Map();this.nextLookup=new Map();this.searching=new Set();this.lastDial=new Map();this.lastRing=new Map();
+    this.grants=new Map();this.returning=new Map();this.tunnels=new Map();this.nextLookup=new Map();this.lastDial=new Map();this.lastRing=new Map();
     this.audience={mode:'friends',ids:new Set()};
     this.pendingAvatars=new Map();this.pendingStyles=new Map();
+    this.roomPeople=new (require('./room-people.cjs').RoomPeople)(this);
     this.voiceChannels=new GroupVoice(this);
     this.groupChanged=()=>this.voiceChannels.reconcile();
     this.groups=new (require('../groups/service.cjs').Groups)(this,store);
@@ -33,6 +35,8 @@ class DirectService {
     this.game.files=new (require('../game/files.cjs').GameFiles)(this,attachmentIO);
     this.gameNet=new GameNetwork(this.game,()=>this.update());
     this.network=new Networks({profile:()=>this.profile,canDiscover:()=>!!this.profile&&!this.strict&&!this.paused&&!this.hidden,
+      rememberNodes:replies=>this.rememberDiscoveryNodes(replies),
+      hasDhtLinks:()=>[...this.allSockets].some(s=>s.contactRoute==='dht'&&!s.destroyed),
       attach:(...args)=>this.attach(...args),seen:(c,r)=>this.found(c,r),issue:msg=>{this.issue=msg;this.update();},changed:()=>this.update(),nics,dhtFactory});
   }
   start(){
@@ -43,7 +47,20 @@ class DirectService {
     this.lastScan=Date.now();this.timer=setInterval(()=>this.tick(),5000);this.timer.unref();this.tick();
   }
   update(){if(this.dirty)return;this.dirty=setTimeout(()=>{this.dirty=null;this.changed();},90);}
-  save(next){this.store.write(next);this.profile=next;this.me=publicCard(next);this.update();}
+  save(next){
+    if(!next.dht)delete next.discoverySeeds;
+    this.store.write(next);this.profile=next;this.me=publicCard(next);this.update();
+  }
+  rememberDiscoveryNodes(replies){
+    if(!this.profile?.dht)return;
+    const time=Date.now(),previous=this.profile.discoverySeeds?.time;
+    if(previous<=time&&time-previous<refreshAfter)return;
+    const nodes=routingSeeds(replies);
+    if(nodes.length){
+      // A full or read-only disk must not turn a successful lookup into a network failure.
+      try{this.save({...this.profile,discoverySeeds:{time,nodes}});}catch{}
+    }
+  }
   create(name){
     if(this.profile)throw Error(tr('На этом ПК уже есть профиль.'));
     name=nameOf(name);if(!name)throw Error(tr('Введите имя.'));
@@ -209,6 +226,7 @@ class DirectService {
     this.announceRooms();this.update();
   }
   announceRooms(){
+    this.roomPeople.announce();
     const guest=this.guestAppearance,info=guest&&this.roomInfo();
     if(guest && info?.role==='guest'){
       for(const link of this.linksTo(guest.person)){
@@ -241,9 +259,10 @@ class DirectService {
       const again=!!door && this.canReturn(link.card,room.invite),permitted=again||this.allows(link.card.id);
       const back=this.strict||this.paused||this.hidden?null:this.game.listing(link.card);
       const availability=this.hidden?'offline':privacyOf(this.profile.privacy).status;
-      const signature=JSON.stringify([permitted?door:'',permitted?count:0,again,back,availability]);
+      const inCall=!!this.roomInfo()&&!this.hidden&&!this.paused&&!this.strict;
+      const signature=JSON.stringify([permitted?door:'',permitted?count:0,again,back,availability,inCall]);
       if(link.sentRoom===signature && now-link.sentRoomAt<20000)continue;
-      link.sentRoom=signature;link.sentRoomAt=now;link.send({kind:'room-state',door:permitted?door:'',count:permitted?count:0,game:1,again,back,version:appVersion,availability});
+      link.sentRoom=signature;link.sentRoomAt=now;link.send({kind:'room-state',door:permitted?door:'',count:permitted?count:0,game:1,again,back,version:appVersion,availability,inCall});
     }
   }
   roomsFor(id){
@@ -263,15 +282,17 @@ class DirectService {
       const links=f.state==='friend'?this.linksTo(f.id):[],visible=links.filter(l=>l.contactStatus!=='offline'),status=contactStatus(links);
       return {...f,lastSeen:f.state==='friend'&&status==='offline'?(this.profile.contactSeen?.[f.id]||null):null,cardStyle:f.state==='friend'?publicStyle(this.profile.contactStyles?.[f.id]):undefined,mix:f.state==='friend'?this.profile.contactMix?.[f.id]:undefined,avatar:avatar?.pixels||null,avatarRev:avatar?avatar.time+'.'+avatar.device:'',status,online:status!=='offline',routes:[...new Set(visible.map(l=>l.route))],
       chat:{...(f.state==='friend'?this.chats.summary(this.contact(f.id)):{unread:0,last:null}),supported:f.state==='friend'&&this.linksTo(f.id).some(l=>this.chats.eligible(l)),files:f.state==='friend'&&this.chats.files.peers(f.id).length>0,canQueueFiles:f.state==='friend'&&this.chats.files.available},
+      inCall:f.state==='friend'&&visible.some(l=>l.remoteRoom?.inCall===true&&l.remoteRoom.until>Date.now()),
       game:this.linksTo(f.id).some(l=>l.remoteRoom?.game),rooms:f.state==='friend'?this.roomsFor(f.id):[],
       versions:f.state==='friend'?[...new Set(this.linksTo(f.id).map(l=>l.remoteRoom?.version).filter(Boolean))]:[],
       onlineDevices:new Set(visible.map(l=>l.card.device)).size};};
     const room=this.publishRoom && this.roomInfo(),scope=room?.role==='host'&&room.invite?roomTag(room.invite):null;
     const admitted=scope?[...new Set([...this.returning.values()].filter(r=>r.invite===room.invite).map(r=>r.person))]:[];
-    return {groups:this.groups.snapshot(),mixRoom:this.mixRoom(),roomContacts:this.roomContacts(),game:{...this.game.state(),returns:this.gameReturns(),network:this.gameNet.status()},audience:{mode:this.audience.mode,ids:[...this.audience.ids],scope,admitted},me:{name:this.profile.name,id:this.me.id,device:this.me.device,avatar:this.profile.avatar?.pixels||null,cardStyle:publicStyle(this.profile.cardStyle)},dht:this.profile.dht,discovery:this.network.discovery||'off',lanReady:!!this.network.nic,lan:this.profile.lan,nics:this.nics(),
-      privacy:privacyOf(this.profile.privacy),friends:this.profile.friends.map(map),chatStorage:this.chats.footprint(),near:[...this.near.values()].map(({card})=>({id:card.id,name:card.name})).filter((v,i,a)=>a.findIndex(x=>x.id===v.id)===i),
+    return {groups:this.groups.snapshot(),mixRoom:this.mixRoom(),roomContacts:this.roomContacts(),roomPeople:this.roomPeople.snapshot(),game:{...this.game.state(),returns:this.gameReturns(),network:this.gameNet.status(),launcher:require('../game/launcher.cjs').launcherState(this.profile)},audience:{mode:this.audience.mode,ids:[...this.audience.ids],scope,admitted},me:{name:this.profile.name,id:this.me.id,device:this.me.device,avatar:this.profile.avatar?.pixels||null,cardStyle:publicStyle(this.profile.cardStyle)},dht:this.profile.dht,discovery:this.network.discovery||'off',lanReady:!!this.network.nic,lan:this.profile.lan,nics:this.nics(),
+      lastContactRefresh:this.lastRefresh||0,privacy:privacyOf(this.profile.privacy),friends:this.profile.friends.map(map),chatStorage:this.chats.footprint(),near:[...this.near.values()].map(({card})=>({id:card.id,name:card.name})).filter((v,i,a)=>a.findIndex(x=>x.id===v.id)===i),
       blocked:this.profile.blocked||[],requests:[...this.requests.values()].map(c=>({id:c.id,name:c.name})),issue:this.issue||'',
-      incoming:this.pending && {id:this.pending.id,key:this.pending.localKey??=randomUUID(),mode:this.pending.admit?"admit":this.pending.switchCall?"switch":"call",resuming:!!this.pending.resume,roomInvitation:!!this.pending.roomInvitation,taken:!!this.pending.taken,unavailable:!this.pendingLive(this.pending)||!!this.pending.door && !this.roomsFor(this.pending.peer).some(r=>r.door===this.pending.door && r.device===this.pending.device && r.count<LIMITS.participants),name:this.contact(this.pending.peer)?.name},outgoing:this.out && {id:this.out.id,resuming:!!this.out.resume,name:this.contact(this.out.peer)?.name}};
+      incoming:this.pending && {id:this.pending.id,peer:this.pending.peer,key:this.pending.localKey??=randomUUID(),mode:this.pending.admit?"admit":this.pending.switchCall?"switch":"call",resuming:!!this.pending.resume,roomInvitation:!!this.pending.roomInvitation,taken:!!this.pending.taken,unavailable:!this.pendingLive(this.pending)||!!this.pending.door && !this.roomsFor(this.pending.peer).some(r=>r.door===this.pending.door && r.device===this.pending.device && r.count<LIMITS.participants),name:this.contact(this.pending.peer)?.name},
+      outgoing:this.out && {id:this.out.id,peer:this.out.peer,resuming:!!this.out.resume,mode:this.out.door?'admit':this.out.hostInvite?'invite':'call',name:this.contact(this.out.peer)?.name}};
   }
   async settings({dht,lan,name}){
     if(!this.profile)throw Error(tr('Сначала создайте профиль.'));
@@ -359,13 +380,14 @@ class DirectService {
     if(!this.network.dht)return;
     const dial=device=>{if(this.network.dht&&!this.linksTo(f.id).some(l=>l.card.device===device)&&this.dialOK('dht'+device))this.network.dialDht(device,f.id);};
     for(const key of f.devices)dial(key);
-    if(this.searching.size>=4||this.searching.has(f.id)||Date.now()<(this.nextLookup.get(f.id)||0))return;
-    this.nextLookup.set(f.id,Date.now()+60000);this.searching.add(f.id);
-    this.network.lookup(f.id,dial).catch(()=>{}).finally(()=>this.searching.delete(f.id));
+    const searches=this.network.lookups;
+    if(searches.size>=4||searches.has(f.id)||Date.now()<(this.nextLookup.get(f.id)||0))return;
+    this.nextLookup.set(f.id,Date.now()+60000);
+    this.network.lookup(f.id,dial).catch(()=>{});
   }
   refreshContacts(){
     if(this.hidden||this.strict||this.paused||!this.profile||Date.now()-(this.lastRefresh||0)<5000)return;
-    this.lastRefresh=Date.now();this.nextLookup.clear();this.lastDial.clear();this.lastScan=0;
+    this.lastRefresh=Date.now();this.network.cancelLookups();this.nextLookup.clear();this.lastDial.clear();this.lastScan=0;
     if(this.profile.dht)this.network.startDht(true);
     this.tick();
   }
@@ -393,7 +415,7 @@ class DirectService {
     if(this.out?.expires<now)this.cancel(tr('Друг не ответил.'));
     for(const [id,g] of this.grants)if(this.roomInfo()?.invite!==g.invite)this.grants.delete(id);else if(this.linksTo(g.person).some(l=>l.card.device===id && l.wire))g.until=now+150000;else if(g.until<now)this.grants.delete(id);
   }
-  friendSignal(kind){return {kind,groups:1,groupAppearance:1,lanFiles:this.game.files.io?1:0,chat:this.chats.usable()?1:0,files:this.chats.files.available?1:0,captions:1,readReceipts:1,fileChunks:1,appearance:1,cardStyle:1};}
+  friendSignal(kind){return {kind,groups:1,groupAppearance:1,groupPalettes:1,lanFiles:this.game.files.io?1:0,chat:this.chats.usable()?1:0,files:this.chats.files.available?1:0,captions:1,readReceipts:1,fileChunks:1,appearance:1,cardStyle:1,roomPeople:1};}
   message(l,m){
     const c=l.card,f=this.contact(c.id);
     if(this.strict||this.paused||!this.links.has(l)||l.socket.destroyed||this.blocked(c.id))return;
@@ -410,7 +432,9 @@ class DirectService {
     }
     if((m.kind==='yes'||m.kind==='known') && (f?.state==='invited'||f?.state==='friend')){
       if(f.state==='invited')this.setFriend({...f,state:'friend'});
+      l.roomPeople=m.roomPeople===1;
       l.groupAppearance=m.groupAppearance===1;
+      l.groupPalettes=l.groupAppearance&&m.groupPalettes===1;
       if(l.lanFiles!==(m.lanFiles===1)){l.lanFiles=m.lanFiles===1;this.update();}
       if(m.groups===1&&!l.groups){l.groups=true;this.groups.announce(l);this.update();}
       if(m.kind==='yes' || f.state==='invited')l.send(this.friendSignal('known'));
@@ -436,6 +460,7 @@ class DirectService {
     }
     if(m.kind==='no'&&f?.state==='invited'){this.forget(f.id);this.notice(tr('Заявка отклонена.'));return;}
     if(f?.state!=='friend')return;
+    if(m.kind==='room-person'||m.kind==='room-people'){this.roomPeople.receive(l,m);return;}
     if(m.kind==='group-voice'){this.voiceChannels.receive(l,m);return;}
     if(m.kind==='group-file'){if(this.groups.fileAllowed(l))void this.groups.files?.receive(l,m).catch(()=>{});return;}
     if(m.kind==='group'){if(m.op==='invite'&&(this.hidden||this.profile.privacy?.invites===false))return;if(typeof m.op==='string'&&m.op.length<=50)void this.groups.receive(l,m).catch(()=>{});return;}
@@ -474,6 +499,7 @@ class DirectService {
         (m.door ? m.count<1 || m.count>LIMITS.participants : m.count!==0))return;
       const version=validVersion(m.version)?m.version:null,old=l.remoteRoom;
       if(m.availability!==undefined && !['online','busy','away','offline'].includes(m.availability))return;
+      if(m.inCall!==undefined&&typeof m.inCall!=='boolean')return;
       const status=m.availability??'online';
       // Only an authenticated public presence is an observation. Heartbeats
       // on a retained invisible connection must never refresh this timestamp.
@@ -486,8 +512,8 @@ class DirectService {
       if(status!==l.contactStatus){l.contactStatus=status;this.update();}
       const b=m.back;
       const back=b && roomDoor(b.id) && typeof b.title==='string' && b.title.trim() && b.title.length<=48 && Number.isInteger(b.count)&&b.count>=1&&b.count<=17?{id:b.id,title:b.title,count:b.count,again:b.again===true}:null;
-      l.remoteRoom={door:m.door,count:m.count,again:m.again===true,back,game:m.game===1,version,until:Date.now()+50000};
-      if(!old || old.door!==m.door || old.count!==m.count || old.version!==version || old.again!==l.remoteRoom.again || JSON.stringify(old.back)!==JSON.stringify(back))this.update();
+      l.remoteRoom={door:m.door,count:m.count,inCall:status!=='offline'&&m.inCall===true,again:m.again===true,back,game:m.game===1,version,until:Date.now()+50000};
+      if(!old || old.door!==m.door || old.count!==m.count || old.inCall!==l.remoteRoom.inCall || old.version!==version || old.again!==l.remoteRoom.again || JSON.stringify(old.back)!==JSON.stringify(back))this.update();
       return;
     }
     if(m.kind==='ring'&&uuid(m.id)){
@@ -639,6 +665,7 @@ class DirectService {
     try{this.store.write(this.profile);}catch{this.issue=tr('Не удалось сохранить профиль.');this.update();}
   }
   async stop(){
+    this.lastRefresh=0;
     this.flushSeen();
     this.voiceChannels.close();
     this.flushAvatars();const files=this.chats.close(),groups=this.groups.close();

@@ -1,4 +1,5 @@
 import {tr} from './locale.mjs';
+import {paintAvatar} from './profile-appearance.mjs';
 import { parseRoomCode, roomCode } from './room-code.mjs';
 
 export function roomHub({ access, $, node, account, room, state, connect, openManual, openFriends, showDialog, closeDialog, api, contactCard, name, hush, acceptIncoming }) {
@@ -52,26 +53,26 @@ export function roomHub({ access, $, node, account, room, state, connect, openMa
     closeDialog('internetDialog');closeDialog('hubDialog');
     $('callError').hidden=true;
     renderCall();showDialog('callDialog');
-    const target=room.pending && !room.pending.accepted?'hubAccept':access.pending && ['knock','intro'].includes(access.pending.type)?'accessAccept':room.outgoing?'hubCancelCall':'minimizeCall';
-    $(target).focus();
   }
   function renderCall(){
     const p=currentPrompt();
     if(!p){if($('callDialog').open){closeDialog('callDialog');hush();}return;}
     const id=p.full.split('/')[0], label=account.contactName(id) || id.split('@')[0];
     $('callName').textContent=label;
-    $('callAvatar').textContent=Array.from(label).slice(0,2).join('').toUpperCase();
+    paintAvatar($('callAvatar'),label);
     $('callAddress').hidden=label===id;
     $('callAddress').textContent=id;
     const incoming=p===room.pending,outgoing=p===room.outgoing,joining=p===room.joining,door=p===access.pending;
     $('hubRing').hidden=!incoming;$('hubOutgoing').hidden=!outgoing && !joining;$('hubAccess').hidden=!door;
-    $('hubAccept').hidden=!!p.accepted;$('hubAccept').textContent=p.purpose==='entry'?tr('Разрешить вход'):p.switchCall?tr('Перейти в другой звонок'):tr('Принять');
-    $('hubDecline').textContent=p.accepted?tr('Отменить'):tr('Отклонить');
+    $('callDialog').classList.toggle('is-ringing',(incoming||outgoing)&&p.purpose==='call'&&!p.accepted);
+    $('hubAccept').hidden=!!p.accepted;$('hubAcceptLabel').textContent=p.purpose==='entry'?tr('Разрешить вход'):p.switchCall?tr('Перейти в другой звонок'):tr('Принять');
+    $('hubActionIcon').setAttribute('href',p.purpose==='call'?'#icon-receiver':'#icon-profile');
+    $('hubDeclineLabel').textContent=p.accepted?tr('Отменить'):tr('Отклонить');
     $('accessText').textContent='';
     if(joining){$('callState').textContent=tr('Подключаемся к комнате…');}
     else if(incoming || outgoing){
       $('callState').textContent=incoming ? (p.accepted?tr('Подключаемся…'):p.purpose==='entry'?tr('Просит войти в ваш звонок'):p.switchCall?tr('Вызов во время разговора'):p.purpose==='call'?tr('Входящий звонок'):tr('Приглашение в комнату'))
-        : p.purpose==='call'?tr('Вызываем…'):tr('Ждём ответа на приглашение…');
+        : p.purpose==='call'?tr('Исходящий звонок'):tr('Ждём ответа на приглашение…');
     }else{
       const need=p.target && !account.mutual(p.target.owner);
       $('callState').textContent=({asking:tr('Запрос на вход отправлен'),knock:tr('Просит войти в звонок'),invited:tr('Приглашение отправлено'),intro:tr('Приглашает в звонок'),'waiting-contact':tr('Ожидаем создателя комнаты')})[p.type];

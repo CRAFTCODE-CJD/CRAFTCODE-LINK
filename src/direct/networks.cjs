@@ -3,6 +3,7 @@ const {tr}=require('../native-language.cjs');
 const crypto=require('node:crypto'),os=require('node:os'),tls=require('node:tls'),udp=require('node:dgram');
 const {createRoomCertificate,fingerprintOf}=require('../core/certificate.cjs');
 const {validCard,publicCard,sign,verify}=require('./identity.cjs');
+const {readSeeds}=require('./discovery-seeds.cjs');
 const PORT=45864,GROUP='239.255.42.97';
 const topic=id=>crypto.createHash('sha256').update('CRAFTCODE LINK friends v1:'+id).digest();
 function interfaces(){
@@ -12,8 +13,8 @@ function interfaces(){
 const ipNum=s=>s.split('.').reduce((n,x)=>(n<<8)|Number(x),0)>>>0;
 function localTo(ip,nic){return (ipNum(ip)&ipNum(nic.netmask))===(ipNum(nic.address)&ipNum(nic.netmask));}
 class Networks {
-  constructor({profile,canDiscover=()=>true,attach,seen,issue,changed,dhtFactory,nics=interfaces}){
-    Object.assign(this,{profile,canDiscover,attach,seen,issue,changed,nics,dhtFactory});this.tokens=new Map();this.dialing=new Set();this.epoch=0;
+  constructor({profile,canDiscover=()=>true,hasDhtLinks=()=>false,rememberNodes,attach,seen,issue,changed,dhtFactory,nics=interfaces}){
+    Object.assign(this,{profile,canDiscover,hasDhtLinks,rememberNodes,attach,seen,issue,changed,nics,dhtFactory});this.lookups=new Map();this.dialing=new Set();this.epoch=0;
   }
   // One publication attempt per generation. Disabling discovery invalidates old callbacks.
   startDht(force=false){
@@ -29,13 +30,14 @@ class Networks {
   async publishDht(epoch){
     let node=this.dht, listening=Boolean(node&&this.dhtListening), timer;
     const current=()=>(this.dhtEpoch||0)===epoch;
-    if(!listening){this.discovery='connecting';this.changed?.();}
+    if(!listening||this.discovery==='retry'){this.discovery='connecting';this.changed?.();}
     try{
       const DHT=require('hyperdht');
       if(!listening){
-        node=this.dht=this.dhtFactory?this.dhtFactory():new DHT({ephemeral:true});
+        const options={ephemeral:true,nodes:readSeeds(this.profile().discoverySeeds)?.nodes||[]};
+        node=this.dht=this.dhtFactory?this.dhtFactory(options):new DHT(options);
         this.server=node.createServer({shareLocalAddress:false},s=>{
-          if(this.dht!==node){s.destroy();return;}this.noise(s);
+          if(this.dht!==node){s.on('error',()=>{});s.destroy();return;}this.noise(s);
         });
       }
       const deadline=new Promise((_,reject)=>{this.cancelPublication=()=>reject(Error('discovery stopped'));timer=setTimeout(()=>reject(Error('discovery timeout')),35000);timer.unref();});
@@ -51,13 +53,17 @@ class Networks {
     }catch{
       if(!current())return;
       this.query?.destroy();this.query=null;
-      if(!listening){
+      const failures=Math.min(5,(this.dhtFailures||0)+1);
+      // A bound listener may have lost its route. Keep live calls/files, but
+      // bootstrap a fresh node after repeated publication failures on an idle one.
+      if(!listening||(failures>=2&&!this.hasDhtLinks())){
+        this.cancelLookups();this.dialing=new Set();
         this.dht=null;this.server=null;this.dhtListening=false;
         if(node)await node.destroy({force:true}).catch(()=>{});
       }
       if(!current())return;
       this.discovery='retry';
-      this.dhtFailures=Math.min(5,(this.dhtFailures||0)+1);
+      this.dhtFailures=failures;
       this.dhtDue=Date.now()+Math.min(60000,5000*2**(this.dhtFailures-1));
     }finally{clearTimeout(timer);if(current()){this.cancelPublication=null;this.changed?.();}}
   }
@@ -71,13 +77,33 @@ class Networks {
     const p=this.profile(),keys=require('hyperdht').keyPair(Buffer.from(p.device,'hex'));
     const q=node.announce(topic(publicCard(p).id),keys,this.server.relayAddresses);
     this.query=q;
-    try{await q.finished();if(!q.closestNodes.length)throw Error('no discovery nodes replied');}
+    try{
+      await q.finished();
+      const replies=q.closestNodes;
+      if(!replies.length)throw Error('no discovery nodes replied');
+      if(this.dht===node&&this.query===q&&this.canDiscover()&&this.profile()?.device===p.device)
+        this.rememberNodes?.(replies);
+    }
     finally{if(this.query===q)this.query=null;}
   }
   async lookup(id,found){
-    const node=this.dht;if(!node)return;
-    const q=node.lookup(topic(id));
-    for await(const result of q){if(this.dht!==node)break;for(const item of (result.peers||[]).slice(0,12))found(item.publicKey.toString('hex'));}
+    const node=this.dht;
+    if(!node)return;
+    const query=node.lookup(topic(id));
+    const cancel=()=>{
+      if(this.lookups.get(id)!==cancel)return;
+      this.lookups.delete(id);clearTimeout(timer);query.destroy();
+    };
+    const timer=setTimeout(cancel,35000);timer.unref();this.lookups.set(id,cancel);
+    try{
+      for await(const result of query){
+        if(this.dht!==node||this.lookups.get(id)!==cancel)break;
+        for(const item of (result.peers||[]).slice(0,12))found(item.publicKey.toString('hex'));
+      }
+    }finally{clearTimeout(timer);if(this.lookups.get(id)===cancel)this.lookups.delete(id);}
+  }
+  cancelLookups(){
+    for(const cancel of this.lookups.values())cancel();
   }
   dialDht(device,id){
     if(!this.dht||this.dialing.has(device)||this.dialing.size>=12)return;
@@ -91,6 +117,7 @@ class Networks {
   }
   stopDht(retain=[]){
     const old=this.dht,server=this.server;
+    this.cancelLookups();
     this.dhtEpoch=(this.dhtEpoch||0)+1;this.dhtAttempt=null;this.dhtDue=0;this.dhtFailures=0;this.dhtListening=false;
     this.cancelPublication?.();this.cancelPublication=null;this.query?.destroy();this.query=null;this.dht=null;this.server=null;this.discovery='off';this.dialing=new Set();
     if(!old)return;
@@ -150,17 +177,30 @@ class Networks {
           this.seen(d.card,{host:r.address,port:d.port,pin:d.pin});
         }catch{}
       });
-      for(const sock of [server,listen,send])sock.on('error',()=>this.issue(tr('Локальная сеть стала недоступна.')));
+      for(const sock of [server,listen,send])sock.on('error',()=>{
+        if(!current())return;
+        this.stopLan();this.issue(tr('Локальная сеть стала недоступна.'));
+      });
       this.refresh();
     }catch(e){if(epoch!==this.epoch)return;this.stopLan();throw e;}
   }
   refresh(){
     if(!this.canDiscover()||!this.sender||!this.nic)return;
+    const epoch=this.epoch,sender=this.sender;
     this.nonce=crypto.randomBytes(16).toString('hex');this.scanUntil=Date.now()+5000;this.responses=0;
     const n=this.nic,b=(ipNum(n.address)|~ipNum(n.netmask))>>>0;
     const addr=[24,16,8,0].map(i=>(b>>>i)&255).join('.');
     const q=Buffer.concat([Buffer.from('CCLQ1'),Buffer.from(this.nonce,'hex')]);
-    for(const to of new Set([GROUP,addr]))this.sender.send(q,PORT,to,()=>{});
+    const targets=new Set([GROUP,addr]);
+    let failures=0;
+    const sent=error=>{
+      if(error&&++failures===targets.size&&this.epoch===epoch){
+        this.stopLan();this.issue(tr('Локальная сеть стала недоступна.'));
+      }
+    };
+    for(const to of targets){
+      try{sender.send(q,PORT,to,sent);}catch(error){sent(error);}
+    }
   }
   dialLan(route,id){
     if(!this.canDiscover()||!this.nic||!localTo(route.host,this.nic))return;

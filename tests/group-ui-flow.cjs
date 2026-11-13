@@ -5,20 +5,21 @@ const en=require('../src/renderer/l10n/en.json');
 
 module.exports=async function verifyGroups(host,guest,people,language){
   const label=s=>language==='en'?en[s]:s;
-  let exists=false,invited=false,joined=false,offered=false,owner=0,online=true,file=null,fileListFails=false,theme='personal';
+  let exists=false,invited=false,joined=false,offered=false,owner=0,online=true,file=null,fileListFails=false,theme='personal',groupName='Команда',renameVersion=1;
   const members=[{id:people[0],name:'Саша',role:'owner'},{id:people[1],name:'Саша',role:'member'}];
   const channels=[{id:'common',name:'Лобби',type:'text',access:'all',allow:[]}],messages=[],commands=[];
   for(const [i,page] of [host,guest].entries()){
-    const info=()=>({id:'team',name:'Команда',owner:people[owner],role:members[i].role,online:i===owner||online,transferring:offered,theme,appearanceVersion:1,
+    const info=()=>({id:'team',name:groupName,owner:people[owner],role:members[i].role,online:i===owner||online,transferring:offered,theme,appearanceVersion:1,renameVersion,
       voiceRooms:{voice:[{id:people[0],name:'Саша',seat:'live-seat',micMuted:true,sharing:false}]},
       members:members.slice(0,joined?2:1),channels,bans:[]});
     await page.exposeFunction('qaGroup',async r=>{
       if(r.op==='summary')return {items:exists&&(i===0||joined)?[info()]:[],
-        invites:invited&&i===1?[{id:'team',name:'Команда',fromName:'Саша'}]:[],
-        transfers:offered&&i===1?[{id:'team',name:'Команда',fromName:'Саша'}]:[]};
+        invites:invited&&i===1?[{id:'team',name:groupName,fromName:'Саша'}]:[],
+        transfers:offered&&i===1?[{id:'team',name:groupName,fromName:'Саша'}]:[]};
       commands.push(r);
       switch(r.op){
         case 'group-create':exists=true;return {id:'team'};
+        case 'group-rename':assert(['owner','admin'].includes(members[i].role));assert.equal(r.profileId,people[i]);groupName=r.name;return true;
         case 'group-appearance':theme=r.theme;return true;
         case 'group-invite':assert.equal(r.person,people[1]);invited=true;return true;
         case 'group-answer':joined=r.accept;invited=false;return true;
@@ -59,6 +60,14 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await host.locator('#groupChannelName').getByText('Лобби',{exact:false}).waitFor();
   const choose=(page,box,name)=>page.locator(box).getByRole('button',{name:label(name),exact:true}).click();
   const refresh=page=>page.evaluate(()=>roomFixture.refresh());
+  await host.click('#groupOptions');await choose(host,'#groupManage','Переименовать группу');
+  assert.equal(await host.locator('#groupField-name').getAttribute('maxlength'),'60');
+  await host.fill('#groupField-name','   ');await host.click('#groupEditSubmit');
+  assert(await host.locator('#groupEdit').isVisible());assert(!commands.some(r=>r.op==='group-rename'));
+  assert.equal(await host.locator('#groupField-name').evaluate(n=>n.validationMessage),label('Введите название группы.'));
+  await host.fill('#groupField-name','Вечерние игры');await host.press('#groupField-name','Enter');
+  await host.locator('#groupEdit').waitFor({state:'hidden'});await host.locator('#groupsTitle').getByText('Вечерние игры',{exact:true}).waitFor();
+  await host.click('#groupManageClose');
   await host.click('#groupOptions');await choose(host,'#groupManage','Оформление группы');
   await host.selectOption('#groupTheme','forest');await host.click('#groupAppearanceSave');
   await host.locator('#groupAppearance').waitFor({state:'hidden'});await host.click('#groupManageClose');
@@ -66,11 +75,18 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await host.selectOption('#groupField-person',people[1]);await host.click('#groupEditSubmit');await host.click('#groupManageClose');
   await refresh(guest);await choose(guest,'#groupInvites','Принять');
   await guest.locator('#groupChannelName').getByText('Лобби',{exact:false}).waitFor();
+  await guest.click('#groupOptions');assert.equal(await guest.locator('#groupManage').getByRole('button',{name:label('Переименовать группу'),exact:true}).count(),0);await guest.click('#groupManageClose');
   await guest.fill('#groupInput','Ссылка https://example.org/game ');await guest.click('#groupEmoji summary');
   await guest.locator('#groupEmoji').getByRole('button',{name:'👍',exact:true}).click();
   assert.equal(await guest.inputValue('#groupInput'),'Ссылка https://example.org/game 👍');await guest.press('#groupInput','Enter');
   await guest.locator('#groupLog .chat-link-card').waitFor();await refresh(host);
   await host.locator('#groupLog .chat-link-card').waitFor();
+  const originalMessage=messages[0];
+  messages[0]={...originalMessage,name:'Ш'.repeat(48),text:'https://example.org/'+'long-segment/'.repeat(24)};
+  await refresh(host);
+  await require('./compact-group-chat-flow.cjs')(host);
+  messages[0]=originalMessage;
+  await refresh(host);
   await host.click('#groupAttach');await host.locator('#groupFiles').getByText('лист.txt').waitFor();
   await refresh(guest);await guest.click('#groupShelf summary');await choose(guest,'#groupFiles','Скачать');
   await guest.locator('#groupFiles').getByRole('button',{name:label('Показать в папке')}).waitFor();
@@ -82,10 +98,32 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await host.fill('#groupField-name','Вечер');await host.click('#groupEditSubmit');await host.click('#groupManageClose');
   await host.locator('#groupVoiceTitle').getByText('Вечер',{exact:true}).waitFor();
   await host.click('[data-group-channel="common"]');await host.click('#groupMembersButton');
+  await host.fill('#groupMemberSearch',people[1].slice(-8));
+  assert.equal(await host.locator('#groupManage .group-member:visible').count(),1);
+  await host.fill('#groupMemberSearch','несуществующий участник');await host.locator('#groupManageBody').getByText(label('Участники не найдены.'),{exact:true}).waitFor();
+  await host.fill('#groupMemberSearch','Саша');
+  await host.locator('#groupMemberSearch').focus();await refresh(host);
+  assert.equal(await host.inputValue('#groupMemberSearch'),'Саша');assert.equal(await host.locator('#groupManage .group-member:visible').count(),2);
+  await host.fill('#groupMemberSearch','');
   for(const id of people)await host.locator('#groupManageBody').getByText('Саша · '+id.slice(-8),{exact:true}).waitFor();
   await host.click('[data-group-member="'+people[1]+'"]');
   await host.selectOption('#groupField-what','promote');await host.click('#groupEditSubmit');await host.click('#confirmYesBtn');
   await host.locator('#groupManageBody').getByText(label('Администратор'),{exact:true}).waitFor();
+  await refresh(guest);await guest.click('#groupOptions');
+  renameVersion=undefined;await refresh(guest);
+  await guest.waitForFunction(()=>[...document.querySelectorAll('#groupManage button')].some(b=>b.disabled&&b.title));
+  assert(await guest.locator('#groupManage').getByRole('button',{name:label('Переименовать группу'),exact:true}).isDisabled());
+  renameVersion=1;await refresh(guest);await choose(guest,'#groupManage','Переименовать группу');
+  await guest.fill('#groupField-name','Друзья в субботу');
+  online=false;await refresh(guest);await guest.waitForFunction(()=>document.querySelector('#groupEditSubmit').disabled);
+  assert.equal(await guest.inputValue('#groupField-name'),'Друзья в субботу');
+  online=true;offered=true;await refresh(guest);
+  await guest.locator('#groupEditError').getByText(label('Идёт передача группы.'),{exact:true}).waitFor();
+  offered=false;members[1].role='member';await refresh(guest);
+  await guest.locator('#groupEditError').getByText(label('Нет доступа к этому действию.'),{exact:true}).waitFor();
+  members[1].role='admin';await refresh(guest);await guest.waitForFunction(()=>!document.querySelector('#groupEditSubmit').disabled);
+  await guest.press('#groupField-name','Enter');await guest.locator('#groupEdit').waitFor({state:'hidden'});await guest.click('#groupManageClose');
+  await refresh(host);await host.locator('#groupsTitle').getByText('Друзья в субботу',{exact:true}).waitFor();
   await host.click('[data-group-member="'+people[1]+'"]');await host.selectOption('#groupField-what','transfer');await host.click('#groupEditSubmit');await host.click('#confirmYesBtn');
   await host.click('#groupManageClose');await refresh(guest);await choose(guest,'#groupInvites','Принять');await guest.click('#confirmYesBtn');
   await guest.click('#groupMembersButton');await guest.locator('#groupManageBody').getByText(label('Владелец')+' · '+label('Вы'),{exact:true}).waitFor();
@@ -119,5 +157,5 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await guest.locator('#backToCall').waitFor();await guest.click('#backToCall');await guest.locator('#roomPage').waitFor();
   assert.equal(await guest.locator('html').getAttribute('data-theme'),'default','standalone voice uses the personal theme');
   assert(commands.some(r=>r.op==='group-send'&&r.channel==='common'));
-  console.log('PASS '+language+' groups: invitations, text, emoji, links, file menu and retry, channel management, roles, ownership, offline history, live people under channels, single-click voice and text navigation, 740px drawer.');
+  console.log('PASS '+language+' groups: group rename with validation, permissions, legacy host, offline and handoff guards; member search; invitations, text, emoji, links, file menu and retry, channel management, roles, ownership, offline history, live people under channels, single-click voice and text navigation, 740px drawer.');
 };

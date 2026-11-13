@@ -11,21 +11,37 @@ export const roleName=role=>tr(role==='owner'?'Владелец':role==='admin'?
 function personLabel(person,people){
   return people.some(other=>other.id!==person.id && other.name===person.name) ? person.name+' · '+person.id.slice(-8) : person.name;
 }
+function groupNameError(value){
+  if(!value.trim())return tr('Введите название группы.');
+  if(value.length>60)return tr('Название группы должно быть не длиннее 60 символов.');
+  if(/[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(value))return tr('Уберите управляющие символы из названия.');
+  return '';
+}
 
 export function groupActions({$,context,command,confirmAction,selectGroup,showParticipant,onError}) {
   const appearance=groupAppearance({$,context,command});
   const editor=$('groupEdit'),manager=$('groupManage'),body=$('groupManageBody');
-  let submit=null,kind='',last='',working=false,targetChannel=null;
+  let submit=null,kind='',last='',working=false,targetChannel=null,editorState=null,membersQuery='';
   const safe=fn=>()=>Promise.resolve().then(fn).catch(onError);
   function action(parent,title,fn,{disabled=false,danger=false}={}) {
     const btn=make('button',tr(title),'group-action'+(danger?' danger':''));
     btn.type='button';btn.disabled=disabled;btn.onclick=safe(fn);parent.append(btn);return btn;
   }
-  function editorFor(title,caption,fields,apply) {
+  function refreshEditor(){
+    if(!editorState || !editor.open)return;
+    const current=context();
+    if(current.owner!==editorState.owner || current.id!==editorState.id){if(!working)editor.close();return;}
+    const reason=editorState.unavailable?.()||'';
+    $('groupEditSubmit').disabled=working||!!reason;
+    if(reason){$('groupEditError').textContent=reason;$('groupEditError').hidden=false;$('groupEditError').dataset.unavailable='true';}
+    else if($('groupEditError').dataset.unavailable){delete $('groupEditError').dataset.unavailable;$('groupEditError').hidden=true;}
+  }
+  function editorFor(title,caption,fields,apply,unavailable) {
     if(editor.open)return;
     const {owner,id}=context(),nodes={};
+    editorState={owner,id,unavailable};
     $('groupEditTitle').textContent=tr(title);$('groupEditSubmit').textContent=tr(caption);
-    $('groupEditError').hidden=true;$('groupFields').replaceChildren();
+    $('groupEditError').hidden=true;delete $('groupEditError').dataset.unavailable;$('groupFields').replaceChildren();
     for(const f of fields){
       const field=make('div','','field'),label=make('label',tr(f.label)),input=make(f.checks?'div':f.options?'select':'input');
       input.id='groupField-'+f.key;label.htmlFor=input.id;field.append(label,input);
@@ -36,6 +52,13 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
       }else{
         if(!f.options){input.type='text';input.maxLength=f.max||48;input.autocomplete='off';}
         input.required=true;if(f.value!=null)input.value=f.value;
+      }
+      if(f.hint){
+        const hint=make('small',tr(f.hint),'group-meta');hint.id=input.id+'-hint';input.setAttribute('aria-describedby',hint.id);field.append(hint);
+      }
+      if(f.validate){
+        const validate=()=>input.setCustomValidity(f.validate(input.value));
+        input.addEventListener('input',validate);validate();
       }
       nodes[f.key]=input;$('groupFields').append(field);
     }
@@ -50,24 +73,26 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
     submit=async()=>{
       const current=context();
       if(current.owner!==owner || current.id!==id)throw Error(tr('Группа изменилась. Откройте действие снова.'));
+      const reason=unavailable?.();if(reason)throw Error(reason);
+      for(const f of fields)if(f.validate){const message=f.validate(nodes[f.key].value);if(message)throw Error(message);}
       const values=Object.fromEntries(Object.entries(nodes).map(([key,el])=>[key,
         el.classList.contains('group-allow') ? [...el.querySelectorAll(':checked')].map(n=>n.value) : el.value.trim()]));
       await apply(values);
     };
-    editor.showModal();const first=$('groupFields').querySelector('input,select');first?.focus();if(first?.type==='text')first.select();
+    editor.showModal();refreshEditor();const first=$('groupFields').querySelector('input,select');first?.focus();if(first?.type==='text')first.select();
   }
   $('groupEditForm').onsubmit=async e=>{
-    e.preventDefault();if(!submit||working)return;
+    e.preventDefault();refreshEditor();if(!submit||working||$('groupEditSubmit').disabled)return;
     working=true;$('groupEditSubmit').disabled=true;$('groupEditError').hidden=true;
     try{await submit();if(editor.open)editor.close();}catch(err){
       if(editor.open){$('groupEditError').textContent=String(err?.message||err).replace(/^Error invoking remote method '[^']+': (?:Error: )?/,'');$('groupEditError').hidden=false;}else onError(err);
-    }finally{working=false;$('groupEditSubmit').disabled=false;}
+    }finally{working=false;$('groupEditSubmit').disabled=false;refreshEditor();}
   };
   for(const id of ['groupEditCancel','groupEditClose'])$(id).onclick=()=>{if(!working)editor.close();};
   editor.oncancel=e=>{if(working)e.preventDefault();};
-  editor.onclose=()=>{submit=null;$('groupFields').replaceChildren();};
+  editor.onclose=()=>{submit=null;editorState=null;$('groupFields').replaceChildren();};
   $('groupManageClose').onclick=()=>manager.close();
-  manager.onclose=()=>{kind='';last='';body.replaceChildren();};
+  manager.onclose=()=>{kind='';last='';membersQuery='';body.replaceChildren();};
   async function confirm(title,subject,caption,fn,danger=false) {
     const {owner,id}=context();
     if(await confirmAction(tr(title),subject,tr(caption),danger) && context().owner===owner && context().id===id)await fn();
@@ -82,9 +107,24 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
       {key:'allow',label:'Дополнительные участники',checks:group.members.filter(m=>m.role==='member'),value:channel?.allow||[]}];
   }
   function create(){
-    editorFor('Создать группу','Создать',[{key:'name',label:'Название группы',max:60}],async ({name})=>{
+    editorFor('Создать группу','Создать',[{key:'name',label:'Название группы',max:60,validate:groupNameError,hint:'До 60 символов. Название видно всем участникам.'}],async ({name})=>{
       const result=await command('group-create',{name});if(result?.id)selectGroup(result.id);
     });
+  }
+  function renameUnavailable(){
+    const {group,online}=context();
+    if(!group || !['owner','admin'].includes(group.role))return tr('Нет доступа к этому действию.');
+    if(!online)return tr('Сервер группы недоступен.');
+    if(group.transferring)return tr('Идёт передача группы.');
+    if(group.renameVersion!==1)return tr('Обновите LINK на компьютере владельца, чтобы переименовать группу.');
+    return '';
+  }
+  function rename(){
+    if(renameUnavailable())return;
+    const {group,id,owner}=context();
+    editorFor('Переименовать группу','Сохранить',[
+      {key:'name',label:'Название группы',max:60,value:group.name,validate:groupNameError,hint:'До 60 символов. Название видно всем участникам.'}
+    ],({name})=>command('group-rename',{id,profileId:owner,name}),renameUnavailable);
   }
   function addChannel(){
     const {group,id}=context();if(!group)return;
@@ -120,19 +160,25 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
   }
   function refresh() {
     appearance.refresh();
+    refreshEditor();
     if(!kind)return;
     const {group,id,channel:selected,owner,online,friends}=context();
     if(!group){close();return;}
     const channel=kind==='channel'?group.channels.find(c=>c.id===targetChannel):selected;
     if(kind==='channel'&&(!channel||group.role==='member')){close();return;}
-    const key=JSON.stringify([kind,id,channel?.id,channel?.name,channel?.access,group.members,group.bans,group.transferring,group.role,online,friends.map(f=>[f.id,f.state])]);
+    const key=JSON.stringify([kind,id,group.name,group.renameVersion,channel?.id,channel?.name,channel?.access,group.members,group.bans,group.transferring,group.role,online,friends.map(f=>[f.id,f.state])]);
     if(key===last)return;last=key;
     const oldAction=document.activeElement?.dataset.groupMember;
+    const oldSearch=document.activeElement?.id==='groupMemberSearch'?{start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd}:null;
     body.replaceChildren();$('groupManageTitle').textContent=kind==='channel'?channel.name:tr(kind==='members'?'Участники':'Действия группы');
     const can=group.role==='admin'||group.role==='owner',locked=!online||!!group.transferring;
     function item(title,fn,isLocked=locked,danger=false){return action(body,title,fn,{disabled:isLocked,danger});}
     if(kind==='members'){
       if(can)item('Пригласить друга',invite);
+      const field=make('div','','field'),searchLabel=make('label',tr('Найти участника')),search=make('input'),counter=make('small','','group-meta');
+      search.id='groupMemberSearch';search.type='search';search.autocomplete='off';search.maxLength=80;search.value=membersQuery;
+      searchLabel.htmlFor=search.id;counter.setAttribute('role','status');counter.setAttribute('aria-live','polite');field.append(searchLabel,search,counter);body.append(field);
+      const memberRows=[];
       for(const m of group.members){
         const row=make('div','','group-member'),meta=make(m.id===owner?'div':'button','','group-member-info');
         const name=personLabel(m,group.members);
@@ -145,8 +191,20 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
           const btn=make('button','•••','icon-button');btn.type='button';btn.setAttribute('aria-label',tr('Действия с участником')+' · '+name);
           btn.dataset.groupMember=m.id;btn.disabled=locked;btn.onclick=safe(()=>memberAction(group,m));row.append(btn);
         }
-        body.append(row);
+        body.append(row);memberRows.push({row,person:m});
       }
+      const noMatches=make('p',tr('Участники не найдены.'),'group-meta');body.append(noMatches);
+      const normalize=value=>String(value).normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е');
+      const filterMembers=()=>{
+        membersQuery=search.value;
+        const tokens=normalize(membersQuery).trim().split(/\s+/).filter(Boolean);let count=0;
+        for(const {row,person} of memberRows){
+          const haystack=normalize(person.name+' '+person.id);row.hidden=!tokens.every(token=>haystack.includes(token));if(!row.hidden)count++;
+        }
+        counter.textContent=tr('Найдено участников')+': '+count+' / '+memberRows.length;noMatches.hidden=count>0;
+      };
+      search.addEventListener('input',filterMembers);filterMembers();
+      if(oldSearch){search.focus({preventScroll:true});search.setSelectionRange(oldSearch.start,oldSearch.end);}
       if(can && group.bans?.length){
         body.append(make('h3',tr('Заблокированные участники')));
         for(const m of group.bans){
@@ -158,6 +216,7 @@ export function groupActions({$,context,command,confirmAction,selectGroup,showPa
       }
     }else{
       if(can&&kind==='options'){
+        const reason=renameUnavailable(),renameAction=item('Переименовать группу',rename,!!reason);renameAction.title=reason;
         if(group.appearanceVersion===1)item('Оформление группы',appearance.open);
         item('Пригласить друга',invite);item('Создать канал',addChannel);
       }

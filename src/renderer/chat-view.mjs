@@ -70,7 +70,8 @@ export function createChatView({log,input,form,send,onSend,maxLength=600,onError
   function observeCard(card){const meta=card.querySelector('.link-chat-meta');if(meta)metadataSize.observe(meta);}
   function forgetCard(card){const meta=card.querySelector('.link-chat-meta');if(meta)metadataSize.unobserve(meta);}
   let cached=new Map();
-  let generation=0,pending=false;
+  const blankDraft=()=>({text:'',clientId:null,pending:false});
+  let draft=blankDraft();
   input.maxLength=maxLength;
   log.classList.add('link-chat-log');
   scroll.classList.add('chat-wallpaper');
@@ -78,9 +79,10 @@ export function createChatView({log,input,form,send,onSend,maxLength=600,onError
   const nearBottom=()=>scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<72;
   const renderEmpty=()=>{if(empty)empty.hidden=!!log.childElementCount;context.refresh();};
   function refresh(){
+    if(draft.text!==input.value){draft.text=input.value;draft.clientId=null;}
     const text=input.value.trim();
     form.classList.toggle('chat-draft',!!text);
-    send.disabled=input.disabled||pending||!text||input.value.length>maxLength;
+    send.disabled=input.disabled||draft.pending||!text||input.value.length>maxLength;
     renderEmpty();
   }
   function addCard(parent,message){
@@ -148,21 +150,31 @@ export function createChatView({log,input,form,send,onSend,maxLength=600,onError
       if(anchor)scroll.scrollTop+=anchor.getBoundingClientRect().top-offset;
     }
   }
-  function reset(){
-    generation++;pending=false;cached.clear();links.clear();metadataSize.disconnect();input.value='';log.replaceChildren();refresh();
+  // The caller can keep this draft in memory and restore it on return to its conversation.
+  function reset(next){
+    refresh();
+    const previous=draft;
+    draft=next||blankDraft();
+    cached.clear();links.clear();metadataSize.disconnect();input.value=draft.text;log.replaceChildren();refresh();
+    return previous.text||previous.pending?previous:null;
   }
   async function submit(){
     refresh();
     if(send.disabled)return;
-    const version=generation,draft=input.value;
-    pending=true;refresh();
+    const submitted=draft,clientId=(submitted.clientId??=crypto.randomUUID());
+    submitted.pending=true;refresh();
     try{
-      const result=await onSend(draft.trim());
-      if(version!==generation||result===false)return;
-      if(input.value===draft)input.value='';
-      if(document.activeElement===send)input.focus({preventScroll:true});
-    }catch(error){if(version===generation)onError?.(error);}
-    finally{if(version===generation){pending=false;refresh();}}
+      const result=await onSend(submitted.text.trim(),clientId);
+      if(result===false)return;
+      if(submitted===draft)refresh();
+      if(submitted.clientId===clientId){
+        submitted.text='';
+        submitted.clientId=null;
+        if(submitted===draft)input.value='';
+      }
+      if(submitted===draft&&document.activeElement===send)input.focus({preventScroll:true});
+    }catch(error){if(submitted===draft)onError?.(error);}
+    finally{submitted.pending=false;if(submitted===draft)refresh();}
   }
   input.addEventListener('input',refresh,options);
   input.addEventListener('keydown',event=>{
@@ -175,6 +187,6 @@ export function createChatView({log,input,form,send,onSend,maxLength=600,onError
   refresh();
   return {append,replace,reset,refresh,
     setEnabled(enabled){input.disabled=!enabled;refresh();},
-    destroy(){generation++;events.abort();metadataSize.disconnect();},
+    destroy(){draft=blankDraft();events.abort();metadataSize.disconnect();},
   };
 }

@@ -176,6 +176,7 @@ async function closeRoom(preserveSwitch) {
   lastSources.clear();
   const room = currentRoom;
   currentRoom = null;
+  direct?.presence();
   await Promise.all([shelfClosing,room?.close()]);
 }
 
@@ -216,6 +217,7 @@ async function openRoom(kind, options, adoptGuest) {
       throw new Error(earlyClosed ? tr('Комната закрылась во время подключения.') : tr('Подключение отменено.'));
     }
     currentRoom = room;
+    direct?.presence();
     const info = room.getInfo();
     // Flush only after the invoke result is queued for the renderer. The UI also
     // buffers events until it has installed the returned session identity.
@@ -224,6 +226,7 @@ async function openRoom(kind, options, adoptGuest) {
       eventDeliveryReady = true;
       for (const event of queuedEvents) {
         if (event.type === 'closed') {currentRoom = null;clearShelf()?.catch(()=>{});clearCapture();}
+        if(['roster','closed'].includes(event.type))direct?.presence();
         sendEvent(event);
       }
       queuedEvents.length = 0;
@@ -249,7 +252,7 @@ function registerIPC() {
 
   direct=require('./direct/ipc.cjs').directIPC({handle,window:()=>mainWindow,journal:()=>partialJournal,
     downloads:()=>storageLocationController.downloads(),downloadRoots:()=>storageLocationController.downloadRoots(),
-    emit:e=>{if(e.type==='game-invited')trayController?.ring('game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
+    emit:e=>{if(e.type==='game-invited'||e.type==='game-requested')trayController?.ring(e.type==='game-requested'?'game-request':'game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
   updates=require('./release-update.cjs').registerUpdates({handle,app,dialog,window:()=>mainWindow,completed:token=>shelf?.store.completed.get(token),
     allowed:()=>direct?.allowsPublicLookup()===true,sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive()),
     changed:state=>sendEvent({type:'release-updated',state}),openExternal:url=>shell.openExternal(url)});
@@ -350,7 +353,7 @@ function registerIPC() {
     if (op === 'load') return accountProfile.load();
     if (op === 'forget') return accountProfile.forget();
     if (op === 'save') return accountProfile.save(stringArgument(raw.id,260),stringArgument(raw.password,1024));
-    if(op==='sync-game-notices'){if(Array.isArray(raw.ids))trayController?.syncGameNotices(raw.ids.slice(0,16));return;}
+    if(op==='sync-game-notices'){if(Array.isArray(raw.ids))trayController?.syncGameNotices(raw.ids.slice(0,48));return;}
     if(op==='clear-request-notice'){trayController?.clearRequestNotice(raw.source);return;}
     if(op==='end-ring'){if(trayController)trayController.endRing();else mainWindow?.flashFrame(false);return;}
     if (op === 'ring') { if(raw.kind==='message')return; if (trayController) trayController.ring(raw.kind,raw); else if (mainWindow && !mainWindow.isFocused()) mainWindow.flashFrame(true); return; }
@@ -364,6 +367,7 @@ function registerIPC() {
       mainWindow.webContents.setWebRTCIPHandlingPolicy(raw.proxyOnly === true ? 'disable_non_proxied_udp' : 'default_public_and_private_interfaces');
       internetRoom = true;
       currentRoom = { close: async () => {}, getInfo: () => ({ role:'internet' }) };
+      direct?.presence();
       return;
     }
     throw new Error(tr('Неизвестная команда.'));
@@ -607,7 +611,7 @@ async function createWindow() {
     let tray;
     try {
       tray = new Tray(path.join(__dirname, 'renderer', 'assets', 'craftlink.ico'));
-      trayController = attachTray({ window: mainWindow, tray, menu: Menu, createNotification:options=>Notification.isSupported()?new Notification({...options,icon:path.join(__dirname,'renderer','assets','craftlink.ico')}):null, canOpenChat:(profile,id)=>direct?.canOpenChat(profile,id),openChat:(profile,id)=>sendEvent({type:'tray-chat',profile,id}),openGame:()=>sendEvent({type:'tray-game'}), openRequests:kind=>sendEvent({type:'tray-requests',kind}), stopSharing:()=>sendEvent({type:'tray-stop-sharing'}), leaveRoom:()=>sendEvent({type:'tray-leave'}), quit: () => app.quit(), isQuitting: () => quitting });
+      trayController = attachTray({ window: mainWindow, tray, menu: Menu, createNotification:options=>Notification.isSupported()?new Notification({...options,icon:path.join(__dirname,'renderer','assets','craftlink.ico')}):null, canOpenChat:(profile,id)=>direct?.canOpenChat(profile,id),openChat:(profile,id)=>sendEvent({type:'tray-chat',profile,id}),openGame:id=>sendEvent({type:'tray-game',id}), openRequests:kind=>sendEvent({type:'tray-requests',kind}), stopSharing:()=>sendEvent({type:'tray-stop-sharing'}), leaveRoom:()=>sendEvent({type:'tray-leave'}), quit: () => app.quit(), isQuitting: () => quitting });
     } catch {
       tray?.destroy();
       await dialog.showMessageBox(mainWindow, { type: 'info', message: tr('Значок в трее недоступен. В этом сеансе крестик полностью закроет программу.') });

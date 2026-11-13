@@ -20,11 +20,15 @@
   <link rel="stylesheet" href="chat-input.css">
   <link rel="stylesheet" href="help-center.css">
   <link rel="stylesheet" href="storage-controls.css">
+  <link rel="stylesheet" href="game-launcher.css">
+  <link rel="stylesheet" href="invite-card.css">
 </head>
 <body>
   <svg width="0" height="0" aria-hidden="true" class="icon-library" xmlns="http://www.w3.org/2000/svg">
     <symbol id="icon-profile" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="10" cy="10" r="2.2"/><path d="M6.5 16c.8-3.1 6.2-3.1 7 0M16 9h2m-2 4h2"/></symbol>
     <symbol id="icon-voice" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8"/></symbol>
+    <symbol id="icon-receiver" viewBox="0 0 24 24"><path d="M7.4 3.4 10 7.7c.3.6.2 1.2-.3 1.6l-1.9 1.6a13.8 13.8 0 0 0 5.3 5.3l1.6-1.9c.4-.5 1.1-.6 1.6-.3l4.3 2.6c.5.3.7.9.5 1.5l-.7 2.1c-.3.9-1.2 1.5-2.2 1.3C10.2 20.3 3.7 13.8 2.5 5.8c-.2-1 .4-1.9 1.3-2.2l2.1-.7c.6-.2 1.2 0 1.5.5Z"/></symbol>
+    <symbol id="icon-hang-up" viewBox="0 0 24 24"><path d="M2 13.5c0-1.6 4.1-5.2 10-5.2s10 3.6 10 5.2v2.1c0 .7-.5 1.2-1.2 1.2h-3.2c-.6 0-1.2-.5-1.2-1.2v-2.3a13 13 0 0 0-8.8 0v2.3c0 .7-.6 1.2-1.2 1.2H3.2c-.7 0-1.2-.5-1.2-1.2Z"/></symbol>
     <symbol id="icon-stream" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M9 21h6m-3-4v4"/></symbol>
     <symbol id="icon-connection" viewBox="0 0 24 24"><path d="M5 15c2-3 1-5 2-8a5.5 5.5 0 0 1 10 0c1 3 0 5 2 8v2H5zm5 5a2.3 2.3 0 0 0 4 0"/></symbol>
     <symbol id="icon-reading" viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2"/><path d="M4 8.5c5 2.5 11 2.5 16 0m-8 2v4m0 0-3.5 6m3.5-6 3.5 6"/></symbol>
@@ -35,6 +39,8 @@
     <symbol id="icon-back" viewBox="0 0 24 24"><path d="m10 5-7 7 7 7M4 12h16"/></symbol>
     <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     <symbol id="icon-send" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 5v14"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></symbol>
+    <symbol id="icon-star" viewBox="0 0 24 24"><path d="m12 3 2.75 5.6 6.15.9-4.45 4.34 1.05 6.13L12 17.08l-5.5 2.89 1.05-6.13L3.1 9.5l6.15-.9Z"/></symbol>
   </svg>
   <div class="app-shell">
 <nav id="groupRail" aria-label="Пространства LINK">
@@ -71,14 +77,15 @@
   <div class="profile-tools"><button id="profileBtn" aria-label="Мой профиль" class="profile-button" title="Открыть профиль"><span class="local-avatar" aria-hidden="true" id="profileAvatar">Я</span><span><small>Мой профиль</small><strong id="profileLabel">Войти</strong></span></button><div id="voiceQuickControls"></div><button id="settingsBtn" class="icon-button settings-button" aria-label="Настройки" title="Настройки"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button></div>
 </section>
 <header class="app-header">
-  <button type="button" class="icon-button" id="contextToggle" aria-expanded="false" aria-label="Открыть список" title="Открыть список"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 5v14"/></svg></button>
+  <button type="button" class="icon-button" id="contextToggle" aria-expanded="false" aria-label="Открыть список" title="Открыть список"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 5v14"/></svg><span>Каналы</span></button>
+  <button type="button" class="icon-button" id="contactDrawerToggle" aria-controls="friendsContext" aria-expanded="false" aria-label="Личные сообщения" title="Личные сообщения" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profile"/></svg><span>Личные сообщения</span></button>
   <strong id="crumb">Друзья</strong>
 </header>
 <button type="button" id="contextScrim" aria-label="Закрыть список" tabindex="-1" hidden></button>
 <section id="directoryPage" aria-labelledby="directoryTitle">
   <header class="directory-heading"><div><h1 id="directoryTitle" tabindex="-1">Друзья</h1><span id="directoryCount" class="field-help"></span></div><div id="bookFilters" role="group" aria-label="Показать"><button data-filter="all" aria-pressed="true">Все</button><button data-filter="online">В сети</button><button data-filter="favorite">Избранные</button><button data-filter="blocked">Заблокированные</button></div><button id="linkFriends" class="button button-primary">Добавить друга</button></header>
   <section id="gamePage" class="game-page" hidden>
-    <section class="surface lan-discovered" id="gameReturns" hidden></section><div id="gameInvites" aria-live="polite"></div>
+    <div id="gameInvites" aria-live="polite"></div><section class="surface lan-discovered" id="gameReturns" hidden></section>
     <section id="gameLobby" class="lan-lobby surface">
       <div class="lan-symbol" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="6" rx="2"/><path d="M12 8v4M5 16v-4h14v4"/><rect x="2" y="16" width="6" height="5" rx="1.5"/><rect x="16" y="16" width="6" height="5" rx="1.5"/></svg></div>
       <div><h2>Соберите игроков в одной сети</h2><p>Создайте сеть или присоединитесь к друзьям. Голосовой звонок можно продолжать во время игры.</p></div>
@@ -86,30 +93,30 @@
       <form id="gameCreate"><label for="gameTitle">Название игровой LAN</label><div class="game-row"><input id="gameTitle" maxlength="48" required placeholder="Например, пятничный матч"><button class="button button-primary">Создать</button></div><label><input type="checkbox" id="lanPublish" checked> Друзья могут запросить вход</label></form>
     </section>
     <div id="gameSession" hidden>
-      <header class="lan-summary"><div><span id="gameRole"></span><h2 id="gameName"></h2></div><button class="button button-primary" id="gameActivate"></button><button class="button button-secondary" id="gameLeave">Выйти из LAN</button></header>
-      <div class="lan-tabs"><div role="tablist" aria-label="Игровая LAN"><button type="button" role="tab" id="gameChatTab" aria-controls="gameChatPane" aria-selected="true">Чат матча</button><button type="button" role="tab" id="gameNetworkTab" aria-controls="gameNetworkPane" aria-selected="false" tabindex="-1">Подключение</button></div><button type="button" id="gameMembersToggle" aria-controls="gameMembers" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>Участники</span></button></div>
-      <section class="lan-chat link-chat" id="gameChatPane" role="tabpanel" aria-labelledby="gameChatTab"><header class="conversation-heading"><h3># <span>Чат матча</span></h3><button id="gameClearChat" class="button button-ghost" hidden>Очистить у меня</button></header><div id="gameHistory" class="link-chat-log" role="log" aria-live="polite" aria-label="Сообщения матча"></div><p id="gameChatEmpty">Здесь можно договориться о матче.</p><form class="chat-form link-chat-compose" id="gameComposer"><div class="chat-tools"><details id="gameAttach"><summary aria-label="Вложения и запись"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></summary><div><button id="gameFile" type="button">Прикрепить файл или фото</button><button id="gameVoice" type="button">Голосовое сообщение</button><button id="gameCircle" type="button">Видеосообщение</button><small id="gameFileHint" hidden>Для вложений в LAN обновите LINK у организатора.</small></div></details><details id="gameEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div id="gameEmojiChoices" class="link-chat-emoji-choices"></div></details></div><label class="sr-only" for="gameMessage">Сообщение в чат матча</label><textarea id="gameMessage" rows="1" maxlength="1000" placeholder="Сообщение участникам…" disabled></textarea><button id="gameSendMessage" type="submit" class="send-button" disabled aria-label="Отправить сообщение"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button></form></section>
+      <header class="lan-summary"><div><span id="gameRole"></span><h2 id="gameName" tabindex="-1"></h2></div><button class="button button-primary" id="gameActivate"></button><button class="button button-secondary" id="gameLeave">Выйти из LAN</button></header>
+      <div class="lan-tabs"><div role="tablist" aria-label="Игровая LAN"><button type="button" role="tab" id="gameChatTab" aria-controls="gameChatPane" aria-selected="true">Чат матча</button><button type="button" role="tab" id="gameNetworkTab" aria-controls="gameNetworkPane" aria-selected="false" tabindex="-1">Подключение</button></div><button type="button" id="gameClearChat" title="Очистить у меня" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"/></svg><span>Очистить у меня</span></button><button type="button" id="gameMembersToggle" aria-controls="gameMembers" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>Участники</span><small id="lanRequestCount" hidden></small></button></div>
+      <section class="lan-chat link-chat" id="gameChatPane" role="tabpanel" aria-labelledby="gameChatTab"><div id="gameHistory" class="link-chat-log" role="log" aria-live="polite" aria-label="Сообщения матча"></div><p id="gameChatEmpty" class="chat-wallpaper">Здесь можно договориться о матче.</p><form class="chat-form link-chat-compose" id="gameComposer"><div class="chat-tools"><details id="gameAttach"><summary aria-label="Вложения и запись"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-attach"/></svg></summary><div><button id="gameFile" type="button">Прикрепить файл или фото</button><button id="gameVoice" type="button">Голосовое сообщение</button><button id="gameCircle" type="button">Видеосообщение</button><small id="gameFileHint" hidden>Для вложений в LAN обновите LINK у организатора.</small></div></details><details id="gameEmoji" class="link-chat-emoji"><summary aria-label="Эмодзи"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-emoji"/></svg></summary><div id="gameEmojiChoices" class="link-chat-emoji-choices"></div></details></div><label class="sr-only" for="gameMessage">Сообщение в чат матча</label><textarea id="gameMessage" rows="1" maxlength="1000" placeholder="Сообщение участникам…" disabled></textarea><button id="gameSendMessage" type="submit" class="send-button" disabled aria-label="Отправить сообщение"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-send"/></svg></button></form></section>
       <section id="gameNetworkPane" class="lan-main" role="tabpanel" aria-labelledby="gameNetworkTab" hidden>
-        <section id="gameConnection" class="lan-connection"><div class="lan-state-line"><i aria-hidden="true"></i><h3 id="gameStateTitle"></h3></div><p id="gameStatus" role="status"></p><section id="gamePath" hidden><label for="gameTarget">На каком ПК создан матч</label><select id="gameTarget"></select><button class="button button-secondary" id="gameTestPath">Проверить игровой канал</button><p id="gamePathResult" role="status"></p><button class="button button-secondary" id="gameCopyDiag">Скопировать диагностику LAN</button></section></section>
-        <section class="lan-guide"><h3>Как подключиться в игре</h3><p>На одном ПК создайте LAN-матч в самой игре. На другом откройте список локальных серверов и нажмите «Обновить».</p><section id="ueDiscovery" hidden><p id="gameSearchStatus" role="status"></p><p id="ueTraffic"></p><details><summary>Параметры запуска игры</summary><p>LINK может передать игре адрес адаптера и порт. Если открылось главное меню, выберите в игре подключение по IP.</p><label for="gameLaunchPort">Игровой порт UDP</label> <input id="gameLaunchPort" type="number" min="1024" max="65535" value="7777" step="1"><button class="button button-secondary" id="ueLaunch">Выбрать и запустить игру…</button><button class="button button-secondary" id="ueJoin">Запустить игру и войти к участнику</button></details></section></section>
+        <section id="gameConnection" class="lan-connection"><div class="lan-state-line"><i aria-hidden="true"></i><h3 id="gameStateTitle"></h3></div><p id="gameStatus" role="status"></p><ul id="gamePreparation" class="lan-preparation" aria-label="Перед запуском игры"></ul><section id="gamePath" hidden><label for="gameTarget">На каком ПК создан матч</label><select id="gameTarget"></select><button class="button button-secondary" id="gameTestPath">Проверить игровой канал</button><p id="gamePathResult" role="status"></p><button class="button button-secondary" id="gameCopyDiag">Скопировать диагностику LAN</button></section></section>
+        <section class="lan-guide"><h3>Как подключиться в игре</h3><p>На одном ПК создайте LAN-матч в самой игре. На другом откройте список локальных серверов и нажмите «Обновить».</p><section id="ueDiscovery" hidden><p id="gameSearchStatus" role="status"></p><p id="ueTraffic"></p></section><details id="gameLauncher" class="lan-launcher"><summary>Быстрый запуск игры</summary><div class="lan-launch-body"><p id="gameSelectedName" class="field-help"></p><div class="lan-launch-actions"><button class="button button-secondary" id="gameChooseExe" type="button">Выбрать игру…</button><button class="button button-secondary" id="gameForgetExe" type="button" hidden>Забыть выбор</button></div><div id="gameLaunchOptions" hidden><label for="gameLaunchMode">Способ запуска</label><select id="gameLaunchMode"><option value="plain">Обычный запуск</option><option value="unreal">Unreal Engine: адрес и порт</option></select><p id="gameLaunchHint" class="field-help"></p><div id="gameUnrealOptions" hidden><label for="gameLaunchPort">Игровой порт UDP</label> <input id="gameLaunchPort" type="number" min="1024" max="65535" value="7777" step="1"></div><div class="lan-launch-actions"><button class="button button-primary" id="ueLaunch" type="button">Запустить игру</button><button class="button button-secondary" id="ueJoin" type="button" hidden>Запустить игру и войти к участнику</button></div><p id="gameLaunchAvailability" class="field-help" role="status"></p></div></div></details></section>
         <details class="lan-guide"><summary>Настройка портов вручную</summary><form id="gamePortsForm"><label for="gamePorts">Порты для этой игровой сети</label><input id="gamePorts" maxlength="180" placeholder="UDP 19132, TCP 25565"><p>Если игра использует особый порт и не сообщает его при поиске, укажите правило у игроков и организатора LAN.</p><button type="button" id="gameEosPorts" class="button button-secondary">Подставить диапазон EOS</button><small>UDP 7777–7876 — стандартный диапазон EOS P2P. Выбранные порты действуют после нажатия «Применить».</small><button type="submit" class="button button-secondary">Применить</button></form></details>
         <details class="lan-guide"><summary>Если игра использует сетевой сервис</summary><p>Для игры через LINK выберите в самой игре «Локальная сеть» или «Подключиться по IP». Если доступно только онлайн-лобби Epic или Steam, войдите в него через игру и отправьте другу её приглашение. Игровой IP понадобится только для режима прямого подключения.</p></details>
       </section>
-      <section id="gameMembers" class="lan-members" aria-labelledby="gameMembersHeading"><header><h3 id="gameMembersHeading">Участники</h3><span id="gameCount"></span></header><label id="lanVisibility"><input type="checkbox" id="lanVisible"> Друзья могут запросить вход</label><div id="lanRequests"></div><div id="gameRoster"></div><div id="gameInviteBox" class="game-row"><select id="gameFriend" aria-label="Выберите друга"></select><button class="button button-secondary" id="gameSendInvite">Пригласить</button></div><p id="gameInviteHint" class="field-help" hidden></p></section>
+      <section id="gameMembers" class="lan-members" aria-labelledby="gameMembersHeading"><header><h3 id="gameMembersHeading">Участники</h3><span id="gameCount"></span></header><label id="lanVisibility"><input type="checkbox" id="lanVisible"> Друзья могут запросить вход</label><div id="lanRequests" aria-live="polite"></div><div id="gameRoster"></div><div id="gameInviteBox" class="game-row"><select id="gameFriend" aria-label="Выберите друга"></select><button class="button button-secondary" id="gameSendInvite">Пригласить</button></div><p id="gameInviteHint" class="field-help" hidden></p></section>
     </div>
   </section>
   <section id="roomsDirectory" hidden><div id="friendRooms"></div><section class="rooms-empty surface" id="roomsEmpty" hidden><div class="room-glyph" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M3 5h14v10H8l-4 4v-4H3z"/><path d="M19 8h2v11h-3v2l-3-2h-4"/></svg></div><div><h2>Открытых комнат пока нет</h2><p>Здесь появятся звонки, в которые друзья разрешили попроситься. Вы также можете открыть свою комнату и пригласить друзей.</p><button class="button button-secondary" id="openRoomWorkspace">Перейти в комнату</button></div></section></section><div id="peopleDirectory" class="directory-body"><div id="workspaceBook" class="surface">
-    <section id="profileWelcome" hidden aria-labelledby="welcomeHeading">
+    <section id="profileWelcome" class="theme-preview" hidden aria-labelledby="welcomeHeading">
       <div><h2 id="welcomeHeading">Добро пожаловать в LINK</h2><p>Выберите, как будет выглядеть ваше пространство. В профиле можно добавить фото и рассказать о себе.</p></div>
       <fieldset id="welcomeThemes"><legend>Тема приложения</legend></fieldset>
       <div class="welcome-actions"><button type="button" id="welcomeProfile" class="button button-primary">Настроить мой профиль</button><button type="button" id="welcomeDone" class="button button-secondary">Готово</button><button type="button" id="welcomeSkip" class="entry-link">Пропустить</button></div>
     </section>
     <section id="firstSteps" hidden aria-labelledby="firstStepsTitle"><div><h2 id="firstStepsTitle"></h2><p id="firstStepsText"></p></div><div class="welcome-actions"><button id="firstStepsOpen" type="button" class="button button-secondary"></button><button id="firstStepsSkip" type="button" class="entry-link"></button></div></section>
-    <div class="book-tools"><input type="search" id="bookQuery" maxlength="180" placeholder="Имя, логин или ID" aria-label="Поиск друзей"><select id="bookSort" aria-label="Порядок"><option value="available">Сначала в сети</option><option value="name">По имени</option><option value="recent">Недавние звонки</option></select></div>
+    <div class="book-tools"><label class="book-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><input type="search" id="bookQuery" maxlength="180" placeholder="Имя, логин или ID" aria-label="Поиск друзей"></label><select id="bookSort" aria-label="Порядок"><option value="available">Сначала в сети</option><option value="name">По имени</option><option value="recent">Недавние звонки</option></select></div>
     <div class="presence-hint" id="bookPresence" hidden><span id="bookPresenceText" role="status"></span><button type="button" id="bookPresenceAction" class="entry-link"></button></div><div id="workspaceContacts"></div>
   </div><div id="workspaceRequests" hidden><section class="surface"><h2>Входящие</h2><div id="inRequests"></div></section><section class="surface"><h2>Отправленные</h2><div id="outRequests"></div></section></div>
-  <aside class="directory-side"><section class="home-activity" aria-labelledby="activityTitle"><h2 id="activityTitle">Активные контакты</h2><div id="homeActivities"></div></section><section class="home-room-action"><button class="button button-secondary" id="linkHost">Создать комнату LINK</button></section>
-  <section id="myCardBox" class="home-card-action" hidden><span id="myCardHint" class="field-help" hidden></span><button id="bookCopy" class="button button-secondary">Скопировать карточку</button></section>
+  <aside class="directory-side"><section class="home-activity" aria-labelledby="activityTitle"><h2 id="activityTitle">Активные контакты</h2><div id="homeActivities"></div></section><section class="home-room-action"><button class="button button-secondary" id="linkHost"><svg class="icon" aria-hidden="true"><use href="#icon-stream"/></svg><span>Создать комнату LINK</span></button></section>
+  <section id="myCardBox" class="home-card-action" hidden><span id="myCardHint" class="field-help" hidden></span><button id="bookCopy" class="button button-secondary"><svg class="icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>Скопировать карточку</span></button></section>
   <details class="fallback" id="lobbyFallback"><summary>Другие способы подключения</summary><div class="entry-actions"><button class="button button-secondary" id="createBtn">Создать комнату</button><button class="button button-secondary" id="joinBtn">Ввести код комнаты</button><button class="button button-secondary" id="bookNearby">Локальная сеть или Radmin VPN</button><button class="button button-secondary" id="internetBtn">Контакты Jabber</button></div></details></aside></div>
 </section>
   <aside class="group-sidebar" id="groupContext" aria-labelledby="groupsTitle" hidden>
@@ -148,7 +155,7 @@
   <form id="groupAppearanceForm">
     <header class="modal-header"><h2 id="groupAppearanceTitle">Оформление группы</h2><button type="button" class="close-button" id="groupAppearanceClose" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header>
     <div class="group-appearance-fields">
-      <div class="group-identity-preview"><span id="groupPhotoPreview"></span><strong id="groupAppearanceName"></strong></div>
+      <div class="group-identity-preview theme-preview"><span id="groupPhotoPreview"></span><strong id="groupAppearanceName"></strong></div>
       <div class="group-photo-actions">
         <input type="file" id="groupPhotoFile" accept="image/png,image/jpeg" aria-label="Фото группы" hidden>
         <button type="button" class="button button-secondary" id="groupChoosePhoto">Выбрать фото</button>
@@ -193,7 +200,9 @@
     </form>
     </section>
     <aside id="dmProfile" aria-label="Профиль собеседника" hidden>
-      <div id="dmProfileCover" class="dm-profile-cover profile-cover" aria-hidden="true"></div>
+      <div id="dmProfileCover" class="dm-profile-cover profile-cover">
+        <button id="dmCloseProfile" type="button" class="icon-button" aria-label="Закрыть профиль" title="Закрыть профиль"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button>
+      </div>
       <div class="dm-profile-info"><span id="dmProfileAvatar" class="dm-avatar"></span><h3 id="dmProfileName" dir="auto"></h3><p id="dmProfileStatus"></p>
         <section id="dmAbout" hidden><h4>О себе</h4><p id="dmAboutText" dir="auto"></p></section>
         <section id="dmFriendSince"><h4>В друзьях с</h4><time></time></section>
@@ -262,13 +271,15 @@
       </div>
 
   </div>
-  <dialog id="callDialog" class="modal call-prompt" aria-labelledby="callName" aria-describedby="callState">
+  <dialog id="callDialog" class="modal call-prompt peer-call-card" aria-labelledby="callName" aria-describedby="callState">
     <button id="minimizeCall" class="close-button" aria-label="Свернуть" title="Свернуть">−</button>
-    <div id="callAvatar" class="call-avatar" aria-hidden="true"></div>
-    <p id="callState" class="call-state" role="status"></p><h2 id="callName" dir="auto"></h2>
-    <p id="callAddress" class="call-address" dir="auto"></p>
-    <div id="hubRing" class="call-actions" hidden><button id="hubAccept" class="button button-primary">Принять</button><button id="hubDecline" class="button button-secondary">Отклонить</button></div>
-    <div id="hubOutgoing" class="call-actions" hidden><button id="hubCancelCall" class="button button-secondary">Отменить</button></div>
+    <div class="call-identity">
+      <div class="call-portrait"><div id="callAvatar" class="call-avatar" aria-hidden="true"></div></div>
+      <h2 id="callName" dir="auto" tabindex="-1" autofocus></h2>
+      <p id="callState" class="call-state" role="status"></p><p id="callAddress" class="call-address" dir="auto"></p>
+    </div>
+    <div id="hubRing" class="call-actions" hidden><button id="hubAccept" class="button button-primary"><svg class="icon" aria-hidden="true"><use id="hubActionIcon" href="#icon-receiver"/></svg><span id="hubAcceptLabel">Принять</span></button><button id="hubDecline" class="button button-secondary"><svg class="icon" aria-hidden="true"><use href="#icon-hang-up"/></svg><span id="hubDeclineLabel">Отклонить</span></button></div>
+    <div id="hubOutgoing" class="call-actions" hidden><button id="hubCancelCall" class="button button-secondary"><svg class="icon" aria-hidden="true"><use href="#icon-hang-up"/></svg>Отменить</button></div>
     <section id="hubAccess" hidden><p id="accessText" class="entry-note" role="status"></p><div class="call-actions"><button id="accessAccept" class="button button-primary">Войти в звонок</button><button id="accessCancel" class="button button-secondary">Отменить</button></div></section>
     <p id="callError" class="online-error" role="alert" hidden></p>
   </dialog>
@@ -387,9 +398,11 @@
           <div class="card-reminder"><div><strong>Карточка входа</strong><p>Сохраните логин для переустановки. Для входа понадобится пароль.</p></div><button id="profileSaveCard" class="button button-secondary">Сохранить</button></div>
 </div><div class="profile-preferences">
           <div class="appearance-fields">
-            <label class="field"><span>Тема приложения</span><select id="profileTheme"><option value="default">Классическая</option><option value="light">Светлая</option><option value="dusk">Сумерки</option><option value="forest">Хвойная</option></select></label>
-            <label class="field"><span>Фон чатов</span><select id="chatWallpaper"><option value="plain">Однотонный</option><option value="dots">Точки</option><option value="mesh">Диагонали</option></select></label>
+            <label class="field"><span>Тема приложения</span><select id="profileTheme"><option value="default">Классическая</option><option value="light">Светлая</option><option value="dusk">Сумерки</option><option value="forest">Хвойная</option><option value="cobalt" data-extended>Кобальт</option><option value="terracotta" data-extended>Терракота</option><option value="paper" data-extended>Бумага</option></select></label>
+            <label class="field"><span>Фон чатов</span><select id="chatWallpaper"><option value="plain">Однотонный</option><option value="dots">Точки</option><option value="mesh">Диагонали</option><option value="contours">Контуры</option><option value="aurora">Сияние · с анимацией</option></select></label>
           </div><p class="field-help">Оформление сохраняется на этом устройстве.</p>
+          <figure id="chatAppearancePreview" class="theme-preview chat-wallpaper"><figcaption>Пример переписки</figcaption>
+            <p>Соберёмся вечером?</p><p>Да, до встречи!</p></figure>
           <label class="field"><span>Язык интерфейса / Language</span><select id="displayLanguage"><option value="ru">Русский</option><option value="en">English</option></select></label><p id="languageNote" role="status" hidden></p><button id="guideSettings" class="entry-link">Как пользоваться LINK</button></div></section>
         <section id="pref-voice">
           <h3>Голос</h3>
@@ -464,10 +477,14 @@
   </dialog>
   <dialog id="linkGuide" class="modal" aria-labelledby="guideTitle" aria-describedby="guideText"><header class="modal-header"><span id="guideStep" class="field-help"></span><button id="guideClose" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div class="guide-illustration" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><use id="guideIcon" href="#icon-profile"/></svg></div><h2 id="guideTitle"></h2><p id="guideText"></p><div class="guide-actions"><button id="guideSkip" class="entry-link"></button><div><button id="guideBack" class="button button-secondary">Назад</button><button id="guideNext" class="button button-primary">Далее</button></div></div></dialog>
   <dialog id="contactActions" class="modal compact-contact" aria-labelledby="contactActionsTitle"><header class="modal-header"><h2 id="contactActionsTitle">Контакт</h2><button class="close-button" id="closeContactActions" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></header><div class="contact-choices" id="contactChoices"></div></dialog>
-  <dialog id="peerCallDialog" class="modal call-prompt" aria-labelledby="peerCaller" aria-describedby="peerCallTitle">
-    <div id="peerAvatar" class="call-avatar" aria-hidden="true"></div>
-    <p id="peerCallTitle" class="call-state" role="status">Входящий звонок</p><h2 id="peerCaller" dir="auto"></h2>
-    <div class="call-actions"><button id="peerAccept" class="button button-primary">Принять</button><button id="peerReject" class="button button-secondary">Отклонить</button></div></dialog>
+  <dialog id="peerCallDialog" class="modal call-prompt peer-call-card" aria-labelledby="peerCaller" aria-describedby="peerCallTitle">
+    <div class="call-identity">
+      <div class="call-portrait"><div id="peerAvatar" class="call-avatar" aria-hidden="true"></div></div>
+      <h2 id="peerCaller" dir="auto" tabindex="-1" autofocus></h2>
+      <p id="peerCallTitle" class="call-state" role="status">Входящий звонок</p>
+    </div>
+    <div class="call-actions"><button id="peerAccept" class="button button-primary"><svg class="icon" aria-hidden="true"><use id="peerActionIcon" href="#icon-receiver"/></svg><span id="peerAcceptLabel">Принять</span></button><button id="peerReject" class="button button-secondary"><svg class="icon" aria-hidden="true"><use href="#icon-hang-up"/></svg><span id="peerRejectLabel">Отклонить</span></button></div>
+  </dialog>
   <dialog id="internetDialog" class="modal online-dialog" aria-labelledby="onlineTitle">
     <div class="modal-header"><div><h2 id="onlineTitle">Друзья</h2><p id="onlineStatus" class="online-status" role="status"></p></div><button id="closeInternet" class="close-button" aria-label="Закрыть"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
     <section id="onlineLogin">
@@ -605,6 +622,17 @@
   <label for="attachmentCaption">Подпись</label><textarea id="attachmentCaption" rows="2" maxlength="1024" placeholder="Добавить подпись…"></textarea>
   <p id="attachmentDraftStatus" role="status"></p>
   <div class="dialog-actions"><button id="attachmentDraftCancel" type="button" class="button button-secondary">Отмена</button><button id="attachmentDraftSend" type="button" class="button button-primary">Отправить</button></div>
+</dialog>
+<dialog id="avatarCrop" class="modal avatar-crop" aria-labelledby="avatarCropTitle">
+  <form method="dialog">
+    <h2 id="avatarCropTitle">Кадрирование фото</h2>
+    <canvas id="avatarCropPreview" width="480" height="480" tabindex="0" autofocus aria-label="Область кадрирования" aria-describedby="avatarCropHint"></canvas>
+    <p id="avatarCropHint" class="field-help">Перетащите фото или сдвиньте кадр стрелками. Щелчок перемещает центр кадра.</p>
+    <label class="field"><span class="range-label"><span>Масштаб фото</span><output id="avatarCropScale" for="avatarCropZoom">100%</output></span>
+      <input type="range" id="avatarCropZoom" min="100" max="300" step="5" value="100">
+    </label>
+    <div class="dialog-actions"><button type="submit" value="cancel" class="button button-secondary">Отмена</button><button type="submit" value="apply" class="button button-primary">Применить</button></div>
+  </form>
 </dialog>
 </body>
 </html>

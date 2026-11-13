@@ -1,21 +1,57 @@
-import {tr} from './locale.mjs';
+import {tr,language} from './locale.mjs';
 import {paintAvatar} from './profile-appearance.mjs';
 import {contactStatusLabel} from './contact-list.mjs';
+const discoveryClock=new Intl.DateTimeFormat(language,{hour:'numeric',minute:'2-digit',second:'2-digit'});
 export function discoveryMessage(data,strict=false){
-  if(data.privacy?.status==='invisible')return tr('Поиск приостановлен в невидимом режиме.');
   if(strict)return tr('Прямой поиск отключён в режиме «Только через ретранслятор».');
+  if(data.privacy?.status==='invisible')return tr('Поиск приостановлен в невидимом режиме.');
+  const parts=[];
   if(data.dht){
-    if(data.discovery==='ready')return tr('Узлы интернет-поиска LINK ответили.');
-    if(data.discovery==='retry')return tr('Нет ответа от интернет-поиска LINK. Повторяем подключение.');
-    return tr('Подключаемся к интернет-поиску LINK…');
+    if(globalThis.navigator?.onLine===false)parts.push(tr('На этом ПК нет подключения к сети по данным системы.'));
+    else if(data.discovery==='ready')parts.push(tr('Интернет-поиск доступен.'));
+    else if(data.discovery==='retry')parts.push(tr('Не удалось подключиться к интернет-поиску. LINK попробует снова.'));
+    else parts.push(tr('Подключаемся к интернет-поиску LINK…'));
   }
-  if(data.lan)return data.lanReady?tr('Поиск включён только в выбранной локальной сети.'):tr('Выбранная локальная сеть пока недоступна.');
-  return tr('Поиск друзей выключен на этом ПК.');
+  if(data.lan)parts.push(tr(data.lanReady?'Поиск в выбранной локальной сети включён.':'Выбранная локальная сеть пока недоступна.'));
+  if(!parts.length)return tr('Поиск друзей выключен на этом ПК.');
+  const friends=data.friends?.filter(c=>c.state==='friend')||[];
+  if(friends.length){
+    const online=friends.filter(c=>c.online).length;
+    parts.push(online?tr('Друзья на связи · {online} из {total}.').replace('{online}',online).replace('{total}',friends.length):tr('Связь с друзьями пока не установлена.'));
+    if(!online&&data.dht&&data.discovery==='ready'&&globalThis.navigator?.onLine!==false)
+      parts.push(tr('Попросите друга открыть LINK и проверить статус и поиск через интернет в профиле.'));
+    else if(!online&&!data.dht&&data.lanReady)
+      parts.push(tr('Для связи оба устройства должны выбрать одну локальную сеть.'));
+  }
+  if(data.lastContactRefresh>0){
+    const time=discoveryClock.format(data.lastContactRefresh);
+    parts.push(tr('Повторный поиск запрошен в {time}.').replace('{time}',time));
+  }
+  return parts.join(' ');
 }
 export function directPanel({showFriends,showRequests,showProfile,openChat,setMethod,identityChanged,inviteFriends,notifyRequests,contactMenu,disconnect,api,$,state,settings,saveSettings,connect,internet,node,showDialog,closeDialog,confirmAction,toast}){
   let data={me:null,nics:[],friends:[],near:[],requests:[]},route='home',transfer='',fetchNumber=0,joining=false,ringId='',pendingTransfer=false,changingNetwork=false;
   let approvedSwitch,confirmingCall=false;
+  let switchReview;
   const cmd=(op,fields={})=>api.direct({op,...fields});
+  function contactAvatar(element,call){
+    const contact=data.friends.find(friend=>friend.id===call.peer&&friend.state==='friend');
+    paintAvatar(element,call.name||tr('Контакт'),contact?.avatar);
+  }
+  async function confirmSwitch(call,session,room){
+    const peer=node('div','call-switch-peer');
+    const portrait=node('span','call-avatar');
+    contactAvatar(portrait,call);
+    const name=node('strong','',call.name||tr('Контакт'));name.dir='auto';
+    peer.append(portrait,name);
+    const controller=new AbortController();
+    const review=switchReview={key:call.key,session,controller};
+    try{
+      return await confirmAction(tr(room?'Перейти в другую комнату?':'Перейти в другой звонок?'),
+        tr(session.role==='host'&&!session.groupVoice?'Ваша текущая комната закроется для участников.':'Вы покинете текущий звонок.'),
+        tr('Перейти'),false,peer,controller.signal);
+    }finally{if(switchReview===review)switchReview=null;}
+  }
   const hint=(text,error=false)=>{
     const message=$('settingsDialog').open && !$('directDialog').open && !$('pref-profile').hidden?$('directProfileFeedback'):$('directMessage');
     message.classList.toggle('invalid',error);
@@ -93,7 +129,15 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
       fav.setAttribute('aria-pressed',String(c.favorite));const more=act('•••',()=>contactMenu(c.name,[
         act(tr('Удалить из друзей'),async()=>{if(await confirmAction(tr('Удалить контакт?'),c.name+' · '+tr('Будут удалены история переписки на этом ПК и ожидающие отправки.'),tr('Удалить'),true)){await cmd('forget',{id:c.id});await sync();}}),
         act(tr('Заблокировать'),()=>block(c))]),tr('Действия с контактом ')+c.name);
-      if(directory){fav.classList.add('directory-icon');more.classList.add('directory-icon');}
+      if(directory){
+        for(const [button,symbol] of [[fav,'icon-star'],[more,'icon-more']]){
+          const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+          const use=document.createElementNS(svg.namespaceURI,'use');
+          svg.setAttribute('class','icon');svg.setAttribute('aria-hidden','true');
+          use.setAttribute('href','#'+symbol);svg.append(use);
+          button.classList.add('directory-icon');button.replaceChildren(svg);
+        }
+      }
       r.append(fav,more);
     }
     return r;
@@ -105,6 +149,7 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
         r.append(label,yes,act(tr('Отклонить'),async()=>{await cmd('answer',{id:c.id,yes:false});await sync();}),
           act('•••',()=>contactMenu(c.name,[act(tr('Заблокировать'),()=>block(c))]),tr('Действия с заявкой')));return r;}
   function blockedCard(c){const line=node('div','blocked-row');line.append(node('span','',c.name),act(tr('Разблокировать'),async()=>{await cmd('unblock',{id:c.id});await sync();}));return line;}
+  let checkParticipantCard;
   function participant(person,current,moderate){
     if(!current()||data.paused||!data.me||person.id===data.me.id)return;
     const owner=data.me.id,id=person.id;
@@ -113,26 +158,44 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
       if(id&&data.requests.some(p=>p.id===id))return 'incoming';
       return id&&data.friends.find(p=>p.id===id)?.state||'unknown';
     };
+    const introduced=()=>person.room&&person.peer&&data.roomPeople?.[person.peer]?.id===id&&
+      data.roomPeople[person.peer].room===person.room;
     const initial=relation(),buttons=[];
     const add=(title,fn)=>buttons.push(act(tr(title),()=>{
       if(current()&&!data.paused&&data.me?.id===owner&&initial===relation())return fn();
     }));
     const descriptions={friend:'Вы друзья в LINK.',blocked:'Этот контакт заблокирован.',invited:'Заявка отправлена',incoming:'У вас есть заявка от этого участника.',
       unknown:'Обменяйтесь карточками LINK лично. После принятия заявки откроется личный чат.'};
-    const details=[node('p','field-help',tr(descriptions[initial]||descriptions.unknown))];
+    const details=[node('p','field-help',tr(initial==='unknown'&&introduced()?
+      'Карточка LINK проверена для этой комнаты. Отправьте заявку, чтобы стать друзьями.':descriptions[initial]||descriptions.unknown))];
     if(id)details.push(node('small','participant-id','ID · '+id));
     if(initial==='friend')add('Личный чат',()=>openChat(id));
     else if(initial==='invited'||initial==='incoming')add('Открыть заявки',()=>showRequests(id));
     else if(initial==='blocked')add('Заблокированные контакты',()=>showFriends('blocked'));
     else{
+      if(introduced())add('Добавить в друзья',async()=>{
+        if(!introduced())return;
+        const result=await cmd('room-add',{owner,room:person.room,peer:person.peer,person:id});
+        await sync();
+        toast(tr(result==='existing'?'Вы друзья в LINK.':result==='accepted'?'Заявка принята.':
+          'Заявка отправлена. После принятия откроется личный чат.'));
+      });
       add('Вставить карточку друга',()=>open('add',person));
       add('Скопировать мою карточку',async()=>{await cmd('copy');toast(tr('Карточка скопирована. Отправьте её другу лично.'));});
     }
     if(moderate)add('Действия с участником',moderate);
     contactMenu(person.name,buttons,details);
+    const hadIntroduction=!!introduced();
+    checkParticipantCard=()=>{
+      if(!$('contactActions').open||!details[0].isConnected){checkParticipantCard=null;return;}
+      if(!current()||data.paused||data.me?.id!==owner||relation()!==initial||!!introduced()!==hadIntroduction){
+        checkParticipantCard=null;closeDialog('contactActions');
+      }
+    };
   }
   let formOwner;
   function render(){
+    checkParticipantCard?.();
     const me=data.paused?null:data.me;identityChanged();$('directReturn').hidden=!data.paused;if(data.paused)$('returnName').textContent=data.me.name;notifyRequests('direct',data.requests||[]);
     if(formOwner!==me?.id){
       if(!me){delete $('profileAvatar').dataset.status;$('profileBtn').title=tr('Открыть профиль');}
@@ -182,20 +245,35 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
       $('nearbyList').replaceChildren(...(near.length?near:[node('p','field-help',settings.proxyOnly?tr('Поиск недоступен в режиме «Только через ретранслятор».'):data.lan?tr('Пока никого нет. Проверьте, что друг открыл LINK и выбрал ту же сеть.'):!data.nics.length?tr('Нет доступных сетей. Подключитесь к Wi-Fi, Ethernet или Radmin VPN.'):tr('Выберите сеть выше, чтобы начать поиск.'))]));
     }
     const call=data.incoming||data.outgoing;
+    if(switchReview&&(data.incoming?.key!==switchReview.key||data.incoming.unavailable||state.session!==switchReview.session))switchReview.controller.abort();
     const audiblyIncoming=data.incoming && !call.taken && !call.unavailable && !settings.dnd;
     if(ringId && !audiblyIncoming){internet().hush('ring');api.internet({op:'end-ring'}).catch(()=>{});ringId='';}
     if(approvedSwitch && approvedSwitch.key!==data.incoming?.key)approvedSwitch=null;
     if(data.issue && route==='near' && $('directDialog').open && !$('directMessage').textContent)hint(data.issue);
     if(call){
-      const title=call.mode==='admit'?'Просит войти в ваш звонок':call.roomInvitation?'Приглашение в комнату':call.mode==='switch'?'Вызов во время разговора':'Входящий звонок';
-      $('peerCallTitle').textContent=tr(call.resuming?'Вход в комнату':data.incoming?title:'Вызываем…');$('peerCaller').textContent=call.name||tr('Контакт');
-      $('peerAvatar').textContent=Array.from($('peerCaller').textContent.trim()).slice(0,2).join('').toLocaleUpperCase();
-      $('peerAccept').hidden=!data.incoming||call.taken;$('peerAccept').textContent=call.mode==='admit'?tr('Разрешить вход'):call.mode==='switch'?tr('Перейти в другой звонок'):tr('Принять');$('peerReject').textContent=data.incoming&&!call.taken?tr('Отклонить'):tr('Отменить');
+      const request=call.mode==='admit',invitation=call.roomInvitation||call.mode==='invite';
+      let title='Исходящий звонок';
+      if(call.unavailable)title='Вызов завершён.';
+      else if(call.resuming)title='Вход в комнату';
+      else if(call.taken)title='Подключаемся…';
+      else if(data.incoming)title=request?'Просит войти в ваш звонок':invitation?'Приглашение в комнату':call.mode==='switch'?'Вызов во время разговора':'Входящий звонок';
+      else if(request||invitation)title=request?'Запрос на вход отправлен':'Ждём ответа на приглашение…';
+      const status=tr(title);
+      if($('peerCallTitle').textContent!==status)$('peerCallTitle').textContent=status;
+      $('peerCaller').textContent=call.name||tr('Контакт');
+      contactAvatar($('peerAvatar'),call);
+      $('peerCallDialog').classList.toggle('is-ringing',!request&&!invitation&&!call.resuming&&!call.taken&&!call.unavailable);
+      $('peerAccept').hidden=!data.incoming||call.taken||call.unavailable;
+      $('peerActionIcon').setAttribute('href',request||invitation?'#icon-profile':'#icon-receiver');
+      $('peerAcceptLabel').textContent=tr(request?'Разрешить вход':call.mode==='switch'?'Перейти в другой звонок':'Принять');
+      $('peerRejectLabel').textContent=tr(call.unavailable?'Закрыть':data.incoming&&!call.taken?'Отклонить':'Отменить');
       if(audiblyIncoming && ringId!==call.key){ringId=call.key;internet().play('ring',false,call.mode!=='admit'&&!call.roomInvitation);}
       if(!$('peerCallDialog').open)showDialog('peerCallDialog');
     }else if($('peerCallDialog').open)closeDialog('peerCallDialog');
   }
   async function sync(){const n=++fetchNumber,s=await cmd('state');if(n!==fetchNumber)return;data=s;render();}
+  window.addEventListener('online',render);
+  window.addEventListener('offline',render);
   function beginTransfer(mode){transfer=mode;hint('');$('transferPass').value=$('transferRepeat').value='';$('repeatLabel').hidden=mode!=='export';
     $('transferRepeat').required=mode==='export';$('transferLabel').textContent=mode==='export'?tr('Придумайте пароль файла'):tr('Введите пароль файла');
     $('transferHint').textContent=mode==='export'?tr('От 12 символов. Файл содержит ключ профиля и текущий список друзей. Передайте файл и пароль раздельно.'):tr('Выберите ранее сохранённый файл .cclprofile. Этот компьютер получит свой ключ устройства.');
@@ -275,16 +353,20 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
     try{await cmd('settings',{lan});hint('');}
     finally{changingNetwork=false;await sync();}
   });
-  bind('directScan',async()=>{if(data.lan)await cmd('refresh');await sync();hint(tr(data.lan?'Поиск запущен.':'Список сетей обновлён.'));});
+  bind('directScan',async()=>{
+    if(data.lan&&!settings.proxyOnly&&data.privacy?.status!=='invisible')await cmd('refresh');
+    await sync();
+    hint(data.lan?discoveryMessage(data,settings.proxyOnly):tr('Список сетей обновлён.'));
+  });
   $('directDht').onchange=()=>run(async()=>{try{await cmd('settings',{dht:$('directDht').checked && !settings.proxyOnly});}finally{await sync();}});
   bind('peerAccept',async()=>{
-    const call=data.incoming;if(!call||call.taken)return;
+    const call=data.incoming;if(!call||call.taken||call.unavailable)return;
     if(state.session&&call.mode!=='admit'){
       if(confirmingCall)return;
       const prior=state.session;
       confirmingCall=true;
       try{
-        const yes=await confirmAction(tr(call.roomInvitation?'Перейти в другую комнату?':'Перейти в другой звонок?'),prior.role==='host'&&!prior.groupVoice?tr('Ваша текущая комната закроется для участников.'):tr('Вы покинете текущий звонок.'),tr('Перейти'));
+        const yes=await confirmSwitch(call,prior,call.roomInvitation);
         if(!yes){await cmd('reject',{id:call.id,key:call.key});return;}
         if((await cmd('state')).incoming?.key!==call.key || state.session!==prior)return;
         // Keep the current room live until the caller supplies a usable invitation.
@@ -306,7 +388,7 @@ export function directPanel({showFriends,showRequests,showProfile,openChat,setMe
       if(state.session){
         const session=state.session;
         const approved=approvedSwitch?.key===s.incoming.key && approvedSwitch.session===session;
-        const answer=approved || await confirmAction(tr('Перейти в другую комнату?'),session.role==='host'&&!session.groupVoice?tr('Ваша текущая комната закроется для участников.'):tr('Вы покинете текущий звонок.'),tr('Перейти'));
+        const answer=approved || await confirmSwitch(s.incoming,session,true);
         const latest=(await cmd('state')).incoming;
         if(latest?.key!==s.incoming.key || state.session!==session)return;
         if(latest.unavailable || !answer){await cmd('reject',{id:latest.id,key:latest.key});if(latest.unavailable)toast(tr('Эта комната уже недоступна.'));return;}

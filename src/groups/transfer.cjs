@@ -7,6 +7,9 @@ const digest=b=>createHash('sha256').update(b).digest('hex');
 const fields=(id,h)=>['LINK group authority v1',id,String(h.epoch),h.previous,h.from,h.owner,h.device,h.token,h.sha];
 const validHop=(id,h)=>h && Number.isSafeInteger(h.epoch)&&h.epoch>1&&M.key(h.previous)&&M.key(h.from)&&M.key(h.owner)&&M.key(h.device)&&
   M.uuid(h.token)&&M.key(h.sha)&&typeof h.proof==='string'&&h.proof.length===88&&verify(h.from,fields(id,h),h.proof);
+function groupForHandoff(r){
+  return r.move.fallbackTheme?{...r.group,theme:r.move.fallbackTheme}:r.group;
+}
 function nextGroup(old,h){
   const g=structuredClone(old),successor=M.member(g,h.owner),prior=M.member(g,g.owner);
   if(!successor||successor.role!=='admin'||!prior||prior.role!=='owner')throw M.denied();
@@ -51,6 +54,7 @@ class GroupHandoff {
       const l=a.device?online.get(a.device):online.size===1?[...online.values()][0]:null;
       if(!l)throw Error(tr('Выберите устройство администратора.'));
       const move={side:'source',phase:'offered',token:randomUUID(),person:a.person,device:l.card.device};
+      if(!l.groupPalettes&&M.extendedThemes.has(r.group.theme))move.fallbackTheme=M.extendedThemes.get(r.group.theme);
       const next={...r,move};this.g.publish(next);this.advertise(next,l);return true;
     }
     if(op==='transfer-cancel'){
@@ -104,7 +108,7 @@ class GroupHandoff {
     if(r.move?.side!=='source'||r.move.phase!=='sending')return;
     let job=this.sending.get(r.id);
     if(!job){
-      const bytes=Buffer.from(JSON.stringify(r.group));if(bytes.length>MAX)throw M.full();
+      const bytes=Buffer.from(JSON.stringify(groupForHandoff(r)));if(bytes.length>MAX)throw M.full();
       job={bytes,sha:digest(bytes),ready:false,token:r.move.token};this.sending.set(r.id,job);
       try{
         if(this.hasFiles(r.group) && !this.g.files)throw M.denied();
@@ -162,10 +166,10 @@ class GroupHandoff {
       if(op==='pull' && job?.ready && job.token===m.token && Number.isInteger(m.offset)&&m.offset>=0&&m.offset<job.bytes.length && m.offset%BLOCK===0){
         this.send(r,'chunk',{offset:m.offset,bytes:job.bytes.subarray(m.offset,m.offset+BLOCK).toString('base64')},l);return;
       }
-      if(op==='prepared'&&x.phase==='sending'&&M.key(m.sha)&&m.sha===digest(Buffer.from(JSON.stringify(r.group)))){
+      if(op==='prepared'&&x.phase==='sending'&&M.key(m.sha)&&m.sha===digest(Buffer.from(JSON.stringify(groupForHandoff(r))))){
         const hop={epoch:r.epoch+1,previous:r.owner,from:r.device,owner:x.person,device:x.device,token:x.token,sha:m.sha};
         hop.proof=sign(this.g.s.profile.device,fields(r.id,hop));
-        const group=nextGroup(r.group,hop),view=M.project(group,this.g.s.me.id);
+        const group=nextGroup(groupForHandoff(r),hop),view=M.project(group,this.g.s.me.id);
         const retired={id:r.id,name:r.name,owner:hop.owner,device:hop.device,epoch:hop.epoch,chain:[...(r.chain||[]),hop],
           view:{...view,transferring:true},...(group.avatar?{badge:{key:view.avatarKey,pixels:group.avatar}}:{}),
           move:{side:'retired',person:x.person,device:x.device,token:x.token,hop,audience:group.members.map(m=>m.id)}};

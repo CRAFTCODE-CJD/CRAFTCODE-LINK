@@ -18,7 +18,7 @@ function shell(createNotification,canOpenChat) {
   });
   let quitting=false;
   const actions=[];
-  const controller=attachTray({window,tray,createNotification,canOpenChat,openChat:(profile,id)=>actions.push([profile,id]),openGame:()=>actions.push('game'),openRequests:source=>actions.push(source),stopSharing:()=>actions.push('stop'),leaveRoom:()=>actions.push('leave'),menu:{buildFromTemplate:items=>items},quit:()=>{quitting=true;},isQuitting:()=>quitting});
+  const controller=attachTray({window,tray,createNotification,canOpenChat,openChat:(profile,id)=>actions.push([profile,id]),openGame:id=>actions.push(['game',id]),openRequests:source=>actions.push(source),stopSharing:()=>actions.push('stop'),leaveRoom:()=>actions.push('leave'),menu:{buildFromTemplate:items=>items},quit:()=>{quitting=true;},isQuitting:()=>quitting});
   const close=()=>{let prevented=false;window.emit('close',{preventDefault(){prevented=true;}});return prevented;};
   return {tray,window,controller,close,actions};
 }
@@ -98,6 +98,19 @@ test('native notifications keep separate destinations, suppress repeats and igno
  controller.setNoticePolicy(true,true);entries[2].emit('click');assert(!window.focused);
  controller.ring('call',{id:'call2'});controller.setNoticePolicy(false,false);
  controller.ring('game');assert.equal(entries.length,3);
+});
+test('game join requests in the background open their exact card only after a click and expire separately',()=>{
+ const entries=[];
+ const {controller,window,actions}=shell(options=>{
+   const native=Object.assign(new EventEmitter(),{options,show(){},close(){this.emit('close');}});
+   entries.push(native);return native;
+ });
+ controller.ring('game-request',{id:'req-1',name:'Friend'});
+ controller.ring('game',{id:'invite-2',name:'Other friend'});
+ assert(!window.focused);assert(entries.every(e=>e.options.silent));
+ controller.syncGameNotices(['req-1']);entries[1].emit('click');assert(!window.focused);
+ entries[0].emit('click');assert(window.focused);
+ assert.deepEqual(actions,[['game','req-1']]);
 });
 test('untrusted notification names stay on one line and cannot reorder the application hint',()=>{
  const {controller,tray}=shell();

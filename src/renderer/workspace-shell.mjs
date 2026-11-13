@@ -13,7 +13,7 @@ const text = (tag, value, cls) => {
 
 export function workspaceShell({$,shell,openGroup,openPerson,refresh}) {
   const mobile=matchMedia('(max-width:880px)');
-  let pane, lastGroups, lastFriends, drawer=false;
+  let pane, lastGroups, lastFriends, drawer, drawerButton;
   const mic=$('micBtn'),deafen=$('deafenBtn'),dock=$('callControls');
   const micSlot=document.createComment('microphone'),deafenSlot=document.createComment('headphones');
   mic.before(micSlot);deafen.before(deafenSlot);
@@ -24,33 +24,51 @@ export function workspaceShell({$,shell,openGroup,openPerson,refresh}) {
   });
   function closeDrawer(restore=false){
     if(!drawer)return;
-    drawer=false;
-    shell.classList.remove('context-open');
+    drawer.classList.remove('drawer-open');
+    drawer=null;
     $('contextScrim').hidden=true;
-    $('contextToggle').setAttribute('aria-expanded','false');
-    if(restore && mobile.matches)$('contextToggle').focus({preventScroll:true});
+    drawerButton.setAttribute('aria-expanded','false');
+    if(restore && mobile.matches)drawerButton.focus({preventScroll:true});
   }
-  function openDrawer(){
-    if(!mobile.matches||!pane)return;
-    drawer=true;shell.classList.add('context-open');
-    $('contextToggle').setAttribute('aria-expanded','true');
+  function openDrawer(target=pane,button=$('contextToggle')){
+    if(!mobile.matches||!target||target.hidden)return;
+    closeDrawer();
+    drawer=target;drawerButton=button;
+    drawer.classList.add('drawer-open');
+    button.setAttribute('aria-expanded','true');
     $('contextScrim').hidden=false;
-    const preferred=pane.querySelector('input[type="search"],[data-group-channel][aria-current="true"]');
-    (preferred||pane.querySelector('button:not(:disabled),input,select'))?.focus({preventScroll:true});
+    const preferred=drawer.querySelector('input[type="search"],[data-group-channel][aria-current="true"]');
+    (preferred||drawer.querySelector('button:not(:disabled):not([hidden]),h1[tabindex]'))?.focus({preventScroll:true});
   }
-  $('contextToggle').onclick=()=>drawer?closeDrawer(true):openDrawer();
+  $('contextToggle').onclick=()=>drawer===pane?closeDrawer(true):openDrawer();
+  const contactsToggle=$('contactDrawerToggle');
+  contactsToggle.onclick=()=>drawer===$('friendsContext')?closeDrawer(true):openDrawer($('friendsContext'),contactsToggle);
   $('contextScrim').onclick=()=>closeDrawer(true);
   document.addEventListener('keydown',event=>{
     if(!drawer||document.querySelector('dialog[open], :popover-open'))return;
     if(event.key==='Escape'){event.preventDefault();closeDrawer(true);return;}
     if(event.key==='Tab'){
-      const controls=[...pane.querySelectorAll('button:not(:disabled),input:not(:disabled),[tabindex="0"],summary')].filter(el=>el.checkVisibility());
+      const controls=[...drawer.querySelectorAll('button:not(:disabled),input:not(:disabled),[tabindex="0"],summary')].filter(el=>el.checkVisibility());
+      if(!controls.length){event.preventDefault();return;}
       const first=controls[0],last=controls.at(-1);
       if(event.shiftKey && document.activeElement===first){event.preventDefault();last.focus();}
       if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
     }
   });
-  mobile.addEventListener('change',()=>{if(!mobile.matches)closeDrawer();refresh();});
+  mobile.addEventListener('change',()=>{
+    const focused=document.activeElement;
+    const inContacts=$('friendsContext').contains(focused)||$('sidebarSearch').contains(focused);
+    const inPane=pane?.contains(focused);
+    if(!mobile.matches)closeDrawer();
+    refresh();
+    if(mobile.matches&&(inPane||inContacts)){
+      (inContacts&&pane===$('groupContext')?contactsToggle:$('contextToggle')).focus({preventScroll:true});
+    }else if(!mobile.matches&&(focused===contactsToggle||focused===$('contextToggle'))){
+      const target=focused===contactsToggle||pane===$('friendsContext')?$('friendContextSearch'):
+        pane===$('dmContext')?$('dmSearch'):$('groupsTitle');
+      target.focus({preventScroll:true});
+    }
+  });
   $('friendContextSearch').oninput=refresh;
   $('contextAddFriend').onclick=()=>$('linkFriends').click();
   function spaces(items,selected,local){
@@ -74,7 +92,7 @@ export function workspaceShell({$,shell,openGroup,openPerson,refresh}) {
   function friends(people,identity){
     const query=$('friendContextSearch').value.trim();
     const items=selectContacts(people.filter(c=>c.state==='friend'),{query});
-    const key=JSON.stringify([identity,query,items.map(c=>[c.id,c.name,c.online,c.status,c.avatarRev,c.chat?.unread])]);
+    const key=JSON.stringify([identity,query,items.map(c=>[c.id,c.name,c.online,c.status,c.inCall,c.avatarRev,c.chat?.unread])]);
     if(key===lastFriends)return;
     lastFriends=key;
     const active=document.activeElement?.closest('#quickPeople [data-person]')?.dataset.person;
@@ -90,21 +108,25 @@ export function workspaceShell({$,shell,openGroup,openPerson,refresh}) {
       return row;
     });
     $('quickPeople').replaceChildren(...rows);
-    if(active)rows.find(row=>row.dataset.person===active)?.focus({preventScroll:true});
+    if(active)(rows.find(row=>row.dataset.person===active)||$('friendContextSearch')).focus({preventScroll:true});
     $('friendContextEmpty').hidden=!!items.length;
     $('friendContextEmpty').textContent=tr(query?'Совпадений нет. Измените поиск или фильтр.':'Здесь появятся ваши друзья.');
   }
   function draw({view,group,items,session,cinema,contacts,identity,local}){
     const groupView=view==='groups'||(view==='room'&&!!session?.groupVoice);
-    viewGroupTheme(groupView?items.find(g=>g.id===group)?.theme:null);
-    const next=groupView?$('groupContext'):view==='chats'?$('dmContext'):$('friendsContext');
+    const activeGroup=groupView&&items.find(g=>g.id===group);
+    viewGroupTheme(activeGroup?.theme||null);
+    if(activeGroup)$('crumb').textContent=activeGroup.name;
+    const personal=view==='chats'?$('dmContext'):$('friendsContext');
+    const next=groupView?$('groupContext'):personal;
     if(pane!==next){closeDrawer();pane=next;}
     shell.dataset.scope=groupView?'group':'personal';shell.dataset.view=view;
-    for(const panel of [$('friendsContext'),$('dmContext'),$('groupContext')]){
-      if(panel)panel.hidden=panel!==next;
-    }
+    $('dmContext').hidden=personal!==$('dmContext');
+    $('friendsContext').hidden=personal!==$('friendsContext');
+    $('groupContext').hidden=!groupView;
+    contactsToggle.hidden=!groupView;
     for(const {label,slot} of searches){
-      const parent=!mobile.matches && next.contains(slot)?$('sidebarSearch'):slot.parentElement;
+      const parent=!mobile.matches && personal.contains(slot)?$('sidebarSearch'):slot.parentElement;
       if(label.parentElement!==parent){
         if(parent===slot.parentElement)slot.after(label);else parent.append(label);
       }
@@ -113,8 +135,7 @@ export function workspaceShell({$,shell,openGroup,openPerson,refresh}) {
     const caption=tr(groupView?'Каналы':view==='chats'?'Чаты':'Друзья');
     $('contextToggle').title=caption;$('contextToggle').setAttribute('aria-label',caption);
     spaces(items,groupView?group:null,local);
-    if(!groupView && view!=='chats')friends(contacts,identity);
-    $('homeDirectory').toggleAttribute('data-active',view==='friends');
+    if(view!=='chats')friends(contacts,identity);
     if(view==='friends')$('homeDirectory').setAttribute('aria-current','page');else $('homeDirectory').removeAttribute('aria-current');
     $('friendContextTitle').textContent=tr(local?'Личные сообщения':'Друзья');
     $('navFriends').toggleAttribute('data-home-active',!groupView);

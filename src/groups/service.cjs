@@ -46,6 +46,10 @@ class Groups {
   }
   localView(r,person,link){
     const view=M.project(r.group,person);
+    if(link&&!link.groupPalettes){
+      delete view.paletteVersion;
+      if(M.extendedThemes.has(view.theme))view.theme=M.extendedThemes.get(view.theme);
+    }
     if(link&&!link.groupAppearance){delete view.theme;delete view.avatarKey;delete view.appearanceVersion;}
     if(view.role==='owner')view.members=view.members.map(m=>({...m,onlineDevices:[...new Set(this.s.linksTo(m.id).filter(l=>this.fileAllowed(l)).map(l=>l.card.device))].slice(0,16)}));
     return {...view,transferring:!!r.move,online:true};
@@ -73,18 +77,21 @@ class Groups {
     const packet={kind:'group',op,...data};
     return this.fileAllowed(link)&&Buffer.byteLength(JSON.stringify(packet))<=wireLimit && link.send(packet);
   }
+  sendInvite(r,link){
+    this.send(link,'invite',{id:r.id,name:r.name,epoch:r.epoch,nameRevision:r.nameRevision||1});
+  }
   announce(l){
     if(!this.fileAllowed(l))return;
     for(const r of this.records.values()){
       if(this.mine(r)){
         if(M.member(r.group,l.card.id)){
           this.handoff.notice(r,l);
-          this.send(l,'invite',{id:r.id,name:r.name,epoch:r.epoch});
+          this.sendInvite(r,l);
           this.send(l,'view',{id:r.id,view:this.localView(r,l.card.id,l)});
           this.directory.send(r,l);
         }
         else if(r.group.invites.some(x=>x.id===l.card.id&&x.until>Date.now()))
-          this.send(l,'invite',{id:r.id,name:r.name,epoch:r.epoch});
+          this.sendInvite(r,l);
       }else if(r.owner===l.card.id && r.device===l.card.device && !r.invite)this.send(l,'sync',{id:r.id,epoch:r.epoch});
       this.handoff.reconnect(r,l);
     }
@@ -99,7 +106,7 @@ class Groups {
       for(const l of this.s.linksTo(id)){
         if(!this.fileAllowed(l))continue;
         if(M.member(r.group,id))this.send(l,'view',{id:r.id,view:this.localView(r,id,l)});
-        else if(r.group.invites.some(i=>i.id===id&&i.until>Date.now()))this.send(l,'invite',{id:r.id,name:r.name,epoch:r.epoch});
+        else if(r.group.invites.some(i=>i.id===id&&i.until>Date.now()))this.sendInvite(r,l);
         else this.send(l,'removed',{id:r.id,epoch:r.epoch});
       }
     }
@@ -109,7 +116,9 @@ class Groups {
     if(r.move)throw locked();
     const group=structuredClone(r.group),result=edit(group);
     group.revision++;M.validateView(M.project(group,group.owner));
-    this.publish({...r,group},r.group);
+    const next={...r,group,name:group.name};
+    if(r.name!==group.name)next.nameRevision=group.revision;
+    this.publish(next,r.group);
     Promise.resolve(this.files?.reconcile(id,group)).catch(e=>{this.s.issue=e.message;this.changed(id);});
     return result;
   }
@@ -207,13 +216,25 @@ class Groups {
     }
     if(m.op.startsWith('handoff-'))return this.handoff.receive(l,m);
     if(m.op==='invite'){
-      if(r||!Number.isSafeInteger(m.epoch)||m.epoch<1)return;
+      const nameRevision=m.nameRevision;
+      if(!Number.isSafeInteger(m.epoch)||m.epoch<1||
+        nameRevision!==undefined&&(!Number.isSafeInteger(nameRevision)||nameRevision<1))return;
+      if(r){
+        if(!pinned||!r.invite||r.view||r.epoch!==m.epoch)return;
+        // Older hosts send only the name. A late legacy packet must not replace
+        // a versioned name received on another connection to the same device.
+        if(nameRevision===undefined ? r.nameRevision||r.name===m.name : nameRevision<=(r.nameRevision||0))return;
+        const name=M.label(m.name);
+        const rate=l.groupInviteUpdates??=new TokenBucket(2,16);
+        if(rate.take())this.put({...r,name,nameRevision});
+        return;
+      }
       const invites=[...this.records.values()].filter(entry=>entry.invite&&!entry.accepted);
       if(invites.length>=MAX_INVITES||invites.filter(entry=>entry.owner===l.card.id).length>=MAX_INVITES_FROM_FRIEND)return;
       let rate=this.inviteRates.get(l.card.id);
       if(!rate){rate=new TokenBucket(1/15,MAX_INVITES_FROM_FRIEND);this.inviteRates.set(l.card.id,rate);}
       if(!rate.take())return;
-      this.put({id:m.id,name:M.label(m.name),owner:l.card.id,device:l.card.device,epoch:m.epoch,invite:true,chain:[]});
+      this.put({id:m.id,name:M.label(m.name),nameRevision,owner:l.card.id,device:l.card.device,epoch:m.epoch,invite:true,chain:[]});
       return;
     }
     if(m.op==='view'&&pinned){this.cache(m.id,m.view);return;}
@@ -286,10 +307,12 @@ class Groups {
     }
     if(op==='transfer'||op==='transfer-cancel'||op==='transfer-answer')return this.handoff.command(r,op,raw);
     const args={...raw};delete args.op;delete args.id;
-    if(op==='appearance'){
+    if(op==='appearance'||op==='rename'){
       if(raw.profileId!==this.s.me.id)throw M.denied();
       delete args.profileId;
     }
+    if(op==='rename'&&!this.mine(r)&&r.view?.renameVersion!==1)
+      throw Error(tr('Обновите LINK на компьютере владельца, чтобы переименовать группу.'));
     const result=await this.request(id,op,args);
     if(op==='leave'){this.store.remove(id);this.changed(id);}
     return result;

@@ -1,4 +1,36 @@
-# CRAFTCODE LINK 0.7.14
+# CRAFTCODE LINK QA
+
+## Windows 0.7.17 release, 2026-11-13
+
+- PASS. Russian and English group navigation at 1426, 940 and 740 pixels. Checked the friends column, channel selection, direct messages, keyboard drawers and return to the current group call. Three isolated desktop clients exchanged voice and screen data while switching between pages.
+- PASS. Two desktop profiles exchanged the same cropped avatar pixels. Cancel, keyboard zoom and pan, profile cards, presence and reopening the app were checked. A group owner also cropped a group photo and the other two members received it.
+- PASS. Checked per-profile themes and wallpapers, group theme restoration, the chat preview and still backgrounds with reduced motion enabled in LINK or Windows. The welcome card uses its selected preview palette for all three actions.
+- PASS. Three isolated Windows profiles exercised incoming calls, decline, caller cancellation during confirmation, guest and host switching, and rejoining after a client restart. Confirmed received audio and decoding. Checked the call cards with keyboard input, seven palettes, both reduced-motion options and the Russian and English interfaces. A separate local Jabber server exercised incoming and outgoing calls.
+- PASS. The Game LAN invitation and join request showed the correct sender. Accepting a game invitation kept a two-person voice call running. Accepting group invitations, explicit ownership transfer, and subsequent file delivery from the new owner were exercised on three profiles.
+- PASS. All 327 automated tests passed on Windows, along with the Python packaging tests and Go tests for loopback audio, the game network and installer maintenance.
+- PASS. Four offline tutorials decoded in Electron. Verified the Russian and English captions, keyboard navigation, manual playback, posters and first-run guide. Both the call tutorial and the LAN tutorial show the recipient accepting an invitation.
+- NOT TESTED. A game match on the two players’ physical PCs.
+
+## Windows 0.7.16 design test build, 2026-11-13
+
+- PASS. On the Friends screen, exercised filters and keyboard navigation in Russian and English at 1426 and 740 pixels. Checked the four themes, the current section after opening a direct conversation and the offline indicator after a contact disconnects.
+- PASS. Two isolated desktop clients stayed in a call while sending a direct message. Checked input, emoji and keyboard focus across direct, room, group and LAN chats. In a narrow conversation, Enter on Close profile and Escape both restored focus to Contact profile.
+- PASS. Voice room layouts held one, two, three and five participants with the sidebar open at 800 × 600. Screen sharing delivered bytes and decoded frames. The LAN chat and transfers ran on isolated clients, including a byte-for-byte comparison of the downloaded file.
+- PASS. All 325 automated unit tests passed on Windows. Three help videos were recorded on demonstration profiles. Their posters use frames from the action shown in each example.
+- NOT TESTED. A game match on the users’ two physical PCs.
+
+## Windows 0.7.15 test build, 2026-11-13
+
+- PASS. All 325 Node tests passed on Windows with two concurrent test workers. In the initial unrestricted parallel run, two Windows PowerShell inventory subprocesses timed out. Both passed in the complete rerun. No tests were skipped.
+- PASS. Two isolated LINK profiles on a private six-node HyperDHT network rediscovered each other after a simulated route failure and retried a call. A separate anonymous public-network probe found 20 responding nodes on this connection. A fresh node, given only six recently responsive routing endpoints and no default bootstrap nodes, also found 20 respondents. This tests discovery on this network.
+- PASS. Verified friend introductions, withdrawal, and stale-card rejection in a local room. Checked group permissions and renaming, contact status, durable acknowledgements while changing chats, compact attachment layouts, LAN launcher controls and discovery states with isolated clients and Russian and English UI. Voice and video notes decoded and transferred files matched in the room/LAN flow.
+- PASS. LAN forwarding tests delivered lobby traffic and both directions of addressed UDP 8088 gameplay frames. The launcher UI was checked without starting a game or enabling a Windows adapter.
+- PASS. Built-in Help opened from the desktop client, the optional guide and keyboard actions worked, and all three tutorial videos decoded. The chat and call videos and posters were refreshed.
+- NOT TESTED. A complete Generals match and recovery on the two players’ actual internet connections. Their November 11 archive records no enabled game adapter. The November 12 diagnosis reports no responding DHT nodes on one connection. It does not isolate a particular provider, router, or regional policy.
+- NOT IMPLEMENTED. A production fallback for this LINK profile when all UDP routes are unavailable. A TCP/443 relay requires a reachable service and an independently verified encrypted client-to-client connection. The separate Android preview was not part of this Windows work.
+
+## Published Windows 0.7.14
+
 
 ## Камера и видеозвонки
 

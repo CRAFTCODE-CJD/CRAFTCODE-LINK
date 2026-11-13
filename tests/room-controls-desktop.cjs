@@ -219,9 +219,11 @@ async function run({a,b,open,create,apps}) {
 
   // Confirming a switch must also handle a caller who hangs up mid-prompt.
   await new Promise(resolve=>setTimeout(resolve,3200));
-  await c.page.click('#dmCall'); await b.page.click('#peerAccept');
+  await c.page.click('#dmCall');await b.page.locator('#peerAccept').waitFor();
+  await screenshot(b.page,'incoming-during-call.png');await b.page.click('#peerAccept');
   await b.page.locator('#confirmYesBtn').waitFor();
-  await c.page.click('#peerReject'); await b.page.click('#confirmYesBtn');
+  assert.equal(await b.page.locator('.call-switch-peer strong').textContent(),'Вера');
+  await c.page.click('#peerReject');await b.page.locator('#confirmYesBtn').waitFor({state:'hidden'});
   await count(a.page,2); await voice(a.page,'3');
   await new Promise(resolve=>setTimeout(resolve,3200));
   await c.page.click('#dmCall'); await b.page.click('#peerAccept');

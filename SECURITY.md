@@ -175,3 +175,9 @@ Game advertisements and admission requests travel over authenticated friend link
 Windows records a generated download token, a fingerprint of the Downloads location and the validated room directory in the local profile before creating a partial file. Startup recovery only considers files associated with that profile in that location. It skips directory links and unregistered files. The final verified name is committed without overwriting a previous copy. Older partial files cannot be safely attributed and are left alone.
 
 A video message gets a single-use camera approval bound to its pending request and room. Cancelling the recording or hiding the window invalidates pending approval. Incoming LAN withdrawals must match the requesting device, active room and outstanding ticket.
+
+## Discovery routing hints and room introductions
+
+With internet discovery enabled, the Windows client can keep up to six public IPv4 routing endpoints that answered its own HyperDHT announcement, limited to one per /24. These are routing nodes. The encrypted local profile holds their addresses for reuse for up to seven days. Disabling internet discovery clears the hints. Profile exports exclude them.
+
+An ordinary LINK media room can introduce guests through the authenticated host. A guest signs its shareable contact card together with its current room scope and temporary participant ID. Other guests can use the verified card to send a friendship request while the participant is present. Turning off friend requests or going invisible withdraws the introduction. Previously shared cards may already have been copied. Friendship acceptance and per-action permissions still apply.

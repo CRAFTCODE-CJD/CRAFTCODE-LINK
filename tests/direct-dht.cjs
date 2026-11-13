@@ -65,6 +65,18 @@ const wait=async read=>{for(let i=0;i<600;i++){if(read())return;await new Promis
    const a=make(prof('Anna'),'127.0.0.2'),b=make(prof('Boris'),'127.0.0.3');
    await wait(()=>a.network.server?.listening && b.network.server?.listening);
    a.add(b.card());await wait(()=>b.requests.size);b.answer(a.me.id,true);await wait(()=>a.contact(b.me.id)?.state==='friend');
+   await Promise.all([a.network.dhtAttempt,b.network.dhtAttempt]);
+   const offline=a.network.dht,announce=offline.announce.bind(offline);
+   offline.announce=()=>({finished:async()=>{},closestNodes:[],destroy(){}});
+   for(const service of [a,b])for(const socket of service.allSockets)socket.destroy();
+   await wait(()=>!a.linksTo(b.me.id).length&&!b.linksTo(a.me.id).length);
+   try{
+     await a.network.startDht(true);await a.network.startDht(true);
+     assert(!a.network.dht,'an idle listener without replies is retired');
+   }finally{offline.announce=announce;}
+   a.refreshContacts();b.refreshContacts();
+   await wait(()=>a.network.dht!==offline&&a.network.discovery==='ready'&&a.snapshot().friends[0].online&&b.snapshot().friends[0].online);
+   console.log('PASS an injected discovery outage followed by refresh on both peers restores mutual authenticated presence on a fresh loopback HyperDHT node.');
    const old=b.profile;await b.stop();await wait(()=>!a.linksTo(b.me.id).length);
    // A restored device has a new key at a different address; the contact knows only the old key.
    const c=make({...old,device:seed()},'127.0.0.4');await wait(()=>c.network.server?.listening);

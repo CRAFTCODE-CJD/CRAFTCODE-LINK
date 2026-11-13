@@ -1,10 +1,16 @@
 WEBVTT
 
-00:00.000 --> 00:04.500
-Create a session in Game LAN.
+00:00.000 --> 00:04.000
+Name your session and create it in Game LAN.
 
-00:04.500 --> 00:08.000
-Invite a friend. They appear in the list after accepting.
+00:04.000 --> 00:06.000
+Select a friend and choose Invite.
 
-00:08.000 --> 00:13.750
-Chat works without the adapter. To play, each person enables their game network.
+00:06.000 --> 00:08.000
+Your friend sees the session name and chooses Accept.
+
+00:08.000 --> 00:10.250
+Both players appear in the participant list.
+
+00:10.250 --> 00:14.250
+Chat is ready. To play, each person enables their game network.

@@ -36,7 +36,7 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
   }});
   $('dmSecurity').onclick=()=>{$('dmActions').open=false;security.open();};
   const input=$('dmInput'), log=$('dmLog'), scroll=$('dmScroll');
-  bindAttachmentDraft({area:$('dmConversation'),input,onError,
+  const validateAttachment=bindAttachmentDraft({area:$('dmConversation'),input,onError,
     scope:()=>visible && (friend()?.chat?.canQueueFiles||friend()?.chat?.files) && !$('strictProxy').checked ?
       {type:'dm',id:selected,profile:owner,key:owner+'/'+selected}:null,
     async publish(target,file,caption){
@@ -48,10 +48,10 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
     maxLength:4000,maxMessages:128,dayDividers:true,onError,decorate:attachments.decorate,
     rowVersion:m=>m.attachment?.state||'',
     updateRow:attachments.updateRow,
-    async onSend(text) {
+    async onSend(text,clientId) {
       const id=selected, person=owner;
       if(!friend() || !visible)return false;
-      await request('chat-send',{id,text,clientId:crypto.randomUUID()});
+      await request('chat-send',{id,text,clientId});
       if(id===selected && owner===person){cursors=[null];await load();}
       return true;
     }});
@@ -90,13 +90,19 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
   }
   let wide=false,wideProfile=true,narrowProfile=false,sharedKey='';
   const profile=$('dmProfile'),profileToggle=$('dmProfileToggle'),conversation=$('dmConversation');
+  const closeProfile=$('dmCloseProfile'),thread=conversation.querySelector('.dm-thread-body');
   function profileLayout(){
+    const focused=document.activeElement;
+    const hadProfileFocus=profile.contains(focused);
     if(visible&&!conversation.hidden)wide=conversation.clientWidth>=740;
     const show=visible&&!!friend()&&(wide?wideProfile:narrowProfile);
     profile.hidden=!show;
     conversation.classList.toggle('with-profile',show);
     conversation.classList.toggle('compact-profile',!wide);
     profileToggle.setAttribute('aria-expanded',String(show));
+    if(visible&&friend()&&hadProfileFocus&&(!show||(wide&&focused===closeProfile))){
+      profileToggle.focus({preventScroll:true});
+    }
     if(show)sharedGroups();
   }
   function sharedGroups(){
@@ -119,14 +125,25 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
   profileToggle.onclick=()=>{
     if(wide)wideProfile=!wideProfile;else narrowProfile=!narrowProfile;
     profileLayout();
+    if(!wide&&narrowProfile)closeProfile.focus({preventScroll:true});
   };
+  function dismissProfile(){
+    narrowProfile=false;
+    profileLayout();
+    profileToggle.focus({preventScroll:true});
+  }
+  closeProfile.onclick=dismissProfile;
+  thread.addEventListener('focusin',()=>{
+    if(!wide&&narrowProfile){narrowProfile=false;profileLayout();}
+  });
   new ResizeObserver(profileLayout).observe(conversation);
   conversation.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&!wide&&!profile.hidden&&!conversation.querySelector('details[open]')){
-      narrowProfile=false;profileLayout();profileToggle.focus({preventScroll:true});
+      event.preventDefault();dismissProfile();
     }
   });
   function showInfo() {
+    validateAttachment();
     security.sync();
     const c=friend();
     $('dmConversation').hidden=!c; $('dmIdle').hidden=!!c;
@@ -200,10 +217,10 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
     if(id && !contacts.some(c=>c.id===id))return;
     if(selected!==id) {
       attachments.clear();composer?.clearFor('dm');$('dmAttach').open=false;
-      if(selected && friend() && input.value)drafts.set(selected,input.value); else drafts.delete(selected);
+      const previous=chat.reset(drafts.get(id));
+      if(selected && friend() && previous)drafts.set(selected,previous); else drafts.delete(selected);
       selected=id; sequence++; latest=[]; cursors=[null]; hasMore=false; readThrough=readRequest=null; loadError=false; loading=!!id;
       sharedKey='';narrowProfile=false;
-      chat.reset(); input.value=drafts.get(id)||''; chat.refresh();
       $('dmActions').open=false; emoji.open=false;
     }
     drawList(); showInfo();
@@ -216,7 +233,7 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
     const query=$('dmSearch').value.trim().toLocaleLowerCase();
     const rows=contacts.filter(c=>c.name.toLocaleLowerCase().includes(query)).sort((a,b)=>
       (b.chat?.last?.time||0)-(a.chat?.last?.time||0) || Number(!!b.online)-Number(!!a.online) || collator.compare(a.name,b.name));
-    const key=JSON.stringify([owner,selected,query,rows.map(c=>[c.id,c.name,c.avatarRev,c.online,c.status,c.chat?.last,c.chat?.unread])]);
+    const key=JSON.stringify([owner,selected,query,rows.map(c=>[c.id,c.name,c.avatarRev,c.online,c.status,c.inCall,c.chat?.last,c.chat?.unread])]);
     if(listKey===key)return;
     listKey=key;
     const previous=document.activeElement?.closest('.dm-entry')?.dataset.person;
@@ -272,7 +289,7 @@ export function privateChats({$,direct,api,state,composer,confirmAction,onError,
     }
     const unread=contacts.reduce((n,c)=>n+(c.chat?.unread||0),0);
     $('dmBadge').hidden=!unread; $('dmBadge').textContent=unread>99?'99+':String(unread);
-    if(!visible)return;
+    if(!visible){validateAttachment();return;}
     const bytes=data.chatStorage?.bytes||0;
     const clearing=!!owner && clearingFiles?.owner===owner;
     $('dmStorage').setAttribute('aria-busy',String(clearing));

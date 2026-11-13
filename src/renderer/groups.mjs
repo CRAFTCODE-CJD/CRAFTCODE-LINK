@@ -32,19 +32,23 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
   const actions=groupActions({$,context:current,command,confirmAction,selectGroup:showSelection,showParticipant:direct.participant,onError});
   const feed=groupFeed({$,openChat,showParticipant:direct.participant,manageMember:person=>actions.manageMember(person)});
   const draftKey=()=>owner+'/'+id+'/'+channel?.id;
-  bindAttachmentDraft({area:$('groupText'),input:$('groupInput'),onError,scope:()=>visible && channel?.type==='text' && isOnline() && !group.transferring && !$('strictProxy').checked ?
+  const validateAttachment=bindAttachmentDraft({area:$('groupText'),input:$('groupInput'),onError,scope:()=>visible && channel?.type==='text' && isOnline() && !group.transferring && !$('strictProxy').checked ?
     {type:'group',profile:owner,group:id,channel:channel.id,key:draftKey()}:null,
     async publish(target,file,caption){await api.offerSelectedFile(target,file,caption);if(target.key===draftKey())reload();}});
-  function closeChannel(){
+  function switchChannel(next=null){
     player.clear();
-    if(channel){if($('groupInput').value)drafts.set(draftKey(),$('groupInput').value);else drafts.delete(draftKey());}
-    channel=null;messages=[];files=[];before=null;more=false;chat.reset();keys.delete('files');
+    const old=channel && draftKey();
+    channel=next;
+    validateAttachment();
+    const previous=chat.reset(channel && drafts.get(draftKey()));
+    if(old){if(previous)drafts.set(old,previous);else drafts.delete(old);}
+    messages=[];files=[];before=null;more=false;keys.delete('files');
     $('groupShelf').open=false;$('groupEmoji').open=false;$('groupFiles').replaceChildren();feedback(null);
   }
   function selectGroup(next,preferred){
     if(!source().items?.some(g=>g.id===next))return;
-    if(next!==id){actions.close();closeChannel();group=null;id=next;token++;selectionChanged();}
-    if(preferred){selections.set(next,preferred);if(channel?.id!==preferred){closeChannel();token++;}}
+    if(next!==id){actions.close();switchChannel();group=null;id=next;token++;selectionChanged();}
+    if(preferred){selections.set(next,preferred);if(channel?.id!==preferred){switchChannel();token++;}}
     draw();reload();
   }
   async function enterVoice(target){
@@ -56,8 +60,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
   function chooseChannel(target){
     if(target.type==='voice' && isOnline() && !group.transferring)return enterVoice(target);
     if(channel?.id!==target.id){
-      closeChannel();channel=target;selections.set(id,target.id);token++;
-      $('groupInput').value=drafts.get(draftKey())||'';
+      switchChannel(target);selections.set(id,target.id);token++;
     }
     showGroup();draw();reload();$('groupChannelName').focus({preventScroll:true});
   }
@@ -87,9 +90,9 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
       const b=make('button',m.file.name||tr('Файл канала'),'button button-secondary');b.type='button';
       b.onclick=()=>{$('groupShelf').open=true;const row=[...$('groupFiles').children].find(el=>el.dataset.file===m.file.id);(row?.querySelector('button')||$('groupShelf').querySelector('summary')).focus();};card.append(b);
     },
-    onSend:async text=>{
+    onSend:async (text,nonce)=>{
       if(!channel||channel.type!=='text'||!isOnline())return false;
-      const old=draftKey();await command('group-send',{id,channel:channel.id,text,nonce:crypto.randomUUID()});drafts.delete(old);return true;
+      await command('group-send',{id,channel:channel.id,text,nonce});return true;
     }});
   function once(key,value,fn){
     const encoded=JSON.stringify(value);if(keys.get(key)===encoded)return;
@@ -99,19 +102,33 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     const b=make('button',tr(title),'button button-secondary');b.type='button';b.onclick=()=>{b.disabled=true;Promise.resolve().then(fn).catch(onError).finally(()=>{b.disabled=false;});};parent.append(b);return b;
   }
   function invitations(list,transfers){
-    const box=$('groupInvites');box.replaceChildren();
+    const box=$('groupInvites'),focused=box.contains(document.activeElement)?document.activeElement.dataset.answer:null;
+    box.replaceChildren();
     for(const [items,isTransfer] of [[list,false],[transfers,true]])for(const offer of items){
-      const row=make('div','','group-invite'),buttons=make('div','','group-invite-actions');
-      row.append(make('small',tr(isTransfer?'Предложение владения':'Приглашение в группу')),make('strong',offer.name),make('small',offer.fromName));
-      for(const yes of [true,false])little(buttons,yes?'Принять':'Отклонить',async()=>{
-        const recipient=owner;
-        if(isTransfer && yes && !await confirmAction(tr('Принять владение группой?'),offer.name+' · '+tr('Этот компьютер станет хранилищем группы.'),tr('Принять владение')))return;
-        if(owner!==recipient)return;
-        await command(isTransfer?'group-transfer-answer':'group-answer',{id:offer.id,accept:yes});
-        if(yes && owner===recipient)showSelection(offer.id);
-      });
-      row.append(buttons);box.append(row);
+      const row=make('article','','invite-card'),avatar=make('span','','invite-avatar');
+      paintGroupMark(avatar,offer);
+      const copy=make('div','','invite-copy'),buttons=make('div','','invite-actions'),recipient=owner;
+      copy.append(make('small',tr(isTransfer?'Предложение владения':'Приглашение в группу'),'invite-kind'),make('strong',offer.name));
+      if(offer.fromName)copy.append(make('small',tr('Владелец группы')+' · '+offer.fromName));
+      if(isTransfer)copy.append(make('small',tr('Этот компьютер станет хранилищем группы.')));
+      for(const yes of [true,false]){
+        const button=make('button',tr(yes?'Принять':'Отклонить'),'button '+(yes?'button-primary':'button-secondary'));
+        button.type='button';
+        button.dataset.answer=[offer.id,isTransfer,yes].join('/');
+        button.onclick=async()=>{
+          for(const b of buttons.children)b.disabled=true;
+          try{
+            if(isTransfer && yes && !await confirmAction(tr('Принять владение группой?'),offer.name+' · '+tr('Этот компьютер станет хранилищем группы.'),tr('Принять владение')))return;
+            if(owner!==recipient)return;
+            await command(isTransfer?'group-transfer-answer':'group-answer',{id:offer.id,accept:yes});
+            if(yes && owner===recipient)showSelection(offer.id);
+          }catch(error){onError(error);}finally{for(const b of buttons.children)b.disabled=false;}
+        };
+        buttons.append(button);
+      }
+      row.append(avatar,copy,buttons);box.append(row);
     }
+    if(focused)([...box.querySelectorAll('button')].find(b=>b.dataset.answer===focused)||box.querySelector('button')||$('groupsTitle')).focus({preventScroll:true});
   }
   function occupants(data){
     if(!group)return {};
@@ -159,7 +176,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
         if(type==='voice'){
           b.title=tr(joined?'Вернуться в звонок':'Войти в голосовой канал')+' · '+c.name;
           b.setAttribute('aria-label',b.title);b.disabled=joining!==null;
-        }
+        }else b.title=c.name;
         if(type==='voice')b.append($('groupVoicePane').querySelector('svg').cloneNode(true));
         else {const mark=make('b','#');mark.setAttribute('aria-hidden','true');b.append(mark);}
         b.append(make('span',c.name));b.onclick=()=>chooseChannel(c);row.append(b);
@@ -210,6 +227,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     $('groupRetry').hidden=!e;
   }
   function draw(){
+    validateAttachment();
     const {invites=[],transfers=[]}=source(),badge=$('groupBadge'),count=owner?invites.length+transfers.length:0;
     badge.hidden=!count;badge.textContent=count||'';
     const data=direct.raw();
@@ -217,6 +235,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     if(!visible)return;
     once('header',[group?.id,group?.name,group?.avatarRev],()=>{
       $('groupsTitle').textContent=group?.name||tr('Группы');
+      $('groupsTitle').title=group?.name||'';
       $('groupContextMark').hidden=!group;
       if(group)paintGroupMark($('groupContextMark'),group);
     });
@@ -264,7 +283,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
       if(!info?.id)throw Error(tr('Группа недоступна.'));
       group=info;
       const next=info.channels.find(c=>c.id===selections.get(id)) || info.channels[0];
-      if(channel?.id!==next?.id){closeChannel();channel=next||null;if(next)selections.set(id,next.id);$('groupInput').value=drafts.get(draftKey())||'';}
+      if(channel?.id!==next?.id){switchChannel(next);if(next)selections.set(id,next.id);}
       else channel=next||null;
       let readError;
       if(channel?.type==='text' && isOnline() && !group.transferring){
@@ -276,16 +295,16 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
         else{files=[];readError??=list.reason;}
       }else{files=[];more=false;}
       feedback(readError);draw();
-    }catch(e){if(visible&&generation===token){actions.close();closeChannel();group=null;feedback(e);draw();}}
+    }catch(e){if(visible&&generation===token){actions.close();switchChannel();group=null;feedback(e);draw();}}
     finally{reading=false;if(rerun){rerun=false;void reload();}}
   }
   function sync(shown,roomVoice){
     const who=direct.active()?direct.raw().me.id:null;
-    if(who!==owner){actions.close();closeChannel();drafts.clear();selections.clear();keys.clear();id=group=null;owner=who;token++;rawSeen=null;}
+    if(who!==owner){actions.close();switchChannel();drafts.clear();selections.clear();keys.clear();id=group=null;owner=who;token++;rawSeen=null;}
     const was=visible;visible=shown;
     if(!shown&&was){actions.close();player.close();token++;}
     const snapshot=direct.raw(),items=source().items||[];
-    if(!items.some(g=>g.id===id)){const next=items[0]?.id||null;if(id!==next){actions.close();closeChannel();id=next;group=null;token++;}}
+    if(!items.some(g=>g.id===id)){const next=items[0]?.id||null;if(id!==next){actions.close();switchChannel();id=next;group=null;token++;}}
     if(roomVoice && items.some(g=>g.id===roomVoice.group) && (id!==roomVoice.group||selections.get(id)!==roomVoice.channel)){
       selectGroup(roomVoice.group,roomVoice.channel);return;
     }

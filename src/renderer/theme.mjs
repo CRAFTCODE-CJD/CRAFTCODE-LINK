@@ -1,6 +1,9 @@
-const themes=new Set(['default','light','dusk','forest']);
+const themes=new Set(['default','light','dusk','forest','cobalt','terracotta','paper']);
+const wallpapers=new Set(['plain','dots','mesh','contours','aurora']);
 const deviceKey='craftlink.appearance.theme';
-export const personalThemeKey=id=>id?deviceKey+'.'+id:deviceKey;
+const wallpaperKey='craftlink.appearance.wallpaper';
+const profileKey=(key,id)=>id?key+'.'+id:key;
+export const personalThemeKey=id=>profileKey(deviceKey,id);
 let personal='default',group=null;
 
 function paint(){
@@ -11,30 +14,41 @@ export function viewGroupTheme(value){
   group=themes.has(value)?value:null;
   paint();
 }
-export function bindPersonalTheme(select){
+function preference(key,id,allowed,fallback){
+  try{
+    let value=localStorage.getItem(profileKey(key,id));
+    if(id&&!value&&!localStorage.getItem(key+'.migrated')){
+      const legacy=localStorage.getItem(key);
+      if(allowed.has(legacy)){
+        value=legacy;localStorage.setItem(profileKey(key,id),value);
+        localStorage.setItem(key+'.migrated','1');
+      }
+    }
+    if(allowed.has(value))return value;
+  }catch{}
+  return fallback;
+}
+export function bindPersonalTheme(select,wallpaper,preview){
   let profile;
+  function show(){
+    preview.dataset.theme=personal;
+    document.documentElement.dataset.wallpaper=wallpaper.value;
+    paint();
+  }
   function sync(id=null){
     if(profile===id)return;
     profile=id;
-    let value;
-    try{
-      value=localStorage.getItem(personalThemeKey(id));
-      // The old release had a single device preference. Import it for the
-      // first profile only, so a later profile can choose independently.
-      if(id&&!value&&!localStorage.getItem(deviceKey+'.migrated')){
-        const legacy=localStorage.getItem(deviceKey);
-        if(themes.has(legacy)){
-          value=legacy;localStorage.setItem(personalThemeKey(id),value);
-          localStorage.setItem(deviceKey+'.migrated','1');
-        }
-      }
-    }catch{}
-    personal=select.value=themes.has(value)?value:'default';paint();
+    personal=select.value=preference(deviceKey,id,themes,'default');
+    wallpaper.value=preference(wallpaperKey,id,wallpapers,'plain');show();
   }
   select.onchange=()=>{
     if(!themes.has(select.value))return;
-    personal=select.value;paint();
+    personal=select.value;show();
     try{localStorage.setItem(personalThemeKey(profile),personal);}catch{}
+  };
+  wallpaper.onchange=()=>{
+    if(!wallpapers.has(wallpaper.value))return;
+    show();try{localStorage.setItem(profileKey(wallpaperKey,profile),wallpaper.value);}catch{}
   };
   sync();return sync;
 }

@@ -40,9 +40,12 @@ class GamePorts{
   accepts(h,roster,learnedListener=false){
     const {proto,sport,dport,src,dst}=h;
     if(!allowedPort(sport)||!allowedPort(dport))return false;
-    const matches=this.allows(proto,dport);
     const key=(src,sport,dst,dport)=>[proto,src,sport,dst,dport].join('/');
     const direct=key(src,sport,dst,dport),now=Date.now(),broadcast=dst===255;
+    // Generals and Zero Hour switch from lobby UDP 8086 to peer-to-peer
+    // gameplay with both sockets bound to UDP 8088.
+    const matchPeer=proto==='UDP'&&!broadcast&&sport===8088&&dport===8088;
+    const matches=matchPeer||this.allows(proto,dport);
     if(proto==='TCP'){
       if(broadcast)return false;
       const reverse=key(dst,dport,src,sport);

@@ -20,6 +20,56 @@ const ids=['host','guest'];
 const peers=ids.map((id,slot)=>({id,slot,name:slot?'Борис':'Анна',micMuted:true,sharing:false}));
 const friendKeys=ids.map((_,i)=>(i+1).toString(16).padStart(64,'0'));
 const filename='CRAFTCODE-LINK-developer-preview-Windows-x64-with-a-long-file-name-2026.11.zip';
+async function checkWelcomePalettes(page,screenshot){
+  const card=page.locator('#profileWelcome');
+  const actions=card.locator('.welcome-actions button');
+  async function contrast(button,focus=false){
+    const scores=await button.evaluate((el,focus)=>{
+      const style=getComputedStyle(el),palette=getComputedStyle(el.closest('#profileWelcome'));
+      const canvas=document.createElement('canvas').getContext('2d',{willReadFrequently:true});
+      function luminance(color){
+        canvas.fillStyle=color;canvas.fillRect(0,0,1,1);
+        const rgb=Array.from(canvas.getImageData(0,0,1,1).data).slice(0,3)
+          .map(n=>n/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);
+        return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+      }
+      const token=name=>palette.getPropertyValue(name).trim();
+      const gradient=[token('--surface'),'color-mix(in srgb, '+token('--accent')+' 9%, '+token('--panel')+')'];
+      function minContrast(ink,backgrounds){
+        const a=luminance(ink);
+        return Math.min(...backgrounds.map(color=>{
+          const b=luminance(color);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+        }));
+      }
+      const backgrounds=style.backgroundColor==='rgba(0, 0, 0, 0)'?gradient:[style.backgroundColor];
+      const text=minContrast(style.color,backgrounds);
+      if(!focus)return {text};
+      return {text,visible:el.matches(':focus-visible')&&parseFloat(style.outlineWidth)>=2&&style.outlineStyle==='solid',
+        ring:minContrast(style.outlineColor,gradient)};
+    },focus);
+    assert(scores.text>=4.5,'button text '+JSON.stringify(scores));
+    if(focus)assert(scores.visible&&scores.ring>=3,'keyboard focus '+JSON.stringify(scores));
+    return scores.text;
+  }
+  const measured={};
+  for(const name of await card.locator('input').evaluateAll(radios=>radios.map(radio=>radio.value))){
+    const choice=card.locator('label:has([value="'+name+'"])');
+    await choice.click();
+    const scores=[];
+    for(const button of await actions.all())scores.push(await contrast(button));
+    for(const button of await actions.all()){
+      await button.hover();scores.push(await contrast(button));
+    }
+    await choice.hover();await choice.locator('input').focus();
+    for(const button of await actions.all()){
+      await page.keyboard.press('Tab');
+      scores.push(await contrast(button,true));
+      if(name==='paper'&&await button.getAttribute('id')==='welcomeDone')await screenshot('welcome-paper-focus');
+    }
+    measured[name]=Math.min(...scores).toFixed(2);
+  }
+  console.log('PASS welcome contrast, resting, hover and keyboard, minimum by palette',measured);
+}
 async function run(){
   const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'link-room-chat-'));
   const bytes=randomBytes(2*1024*1024+27),picked=path.join(temporary,filename);
@@ -30,7 +80,17 @@ async function run(){
     await fs.writeFile(picked,bytes);
     browser=await chromium.launch({channel:process.env.LINK_QA_BROWSER||undefined,args:['--allow-loopback-in-peer-connection','--mute-audio','--autoplay-policy=no-user-gesture-required','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
     const context=await browser.newContext({viewport:{width:1280,height:720}});
+    if(process.env.LINK_QA_JABBER_CALL_CARD==='1'){
+      const {Fixture}=require('./xmpp-fixture.cjs');
+      const {providers}=await import('../src/renderer/providers.mjs');
+      const network=new Fixture({});
+      await context.routeWebSocket('**/*',socket=>{
+        if(socket.url()===providers.jabberru.service)network.route(socket,'jabber.ru');
+        else socket.close();
+      });
+    }
     await context.addInitScript(language=>localStorage.setItem('craftcode.language',language),language);
+    if(process.env.LINK_QA_THEME)await context.addInitScript(theme=>localStorage.setItem('craftlink.appearance.theme',theme),process.env.LINK_QA_THEME);
     await context.route('**/*',async route=>{
       const url=new URL(route.request().url());
       if(url.origin!==origin||!/^\/(?:[a-z\d-]+\.(?:html|mjs|css)|(?:assets|vendor|l10n)\/[a-z\d.-]+)$/i.test(url.pathname))return route.abort();
@@ -50,7 +110,7 @@ async function run(){
         if(r.op==='game-create')game.create(r.title,r.listed);
         if(r.op==='game-invite')game.invite(r.id);
         if(r.op==='game-answer')game.answer(r.id,r.yes);
-        if(r.op==='game-review')game.review(r.device,r.yes);
+        if(r.op==='game-review')game.review(r.device,r.yes,r.actionId);
         if(r.op==='game-leave')game.leave();
         if(r.op==='game-chat')game.chat(r.text);
         if(r.op==='game-clear-chat')game.clearChat(r.room,r.through);
@@ -125,19 +185,103 @@ async function run(){
       });
     }
     const [host,guest]=pages;
+    if(process.env.LINK_QA_JABBER_CALL_CARD==='1'){
+      for(const [index,page] of pages.entries()){
+        await page.evaluate(()=>{
+          const direct=craftlink.direct;
+          craftlink.direct=async request=>{
+            const result=await direct(request);
+            if(request.op==='state')result.paused=true;
+            return result;
+          };
+          roomFixture.refresh();
+        });
+        await page.click('#settingsBtn');await page.click('[data-pane=profile]');
+        await page.click('#settingsGuest summary');await page.click('#settingsLogin');
+        await page.fill('#accountJid',(index?'boris':'anna')+'@jabber.ru');
+        await page.fill('#accountPass','fixture-password');await page.uncheck('#rememberAccount');
+        await page.click('#loginAccount');await page.locator('#onlineActive').waitFor().catch(async error=>{
+          throw Error(error.message+' '+JSON.stringify(await page.locator('#onlineError,#onlineStatus,#toast').allTextContents())+' '+errors.join(', '));
+        });
+      }
+      await host.fill('#contactJid','boris@jabber.ru');await host.click('#addContactForm button');
+      await guest.locator('#onlineRequests button').first().click();
+      for(const page of pages)await page.click('#closeInternet');
+      await host.locator('#workspaceContacts').getByRole('button',{name:tr('Позвонить'),exact:true}).click();
+      await guest.locator('#hubAccept').waitFor();
+      for(const [index,page] of pages.entries()){
+        assert.equal(await page.locator('#callState').textContent(),tr(index?'Входящий звонок':'Исходящий звонок'));
+        assert.equal(await page.locator('#callDialog.is-ringing[open]').count(),1);
+        if(process.env.LINK_UI_QA_IMAGES){
+          await fs.mkdir(process.env.LINK_UI_QA_IMAGES,{recursive:true});
+          await page.screenshot({animations:'disabled',path:path.join(process.env.LINK_UI_QA_IMAGES,'jabber-'+(index?'incoming':'outgoing')+'-'+language+'.png')});
+        }
+      }
+      await guest.click('#hubDecline');await host.locator('#callDialog').waitFor({state:'hidden'});
+      assert.deepEqual(errors,[]);console.log('PASS '+language+' Jabber outgoing, incoming and declined through two isolated XMPP clients.');return;
+    }
+    if(process.env.LINK_QA_FRIEND_DISCOVERY==='1'){
+      await require('./friend-discovery-flow.cjs')(host,friendKeys,tr);
+      assert.deepEqual(errors,[]);return;
+    }
+    if(process.env.LINK_QA_GAME_LAUNCHER==='1'){
+      await require('./game-launcher-flow.cjs')(host,tr);
+      assert.deepEqual(errors,[]);return;
+    }
+    if(process.env.LINK_QA_ROOM_CONTACTS==='1'){
+      await require('./room-contact-flow.cjs')(host,guest,friendKeys,language);
+      assert.deepEqual(errors,[]);return;
+    }
     if(process.env.LINK_QA_WELCOME==='1'){
       await host.locator('#profileWelcome').waitFor();
       assert.equal(await host.locator('dialog:modal').count(),0);
       await host.click('#navGame');assert.equal(await host.locator('#profileWelcome').isVisible(),false);
-      await host.click('#navFriends');await host.locator('#welcomeThemes label:has([value=dusk])').click();
+      await host.click('#navFriends');
+      await checkWelcomePalettes(host,screenshot);
+      assert.equal(await host.getAttribute('#profileWelcome','data-theme'),'paper');
+      assert.equal(await host.getAttribute('html','data-theme'),'default');
+      await screenshot('welcome-paper');
       await host.click('#welcomeProfile');await host.locator('#settingsDialog:modal #avatarEditor').waitFor();
-      assert.equal(await host.inputValue('#profileTheme'),'dusk');await host.click('#closeSettingsDialog');
+      assert.equal(await host.inputValue('#profileTheme'),'paper');
+      await host.selectOption('#chatWallpaper','aurora');
+      const preview=host.locator('#chatAppearancePreview');
+      const animation=()=>preview.evaluate(el=>getComputedStyle(el).animationName);
+      for(const name of ['paper','cobalt','terracotta']){
+        await host.selectOption('#profileTheme',name);
+        assert.equal(await preview.getAttribute('data-theme'),name);
+        await preview.scrollIntoViewIfNeeded();await screenshot('preview-'+name);
+      }
+      await host.emulateMedia({reducedMotion:'no-preference'});assert.equal(await animation(),'aurora-drift');
+      await host.emulateMedia({reducedMotion:'reduce'});assert.equal(await animation(),'none');
+      assert.match(await preview.evaluate(el=>getComputedStyle(el).backgroundImage),/radial-gradient/);
+      await host.emulateMedia({reducedMotion:'no-preference'});
+      await host.click('[data-pane=reading]');await host.check('#reduceMotion');assert.equal(await animation(),'none');
+      await host.uncheck('#reduceMotion');await host.click('#closeSettingsDialog');
       await host.reload();await host.waitForFunction(()=>document.querySelector('#profileLabel').textContent==='Анна');
       assert.equal(await host.locator('#profileWelcome').isVisible(),false);
-      assert.equal(await host.inputValue('#profileTheme'),'dusk');
+      assert.equal(await host.inputValue('#profileTheme'),'terracotta');assert.equal(await host.inputValue('#chatWallpaper'),'aurora');
+      await host.evaluate(()=>{
+        const direct=window.craftlink.direct;
+        window.craftlink.direct=async request=>{
+          if(request.op==='chat-history'){
+            return {messages:['Соберёмся вечером?','Да, до встречи!'].map((text,i)=>({
+              id:String(i),text,direction:i?'out':'in',status:'delivered',time:Date.UTC(2026,10,13,15,10+i)
+            })),hasMore:false};
+          }
+          const result=await direct(request);
+          if(request.op==='state')for(const contact of result.friends)contact.chat={supported:true,files:true};
+          return result;
+        };
+        window.qaLanFriends=true;roomFixture.refresh();
+      });
+      await host.locator('#quickPeople button').first().click();await host.locator('#dmLog article').nth(1).waitFor();
+      assert.equal(await host.locator('#dmScroll').evaluate(el=>getComputedStyle(el).animationName),'aurora-drift');
+      await screenshot('chat-terracotta');
+      await guest.locator('#welcomeThemes label:has([value=cobalt])').click();
       await guest.locator('#welcomeSkip').click();await guest.reload();
       await guest.waitForFunction(()=>document.querySelector('#profileLabel').textContent==='Борис');
       assert.equal(await guest.locator('#profileWelcome').isVisible(),false);
+      assert.notEqual(await guest.inputValue('#profileTheme'),'cobalt');
       assert.deepEqual(errors,[]);console.log('PASS '+language+' welcome on Home, skip, theme, profile editor, reload and a separate profile.');return;
     }
     if(process.env.LINK_QA_SOUNDS==='1'){
@@ -146,6 +290,10 @@ async function run(){
     }
     if(process.env.LINK_QA_SHELL==='1'){
       await require('./workspace-shell-flow.cjs')(host,language);
+      assert.deepEqual(errors,[]);return;
+    }
+    if(process.env.LINK_QA_DRAFTS==='1'){
+      await require('./chat-drafts-flow.cjs')(host);
       assert.deepEqual(errors,[]);return;
     }
     if(process.env.LINK_QA_GROUP_UI==='1'){
@@ -287,13 +435,20 @@ async function run(){
     assert.equal(await host.getAttribute('#own-voice','aria-valuetext'),'100%');await closeRoomMenu(host);
     for(const page of pages){await page.evaluate(()=>{window.qaLanFriends=true;roomFixture.refresh();});await page.click('#navGame');}
     await host.fill('#gameTitle','Вечерний матч');await host.click('#gameCreate button');
+    await host.locator('#gameChatEmpty').waitFor();
+    await host.locator('#chatWallpaper').evaluate(control=>{
+      control.value='dots';control.dispatchEvent(new Event('change'));
+    });
+    for(const id of ['gameChatEmpty','gameHistory']){
+      assert.match(await host.locator('#'+id).evaluate(element=>getComputedStyle(element).backgroundImage),/radial-gradient/);
+    }
     const request={action:'ask',room:games[0].active.id,ticket:require('node:crypto').randomUUID()};
     games[0].receive(people[1],request);await host.evaluate(()=>roomFixture.refresh());
-    const requestCard=host.locator('#lanRequests .lan-request');
+    const requestCard=host.locator('#lanRequests .invite-card');
     await requestCard.getByText('Борис',{exact:true}).waitFor();
     await host.setViewportSize({width:1426,height:933});
     const layout=await requestCard.evaluate(card=>{
-      const title=card.querySelector('strong').getBoundingClientRect(),actions=card.querySelector('.lan-request-actions').getBoundingClientRect();
+      const title=card.querySelector('strong').getBoundingClientRect(),actions=card.querySelector('.invite-actions').getBoundingClientRect();
       return {nameWidth:title.width,stacked:actions.top>=title.bottom,overflow:card.scrollWidth-card.clientWidth};
     });
     assert(layout.nameWidth>100&&layout.stacked&&layout.overflow<=1,JSON.stringify(layout));
@@ -324,14 +479,18 @@ async function run(){
     await guest.evaluate(()=>roomFixture.refresh());
     await guest.locator('#gameHistory article:not(.is-own)').getByText('Начинаем🎮').waitFor();
     await screenshot('lan-chat');
-    await host.setViewportSize({width:800,height:620});
+    await host.setViewportSize({width:800,height:600});
     await host.locator('#gameSession.lan-compact').waitFor();
     assert(await host.locator('#gameComposer').evaluate(form=>
       form.getBoundingClientRect().bottom<=document.querySelector('#directoryPage').getBoundingClientRect().bottom),
       'LAN composer fits above the live call controls without scrolling the directory');
     await host.click('#gameMembersToggle');await host.locator('#gameMembers').waitFor();
+    assert.equal(await host.locator('#gameChatPane').evaluate(pane=>pane.inert),true);
     await screenshot('lan-members-compact');
     await host.keyboard.press('Escape');assert.equal(await host.getAttribute('#gameMembersToggle','aria-expanded'),'false');
+    assert.equal(await host.locator('#gameChatPane').evaluate(pane=>pane.inert),false);
+    await host.click('#navFriends');await host.click('#navGame');
+    assert(await host.locator('#gameName').evaluate(title=>title===document.activeElement));
     await host.setViewportSize({width:1440,height:900});
     await host.click('#gameClearChat');
     const modal=host.locator('dialog:modal');
@@ -350,10 +509,38 @@ async function run(){
     const repo=guest.locator('#chatMessages .chat-link-card a');
     await repo.getByText('CRAFTCODE-CJD/CRAFTCODE-LINK',{exact:true}).waitFor();
     assert.equal(await repo.getAttribute('href'),'https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK');
+    await require('./chat-drop-desktop.cjs').dropFile(guest,'#chatMessages',droppedPath);
+    await guest.locator('#attachmentDraft:modal').waitFor();
+    await guest.evaluate(()=>roomFixture.emit({type:'closed'}));
+    await guest.locator('#attachmentDraft').waitFor({state:'hidden'});
     await host.click('#leaveBtn');
     const leave=host.locator('dialog:modal button').last();
     if(await leave.isVisible())await leave.click();
     await host.waitForFunction(()=>!document.querySelector('#chatMessages').childElementCount);
+    // The other renderer stays offline; negotiation must not cover participants' controls.
+    await host.click('#navFriends');
+    await host.click('#linkHost');
+    await host.setViewportSize({width:800,height:600});
+    await roomChat(host);
+    for(const count of [1,2,3,5]){
+      const roster=[...peers,...Array.from({length:count},(_,index)=>({
+        id:'qa-'+index,slot:index+2,name:'Player '+(index+3),micMuted:true,sharing:false
+      }))].slice(0,count);
+      await host.evaluate(peers=>roomFixture.emit({type:'roster',peers}),roster);
+      await host.waitForFunction(n=>document.querySelectorAll('#voiceGrid .voice-tile').length===n,count);
+      const bounds=await host.locator('#voiceGrid').evaluate(grid=>({
+        grid:grid.clientWidth,stage:grid.parentElement.clientWidth,tile:grid.firstElementChild.clientWidth
+      }));
+      assert(bounds.grid>=bounds.stage-2 && bounds.tile>=150,JSON.stringify({count,bounds}));
+      if(count===5)await screenshot('room-roster-800');
+    }
+    await host.evaluate(()=>roomFixture.roster());
+    await host.locator('#mediaNotice').waitFor();
+    await roomMix(host,1);
+    await closeRoomMenu(host);
+    assert(await host.locator('#mediaNotice').isVisible(),'Participant controls work during media negotiation');
+    if(process.env.LINK_UI_QA_IMAGES)await host.locator('#toast').waitFor({state:'hidden'});
+    await screenshot('room-connecting-800');
     assert.deepEqual(errors,[]);
     const evidence={browser:browser.version(),language,verifiedBytes:bytes.length,dropBytes:dropped.length,pasteBytes:pasted.length,
       lanMembers:2,lanChatDelivered:true,decodedClips:['voice','circle'],sizes};

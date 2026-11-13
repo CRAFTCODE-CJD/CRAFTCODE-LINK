@@ -142,6 +142,9 @@ async function run(){
     await a.page.click('#navFriends');
     await a.page.locator('#workspaceContacts .open-person-chat').click();
     await a.page.waitForFunction(()=>document.querySelector('#dmTitle').textContent==='Борис' && !document.querySelector('#dmInput').disabled);
+    if(process.env.LINK_QA_COMPOSER==='1'){
+      await require('./composer-design-desktop.cjs')(a,b);assert.deepEqual(errors,[]);return;
+    }
     if(process.env.LINK_QA_HELP==='1'){
       await require('./help-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;
     }
@@ -170,6 +173,9 @@ async function run(){
     }
     if(process.env.LINK_QA_LAN_CHAT==='1'){
       await require('./lan-chat-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;
+    }
+    if(process.env.LINK_QA_LAN_INVITES==='1'){
+      await require('./lan-invites-desktop.cjs')({a,b,open,create});assert.deepEqual(errors,[]);return;
     }
     if(process.env.LINK_QA_STORAGE_DOWNLOADS==='1'){
       await require('./storage-download-desktop.cjs')({a,b});assert.deepEqual(errors,[]);return;

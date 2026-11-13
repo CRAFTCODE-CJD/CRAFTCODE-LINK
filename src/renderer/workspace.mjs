@@ -8,9 +8,11 @@ import {paintAvatar} from './profile-appearance.mjs';
 import {selectContacts} from './contact-list.mjs';
 import {friendRooms,newestPeerVersion} from './room-directory.mjs';
 
-export function createWorkspace({$, state, direct, internet, composer, closeStudio, copyCard, removeRequest, action, actionError, confirmAction,openGroupVoice}) {
+const discoveryActions={strictProxy:'Настройки соединения',directStatus:'Изменить статус',directNic:'Выбрать локальную сеть',directDht:'Настройки поиска'};
+
+export function createWorkspace({$, state, direct, internet, composer, closeStudio, openSettings, copyCard, removeRequest, action, actionError, confirmAction,openGroupVoice}) {
   const shell = document.querySelector('.app-shell');
-  const game=gamePanel({$,api:window.craftlink,direct,composer,actionError,confirmAction});
+  const game=gamePanel({$,api:window.craftlink,direct,state,composer,actionError,confirmAction});
   const chats=privateChats({$,direct,api:window.craftlink,state,composer,confirmAction,onError:actionError,openGroup,openList:()=>layout.openDrawer(),selected:()=>layout.closeDrawer(),messageCue:()=>internet.play('message')});
   const groups=groupPanel({$,direct,api:window.craftlink,state,confirmAction,onError:actionError,openChat,selectionChanged:schedule,
     showGroup:()=>{navigate('groups',false);layout.closeDrawer();},
@@ -23,6 +25,7 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
   const navigation = {groups:$('navGroups'),chats:$('navChats'),game:$('navGame'),friends: $('navFriends'), requests: $('navRequests'), room: $('navRoom'),rooms:$('navRooms')};
   let view = 'friends', filter = 'all', session, cinema = false, lastBook, lastRail;
   let queued = false, identity, clockTimer;
+  let refreshingProfile=null;
   const layout=workspaceShell({$,shell,openGroup,openPerson,refresh});
   function startClock(active) {
     clearInterval(clockTimer);
@@ -50,7 +53,11 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
     view = next;
     refresh();
     if (focus) {
-      const heading=view==='room'?$('roomLabel'):view==='chats'?($('dmConversation').hidden?$('dmListTitle'):$('dmTitle')):view==='groups'?($('groupContent').hidden?$('groupWelcomeTitle'):$('groupChannelName')):$('directoryTitle');
+      let heading=$('directoryTitle');
+      if(view==='room')heading=$('roomLabel');
+      if(view==='chats')heading=$('dmConversation').hidden?$('dmListTitle'):$('dmTitle');
+      if(view==='groups')heading=$('groupContent').hidden?$('groupWelcomeTitle'):$('groupChannelName');
+      if(view==='game'&&!$('gameSession').hidden)heading=$('gameName');
       if(heading)heading.focus({preventScroll:true});
       if(view==='chats'&&$('dmConversation').hidden)layout.openDrawer();
     }
@@ -118,17 +125,36 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
     const connected = Boolean(state.session);
     const friends = contacts.filter(c => c.state === 'friend');
     const data=direct.raw(), strict=$('strictProxy').checked;
-    const showPresence=view==='friends'&&friends.length>0&&!friends.some(c=>c.online);
+    const showPresence=view==='friends'&&friends.length>0&&(local?friends.some(c=>!c.online):!friends.some(c=>c.online));
     $('bookPresence').hidden=!showPresence;
     if(showPresence){
       const text=local?discoveryMessage(data,strict):internet.account.status==='online'?tr('Вы подключены к Jabber. Контакты пока не появились в сети.'):tr('Подключаемся к Jabber…');
-      $('bookPresenceText').textContent=text;
-      const preferences=local&&(strict||!data.dht||data.privacy?.status==='invisible');
-      $('bookPresenceAction').hidden=!local;
-      $('bookPresenceAction').textContent=tr(preferences?'Настройки поиска':'Обновить связь');
-      $('bookPresenceAction').onclick=async()=>{
-        if(preferences){$('profileBtn').click();return;}
-        try{await window.craftlink.direct({op:'refresh'});await direct.sync();}catch(e){actionError(e);}
+      const status=$('bookPresenceText'),button=$('bookPresenceAction');
+      const busy=local&&refreshingProfile===data.me.id;
+      const feedback=busy?tr('Запрашиваем повторный поиск…'):text;
+      if(status.textContent!==feedback)status.textContent=feedback;
+      const invisible=data.privacy?.status==='invisible';
+      const missingLan=!data.dht&&data.lan&&!data.lanReady&&!data.nics?.some(n=>n.name===data.lan);
+      const target=strict?'strictProxy':invisible?'directStatus':missingLan?'directNic':!data.dht&&!data.lan?'directDht':null;
+      button.hidden=!local;
+      button.disabled=busy;
+      button.textContent=tr(discoveryActions[target]||'Обновить связь');
+      button.onclick=async()=>{
+        if(!local||busy)return;
+        try{
+          if(target){
+            if(target==='directNic'){direct.open('near');return;}
+            const opening=openSettings(strict?'connection':'profile');
+            if(strict)$('advancedRouting').open=true;
+            $(target).focus();
+            await opening;
+            return;
+          }
+          refreshingProfile=data.me.id;drawBook(model());
+          await window.craftlink.direct({op:'refresh'});
+          await direct.sync();
+        }catch(e){actionError(e);}
+        finally{if(refreshingProfile===data.me.id){refreshingProfile=null;schedule();}}
       };
     }
     const outgoing = contacts.filter(c => c.state !== 'friend');
@@ -136,10 +162,10 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
     $('myCardBox').hidden = !local && !jabber;
     $('myCardHint').hidden=!jabber;
     $('myCardHint').textContent=jabber?internet.account.id:'';
-    $('bookCopy').textContent = jabber ? tr('Скопировать адрес') : tr('Скопировать карточку');
+    $('bookCopy').querySelector('span').textContent = jabber ? tr('Скопировать адрес') : tr('Скопировать карточку');
     $('bookCopy').title=jabber?internet.account.id:tr('Отправьте карточку другу, чтобы он мог добавить вас в LINK.');
     $('linkFriends').textContent = local || jabber ? tr('Добавить друга') : tr('Открыть профиль LINK');
-    $('linkHost').textContent = connected ? tr('Вернуться в звонок') : jabber ? tr('Создать комнату') : tr('Создать комнату LINK');
+    $('linkHost').querySelector('span').textContent = connected ? tr('Вернуться в звонок') : jabber ? tr('Создать комнату') : tr('Создать комнату LINK');
     $('lobbyFallback').hidden = connected;
     $('bookNearby').hidden = jabber;
     $('internetBtn').textContent=tr(jabber?'Контакты Jabber':local?'Перейти на Jabber':'Войти в Jabber');
@@ -305,7 +331,12 @@ export function createWorkspace({$, state, direct, internet, composer, closeStud
   action('bookCopy',copyCard);
   $('roomCreate').onclick=()=>$('linkHost').click();
   $('roomCode').onclick=()=>$('joinBtn').click();
-  return {navigate,schedule,openChat,showRequests(person){
+  return {navigate,schedule,openChat,openGameNotice(id){
+    const g=direct.raw().game;
+    if(!g?.requests?.some(item=>item.actionId===id)&&!g?.invitations?.some(item=>item.id===id))return;
+    navigate('game',false);
+    requestAnimationFrame(()=>{if(view==='game')game.openNotice(id);});
+  },showRequests(person){
     navigate('requests');
     const row=person&&[...$('workspaceRequests').querySelectorAll('[data-person]')].find(el=>el.dataset.person===person);
     if(row){row.tabIndex=-1;row.focus({preventScroll:true});row.scrollIntoView({block:'nearest'});}
