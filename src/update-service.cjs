@@ -128,8 +128,8 @@ class UpdateService {
         const found=savedOffer(this.release,this.current);
         if(!found||found.version!==offer.version||found.size!==offer.size||pending.sha&&this.release.sha!==pending.sha){
           this.save({...this.preferences,offer:found,pending:null,checked:this.now(),retryAt:0});
-          this.phase=result.phase;this.received=0;this.resumeFrom=0;
           await cleanupPartials(this.cache);
+          this.phase=result.phase;this.received=0;this.resumeFrom=0;
           return this.state();
         }
       }
@@ -162,13 +162,13 @@ class UpdateService {
         this.nextAttemptAt=Math.max(this.preferences.retryAt,this.now()+this.retryDelay);
         this.retryDelay=Math.min(maxReconnectDelay,this.retryDelay*2);
       }else{
-        this.phase=this.preferences.offer?'available':'idle';
         this.error=request.signal.aborted?'':e.retryAfterMs?rateLimitMessage:
           e.code==='ENOSPC'?'На выбранном диске недостаточно свободного места.':
           e.message==='Установщик выпуска не прошёл проверку.'?e.message:'Не удалось скачать обновление. Повторите загрузку.';
         if(pending)this.save({...this.preferences,pending:null});
         this.received=0;this.resumeFrom=0;this.nextAttemptAt=0;
-        await cleanupPartials(this.cache);
+        try{await cleanupPartials(this.cache);}
+        finally{this.phase=this.preferences.offer?'available':'idle';}
       }
     }finally{this.finish();}
     return this.state();

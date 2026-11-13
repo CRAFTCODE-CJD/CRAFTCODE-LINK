@@ -143,11 +143,28 @@ test('A changed publisher digest on restart clears the old partial and requires 
   run.first.close();
   run.replaceRelease();
   const second=run.client();
+  // Hold the real unlink at the filesystem boundary; consumers may request
+  // state through IPC while the old partial still occupies disk space.
+  const [partial]=await run.cacheFiles();
+  assert.match(partial,/^installer-[0-9a-f]{64}-\d+\.part$/);
+  let deleting=false;
+  const gate=Promise.withResolvers();
+  const unlink=fs.unlink.bind(fs);
+  t.mock.method(fs,'unlink',async file=>{
+    if(path.basename(file)===partial){deleting=true;await gate.promise;}
+    return unlink(file);
+  });
   await second.restore();
+  try{
+    await until(()=>deleting,'removal of the obsolete partial');
+    assert.deepEqual(await run.cacheFiles(),[partial]);
+    assert.equal((await second.command({op:'state'})).phase,'downloading');
+  }finally{gate.resolve();await second.downloadTask;}
   await until(()=>second.state().phase==='available','new offer requiring user approval');
   assert.equal(second.state().received,0);
   assert.deepEqual(await run.cacheFiles(),[]);
   assert.deepEqual(run.ranges,[null]);
+  await assert.rejects(second.command({op:'install'}),/Сначала скачайте проверенный установщик/);
 });
 
 test('An explicit cancel while offline forgets the transfer even after restarting',async t=>{
