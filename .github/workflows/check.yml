@@ -3,6 +3,7 @@ name: Check Windows source
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -27,6 +28,22 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Check committed source and new history for private data
+        env:
+          REF_TO_CHECK: ${{ github.event.pull_request.head.sha || github.sha }}
+          PREVIOUS_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          $privacyArgs = @('scripts/git-privacy.py', 'history', $env:REF_TO_CHECK, '--ci')
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $commit = git rev-parse --verify "$($env:GITHUB_REF)^{commit}"
+            if ($LASTEXITCODE -ne 0 -or $commit -ne $env:REF_TO_CHECK) { throw 'Release tag changed after the workflow trigger.' }
+            $privacyArgs[2] = $env:GITHUB_REF
+          }
+          if ($env:PREVIOUS_REF) { $privacyArgs += $env:PREVIOUS_REF }
+          python @privacyArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -p git_privacy.py
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:

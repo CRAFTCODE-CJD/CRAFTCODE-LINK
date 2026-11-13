@@ -13,3 +13,5 @@ Whenever a screen, control label or user flow changes, check the affected Help a
 Test network changes with temporary profiles and test peers. State whether a result used actual received bytes, decoded media or a completed game match. Mark unavailable checks as BLOCKED or NOT TESTED. The local Windows integration scenarios are described in WINDOWS_TEST_RU.md and QA_REPORT.md.
 
 The `Check Windows source` workflow runs syntax, contract and native-helper tests on pull requests. Packaged installation, physical media devices and a multi-PC game session have additional checks in the release guide. [Release guide](docs/GITHUB_RELEASE_RU.md)
+
+To catch personal data before committing or pushing, install the local checks with `python scripts/git-privacy.py install` (Git 2.55+). Contributors keep their own Git identity. Existing hooks, including Git LFS, remain installed. [Publication privacy and release checks](docs/PUBLICATION_PRIVACY.md)
