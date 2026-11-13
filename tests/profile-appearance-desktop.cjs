@@ -1,4 +1,5 @@
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 const {roomMix,closeRoomMenu}=require('./participant-controls.cjs');
 const path=require('node:path'),os=require('node:os'),fs=require('node:fs/promises');
 const {EventEmitter}=require('node:events'),assert=require('node:assert/strict');
@@ -75,7 +76,7 @@ async function run(){
     `);
     async function open(id,name,ip){
       const base=path.join(temp,id);await fs.mkdir(base);
-      const app=await _electron.launch({executablePath:process.env.LINK_QA_ELECTRON||require('electron'),
+      const app=await _electron.launch({executablePath:testRuntime(),
         args:[launcher,'--mute-audio','--no-error-dialogs','--allow-loopback-in-peer-connection','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--craftlink-profile='+id],
         env:{...process.env,LINK_APPEARANCE_DATA:base,LINK_APPEARANCE_IP:ip,XDG_CONFIG_HOME:base}});
       apps.add(app);

@@ -15,9 +15,7 @@ function optionalLimit(name){
  return value;
 }
 async function open(label){
- const executable=process.env.LINK_QA_ELECTRON||require('electron');
- const resources=path.join(path.dirname(executable),'resources');
- assert(!['app','app.asar'].some(name=>fs.existsSync(path.join(resources,name))),'Use the unbundled Electron test runtime and pass a packaged src/entry.cjs as the script argument');
+ const executable=testRuntime();
  const launchArgs=[path.join(__dirname,'screen-sync-bootstrap.cjs'),'--no-error-dialogs','--allow-loopback-in-peer-connection','--mute-audio','--use-fake-device-for-media-stream','--craftlink-profile='+path.basename(tmp)+'-'+label];
  const entry=label==='guest'?viewerEntry:senderEntry;
  const profile=path.join(tmp,label);fs.mkdirSync(profile);

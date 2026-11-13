@@ -1,4 +1,5 @@
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 // Two actual clients on a private loopback DHT. The test launcher supplies the
 // bootstrap nodes, a private clipboard and separate app data before loading LINK.
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
@@ -101,7 +102,7 @@ async function run(){
       const address={alice:'127.0.0.2',boris:'127.0.0.3',vera:'127.0.0.4'}[id];
       assert(address,'unknown isolated test profile');
       const base=path.join(temp,id); await fs.mkdir(base,{recursive:true});
-      const app=await _electron.launch({executablePath:process.env.LINK_QA_ELECTRON||require('electron'),
+      const app=await _electron.launch({executablePath:testRuntime(),
         args:[launcher,'--mute-audio','--no-error-dialogs','--allow-loopback-in-peer-connection','--use-fake-device-for-media-stream',...(process.env.LINK_QA_LIVE_CAMERA==='1'?[]:['--use-fake-ui-for-media-stream']),'--craftlink-profile='+id],
         env:{...process.env,LINK_CHAT_TEST_DATA:base,LINK_CHAT_TEST_IP:address,XDG_CONFIG_HOME:base}});
       apps.add(app);

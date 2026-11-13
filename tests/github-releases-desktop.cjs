@@ -1,4 +1,5 @@
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 // Launch the real app with a disposable profile and substitute only release
 // HTTP and the native confirmation. The fixture has no executable installer.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
@@ -67,7 +68,7 @@ async function run(){
   const temp=await fs.mkdtemp(path.join(os.tmpdir(),'link-update-desktop-'));
   try{
     const env={...process.env,LINK_RELEASE_FIXTURE:temp};delete env.ELECTRON_RUN_AS_NODE;
-    const child=spawn(process.env.LINK_QA_ELECTRON||require('electron'),[__filename,'--craftlink-profile=updates-test'],{env,windowsHide:true,stdio:'inherit'});
+    const child=spawn(testRuntime(),[__filename,'--craftlink-profile=updates-test'],{env,windowsHide:true,stdio:'inherit'});
     const timer=setTimeout(()=>child.kill(),65000);
     try{const code=await new Promise((resolve,reject)=>{child.once('exit',resolve);child.once('error',reject);});assert.equal(code,0);}
     finally{clearTimeout(timer);}

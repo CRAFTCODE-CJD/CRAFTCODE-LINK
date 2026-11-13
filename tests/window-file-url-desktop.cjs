@@ -12,11 +12,9 @@ const {pathToFileURL} = require('node:url');
 function checkWindowsInstallPath() {
   const root = path.resolve(__dirname, '..');
   const electronModule = require.resolve('electron', {paths:[root]});
-  const runtime = require(electronModule);
+  const runtime = require('./electron-runtime.cjs').testRuntime();
   const resources = path.join(path.dirname(runtime), 'resources');
-  assert.equal(path.basename(runtime).toLowerCase(), 'electron.exe');
   assert(fs.existsSync(path.join(resources, 'default_app.asar')));
-  for (const name of ['app', 'app.asar']) assert(!fs.existsSync(path.join(resources, name)));
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'link-ui-path-'));
   const dependencies = path.join(temp, 'node_modules');

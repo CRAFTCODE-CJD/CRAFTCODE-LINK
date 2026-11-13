@@ -1,4 +1,5 @@
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 // Real Windows IPC/UI with a private AppData, DPAPI profile and Downloads.
 // Native folder choices and relaunch are controlled by this launcher only.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
@@ -35,7 +36,7 @@ fs.writeFileSync(launcher,`
   ownRequire('./src/entry.cjs');
 `);
 async function open(){
-  const app=await _electron.launch({executablePath:process.env.LINK_QA_ELECTRON||require('electron'),args:[launcher,'--craftlink-profile=storage','--mute-audio','--no-error-dialogs'],env:{...process.env}});
+  const app=await _electron.launch({executablePath:testRuntime(),args:[launcher,'--craftlink-profile=storage','--mute-audio','--no-error-dialogs'],env:{...process.env}});
   apps.add(app);
   const page=await app.firstWindow();page.setDefaultTimeout(25000);page.on('pageerror',e=>errors.push(String(e)));
   await page.waitForFunction(()=>typeof document.querySelector('#bookQuery')?.oninput==='function');

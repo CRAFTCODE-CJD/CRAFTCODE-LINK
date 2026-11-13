@@ -1,6 +1,7 @@
 const {capture}=require('./visual-capture.cjs');
 const {clickPath}=require('./qa-navigation.cjs');
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 const {roomMix,roomChat,closeRoomMenu}=require('./participant-controls.cjs');
 
 // Real application UI + main/preload + TLS control integration. These checks
@@ -61,7 +62,7 @@ async function launch(label, profile) {
   args.push('--allow-loopback-in-peer-connection');
   if (process.platform === 'linux') args.unshift('--headless', '--ozone-platform=headless', '--no-sandbox');
   const app = await playwright._electron.launch({
-    executablePath: process.env.LINK_QA_ELECTRON || require('electron'), args, timeout: 30_000,
+    executablePath: testRuntime(), args, timeout: 30_000,
   });
   const instance = { app, page: null, label, closed: false };
   instances.push(instance);

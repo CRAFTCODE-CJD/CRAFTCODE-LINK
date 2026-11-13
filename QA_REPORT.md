@@ -1,6 +1,8 @@
 # CRAFTCODE LINK QA
 
-## Windows 0.7.17 release, 2026-11-13
+## Windows 0.7.18 release, 2026-11-13
+
+- PASS. The main window loaded and the renderer reached trusted IPC on Windows from both a normal path and a path containing a literal percent escape, a hash and Cyrillic text. Desktop tests that need an external bootstrap now reject a bundled executable before opening a window.
 
 - PASS. Russian and English group navigation at 1426, 940 and 740 pixels. Checked the friends column, channel selection, direct messages, keyboard drawers and return to the current group call. Three isolated desktop clients exchanged voice and screen data while switching between pages.
 - PASS. Two desktop profiles exchanged the same cropped avatar pixels. Cancel, keyboard zoom and pan, profile cards, presence and reopening the app were checked. A group owner also cropped a group photo and the other two members received it.

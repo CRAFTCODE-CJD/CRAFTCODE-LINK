@@ -1,4 +1,5 @@
 'use strict';
+const {testRuntime}=require('./electron-runtime.cjs');
 // Three real renderers, SRTP and reproducible local UDP impairment. No public services.
 const assert=require('node:assert/strict'),path=require('node:path'),os=require('node:os'),fs=require('node:fs');
 const {_electron}=require(require.resolve('playwright',{paths:[__dirname,process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||__dirname]}));
@@ -10,7 +11,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const args=[path.join(__dirname,'qa-main.cjs'), '--link-qa-hidden', '--mute-audio', '--no-error-dialogs',
     '--user-data-dir='+path.join(tmp,'profile')];
   if(process.platform==='linux')args.unshift('--headless','--ozone-platform=headless','--no-sandbox');
-  app=await _electron.launch({executablePath:process.env.LINK_QA_ELECTRON || require('electron'),args,timeout:30000,
+  app=await _electron.launch({executablePath:testRuntime(),args,timeout:30000,
     env:{...process.env,XDG_CONFIG_HOME:tmp}});
   for(let i=0;i<90&&app.windows().length<3;i++)await sleep(200);
   const pages={};for(const page of app.windows()){
