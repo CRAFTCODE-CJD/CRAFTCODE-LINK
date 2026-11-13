@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path');
 const {tr}=require('./native-language.cjs');
+const {directory}=require('./storage-location.cjs');
 const cacheNames=new Set(['Cache','Code Cache','GPUCache','DawnCache','DawnGraphiteCache','DawnWebGPUCache','GrShaderCache','ShaderCache','GraphiteDawnCache','Crashpad','logs','reports','update-cache','media-test']);
 
 // Count only this product's own data. Downloads are not traversed, and links
@@ -26,7 +27,7 @@ async function measure(directory){
   return {bytes,cacheBytes,free:Number(stats.bavail*stats.bsize),incomplete};
 }
 
-function createStorageControls({location,session,updates,restart,sessionActive}){
+function createStorageControls({location,session,updates,restart,sessionActive,openDirectory}){
   let busy=false;
   async function snapshot(){const state=await location.snapshot();return {...state,...await measure(state.directory)};}
   async function command(raw){
@@ -36,6 +37,14 @@ function createStorageControls({location,session,updates,restart,sessionActive})
     try{
       switch(raw.op){
         case 'state':return await snapshot();
+        case 'open-profile':case 'open-downloads':{
+          const target=raw.op==='open-profile'?location.current:location.downloads();
+          try{
+            const folder=directory(target);
+            if(await openDirectory(folder))throw Error();
+          }catch{throw Error(tr('Не удалось открыть папку. Проверьте, доступен ли диск.'));}
+          return true;
+        }
         case 'clear-cache':{
           const before=await snapshot();
           await updates.clearCache();

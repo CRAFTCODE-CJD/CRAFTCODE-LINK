@@ -1,4 +1,4 @@
-# CRAFTCODE LINK 0.7.18
+# CRAFTCODE LINK 0.7.19
 
 CRAFTCODE LINK is a Windows messenger with local profiles, private messages, voice rooms, screen sharing and game LAN. Friends exchange a LINK card and confirm the connection. A group runs on its owner's computer.
 

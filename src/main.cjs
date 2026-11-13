@@ -257,7 +257,7 @@ function registerIPC() {
     allowed:()=>direct?.allowsPublicLookup()===true,sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive()),
     changed:state=>sendEvent({type:'release-updated',state}),openExternal:url=>shell.openExternal(url)});
   if(storageLocationController){
-    const storageControls=require('./storage-controls.cjs').createStorageControls({location:storageLocationController,session:()=>mainWindow.webContents.session,updates,
+    const storageControls=require('./storage-controls.cjs').createStorageControls({location:storageLocationController,session:()=>mainWindow.webContents.session,updates,openDirectory:folder=>shell.openPath(folder),
       restart:async()=>{mainWindow.webContents.session.flushStorageData();app.relaunch();app.quit();},
       sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive())});
     handle('storage',raw=>storageControls.command(raw));

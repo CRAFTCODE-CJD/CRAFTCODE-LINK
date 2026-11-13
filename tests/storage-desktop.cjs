@@ -9,7 +9,8 @@ const appData=path.join(temp,'AppData'),downloads=path.join(temp,'Downloads'),dr
 for(const dir of [appData,downloads,driveA,driveB])fs.mkdirSync(dir);
 const launcher=path.join(temp,'launch.cjs'),errors=[],apps=new Set();let client;
 fs.writeFileSync(launcher,`
-  const {app,dialog,safeStorage}=require('electron'),fs=require('node:fs'),path=require('node:path');
+  const {app,dialog,safeStorage,shell}=require('electron'),fs=require('node:fs'),path=require('node:path');
+  shell.openPath=async folder=>{globalThis.openedFolder=folder;return '';};
   const ownRequire=require('node:module').createRequire(${JSON.stringify(path.join(root,'package.json'))});
   app.setPath('appData',${JSON.stringify(appData)});app.setPath('downloads',${JSON.stringify(downloads)});
   app.getVersion=()=>ownRequire('./package.json').version;
@@ -73,10 +74,25 @@ async function narrowCapture(name){
   client=await open();const original=await client.app.evaluate(()=>globalThis.inspectStorageProfile());
   await client.page.evaluate(()=>localStorage.setItem('storage-fixture','appearance survives'));
   await settings();await client.page.fill('#settingsSearch','Хранилище');assert(await client.page.locator('[data-pane="storage"]').isVisible());await client.page.fill('#settingsSearch','');
+  async function checkOpen(button,expected){
+    await client.page.locator('#'+button).focus();await client.page.keyboard.press('Enter');
+    await client.page.waitForFunction(()=>document.querySelector('#pref-storage').getAttribute('aria-busy')==='false');
+    assert.equal(await client.app.evaluate(()=>globalThis.openedFolder),fs.realpathSync.native(expected));
+  }
+  await checkOpen('storageOpen',client.data);await checkOpen('downloadsOpen',downloads);
+  await assert.rejects(client.page.evaluate(()=>window.craftlink.storage({op:'open-profile',path:'untrusted'})));
   await choose(null,'#storageChoose');assert(await client.page.locator('#storageMove').isHidden());
   await choose(driveA,'#storageChoose');assert(await client.page.locator('#storageConfirmMove').isVisible(),await client.page.locator('#storageStatus').innerText());await client.page.click('#storageCancelMove');
   await client.page.waitForSelector('#storageMove',{state:'hidden'});
   await choose(driveB,'#downloadsChoose');assert.equal(await client.page.locator('#downloadsPath').innerText(),driveB);
+  await checkOpen('downloadsOpen',driveB);
+  fs.rmdirSync(driveB);
+  await client.app.evaluate(()=>{globalThis.openedFolder=null;});
+  await client.page.click('#downloadsOpen');
+  await client.page.waitForFunction(()=>document.querySelector('#storageStatus').textContent.includes('доступен ли диск'));
+  assert.equal(await client.app.evaluate(()=>globalThis.openedFolder),null);
+  fs.mkdirSync(driveB);
+  await checkOpen('downloadsOpen',driveB);
   await client.page.click('#storageClearCache');await client.page.waitForFunction(()=>document.querySelector('#pref-storage').getAttribute('aria-busy')==='false');
   assert.equal(await client.page.evaluate(()=>localStorage.getItem('storage-fixture')),'appearance survives');
   assert.deepEqual(await client.app.evaluate(()=>globalThis.inspectStorageProfile()),original);
@@ -88,6 +104,7 @@ async function narrowCapture(name){
   assert.deepEqual(await client.app.evaluate(()=>globalThis.inspectStorageProfile()),original);
   assert.equal(await client.page.evaluate(()=>localStorage.getItem('storage-fixture')),'appearance survives');
   await settings();assert.equal(await client.page.locator('#downloadsPath').innerText(),driveB);
+  await checkOpen('storageOpen',client.data);
   await client.page.evaluate(async()=>{localStorage.setItem('craftcode.language','en');await window.craftlink.setLanguage('en');});await client.page.reload();
   await client.page.waitForFunction(()=>typeof document.querySelector('#bookQuery')?.oninput==='function');await settings();
   await client.page.fill('#settingsSearch','Storage');assert(await client.page.locator('[data-pane="storage"]').isVisible());await client.page.fill('#settingsSearch','');

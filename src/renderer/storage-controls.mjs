@@ -27,13 +27,16 @@ export function bindStorageControls($,api){
   }
   async function act(op){
     if(busy)return;
-    busy=true;status.textContent=tr(op==='clear-cache'?'Очищаем кэш…':'Проверяем хранилище…');render();
+    const opening=op==='open-profile'||op==='open-downloads';
+    busy=true;status.textContent=tr(opening?'Открываем папку…':op==='clear-cache'?'Очищаем кэш…':'Проверяем хранилище…');render();
     try{
-      state=await api.storage({op,...(op==='schedule-move'?{token:state.selection?.token}:{})});
+      const result=await api.storage({op,...(op==='schedule-move'?{token:state.selection?.token}:{})});
+      if(opening){status.textContent='';return;}
+      state=result;
       status.textContent=state.error|| (op==='clear-cache'?tr('Освобождено: ')+size(state.freed):'');
     }catch(e){status.textContent=e.message||tr('Не удалось открыть хранилище. Повторите попытку.');}
     finally{busy=false;render();}
   }
-  for(const [id,op] of Object.entries({storageRefresh:'state',storageChoose:'choose-location',storageConfirmMove:'schedule-move',storageCancelMove:'cancel-move',storageRestart:'restart',downloadsChoose:'choose-downloads',storageClearCache:'clear-cache'}))$(id).onclick=()=>act(op);
+  for(const [id,op] of Object.entries({storageRefresh:'state',storageChoose:'choose-location',storageOpen:'open-profile',downloadsOpen:'open-downloads',storageConfirmMove:'schedule-move',storageCancelMove:'cancel-move',storageRestart:'restart',downloadsChoose:'choose-downloads',storageClearCache:'clear-cache'}))$(id).onclick=()=>act(op);
   return {refresh:()=>act('state')};
 }

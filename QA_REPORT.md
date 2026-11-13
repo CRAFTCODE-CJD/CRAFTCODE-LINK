@@ -1,8 +1,10 @@
 # CRAFTCODE LINK QA
 
-## Windows 0.7.18 release, 2026-11-13
+## Windows 0.7.19 release, 2026-11-13
 
 - PASS. The main window loaded and the renderer reached trusted IPC on Windows from both a normal path and a path containing a literal percent escape, a hash and Cyrillic text. Desktop tests that need an external bootstrap now reject a bundled executable before opening a window.
+
+- PASS. Storage settings send the active profile folder and the selected downloads folder to the Windows folder opener, including after a profile move and restart. Tested keyboard activation and Russian and English layouts at 800 pixels with the OS opener intercepted.
 
 - PASS. Russian and English group navigation at 1426, 940 and 740 pixels. Checked the friends column, channel selection, direct messages, keyboard drawers and return to the current group call. Three isolated desktop clients exchanged voice and screen data while switching between pages.
 - PASS. Two desktop profiles exchanged the same cropped avatar pixels. Cancel, keyboard zoom and pan, profile cards, presence and reopening the app were checked. A group owner also cropped a group photo and the other two members received it.
@@ -32,6 +34,8 @@
 - NOT IMPLEMENTED. A production fallback for this LINK profile when all UDP routes are unavailable. A TCP/443 relay requires a reachable service and an independently verified encrypted client-to-client connection. The separate Android preview was not part of this Windows work.
 
 ## Published Windows 0.7.14
+
+On 13 November the public Portable ZIP matched the SHA-256 on GitHub. All 175 files under `src` matched the release tag. The original Windows game helper started from a path containing spaces, Cyrillic and a hash, and completed the first authenticated handshake step. The bundled x64 Wintun DLL had a valid WireGuard LLC signature. Two isolated Electron clients running the extracted application code accepted a LAN invitation and exchanged files with matching hashes. On the same source, a Godot server and 16 clients completed a scored match over real UDP sockets with simulated adapters. Activating Wintun on two physical PCs, accepting UAC and playing across the two users’ networks remain NOT TESTED.
 
 
 ## Камера и видеозвонки

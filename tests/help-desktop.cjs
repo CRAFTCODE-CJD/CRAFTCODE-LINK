@@ -61,7 +61,14 @@ module.exports=async({a,b})=>{
   async function record(name,client,actions){
     const selection=(process.env.LINK_RECORD_TUTORIALS||'').split(',');
     if(!selection.includes('1')&&!selection.includes(name)){await actions(()=>{},()=>{});return;}
-    const dir=path.join(output,name+'-frames');await fs.mkdir(dir,{recursive:true});
+    const dir=await fs.mkdtemp(path.join(output,'.frames-'+name+'-'));
+    try{
+      await captureTutorial(dir,name,client,actions);
+    }finally{
+      await fs.rm(dir,{recursive:true,force:true,maxRetries:3,retryDelay:200});
+    }
+  }
+  async function captureTutorial(dir,name,client,actions){
     let running=true,index=0,posterFrame,screen=client;
     await capture(client,path.join(dir,'00000.png'));await pause(350);
     const loop=(async()=>{while(running){const started=Date.now();await capture(screen,path.join(dir,String(index++).padStart(5,'0')+'.png'));await pause(Math.max(0,250-(Date.now()-started)));}})();
