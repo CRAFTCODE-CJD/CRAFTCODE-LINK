@@ -6,16 +6,23 @@ const en=require('../src/renderer/l10n/en.json');
 module.exports=async function verifyGroups(host,guest,people,language){
   const label=s=>language==='en'?en[s]:s;
   let exists=false,invited=false,joined=false,offered=false,owner=0,online=true,file=null,fileListFails=false,theme='personal',groupName='Команда',renameVersion=1;
+  let revision=0,previousView='',fileVersion=0,outsiderOnline=false,guestCanRead=true;
   const members=[{id:people[0],name:'Саша',role:'owner'},{id:people[1],name:'Саша',role:'member'}];
   const channels=[{id:'common',name:'Лобби',type:'text',access:'all',allow:[]}],messages=[],commands=[];
   for(const [i,page] of [host,guest].entries()){
-    const info=()=>({id:'team',name:groupName,owner:people[owner],role:members[i].role,online:i===owner||online,transferring:offered,theme,appearanceVersion:1,renameVersion,
-      voiceRooms:{voice:[{id:people[0],name:'Саша',seat:'live-seat',micMuted:true,sharing:false}]},
-      members:members.slice(0,joined?2:1),channels,bans:[]});
+    const info=()=>{
+      const key=JSON.stringify([members,channels,messages,file,groupName,theme,joined,offered,renameVersion,guestCanRead]);
+      if(key!==previousView){previousView=key;revision++;}
+      return {id:'team',revision,viewVersion:revision,fileVersions:{common:fileVersion},name:groupName,owner:people[owner],role:members[i].role,online:i===owner||online,transferring:offered,theme,appearanceVersion:1,renameVersion,
+        voiceRooms:{voice:[{id:people[0],name:'Саша',seat:'live-seat',micMuted:true,sharing:false}]},
+        members:members.slice(0,joined?2:1),channels:channels.filter(c=>i===0||guestCanRead||c.id!=='common').map(c=>c.type!=='text'?c:
+          {...c,messageCount:messages.length,lastMessage:messages.at(-1)?.id||null,fileCount:file?1:0,lastFile:file?.id||null}),bans:[]};
+    };
     await page.exposeFunction('qaGroup',async r=>{
       if(r.op==='summary')return {items:exists&&(i===0||joined)?[info()]:[],
         invites:invited&&i===1?[{id:'team',name:groupName,fromName:'Саша'}]:[],
         transfers:offered&&i===1?[{id:'team',name:groupName,fromName:'Саша'}]:[]};
+      if(r.op==='outsider-presence')return outsiderOnline;
       commands.push(r);
       switch(r.op){
         case 'group-create':exists=true;return {id:'team'};
@@ -32,8 +39,8 @@ module.exports=async function verifyGroups(host,guest,people,language){
         case 'group-voice-join':return {role:'host',selfId:'host',hostId:'host',peers:[{id:'host',name:'Саша',slot:0,micMuted:true,sharing:false}],
           groupVoice:{group:r.group,channel:r.channel},groupChannelName:channels.find(c=>c.id===r.channel).name,mixRoom:'group-test',usePeerIce:false};
         case 'group-send':messages.push({id:r.nonce,person:people[i],name:'Саша',at:Date.now(),text:r.text});return true;
-        case 'group-file-offer':file={id:'file',name:'лист.txt',size:512,author:people[0],status:'available',canDownload:true};return true;
-        case 'group-file-download':file={...file,status:'saved',canDownload:false,canReveal:true};return true;
+        case 'group-file-offer':file={id:'file',name:'лист.txt',size:512,author:people[0],status:'available',canDownload:true};fileVersion++;return true;
+        case 'group-file-download':file={...file,status:'saved',canDownload:false,canReveal:true};fileVersion++;return true;
         case 'group-role':members[1].role=r.role;return true;
         case 'group-transfer':offered=true;return true;
         case 'group-transfer-answer':offered=false;if(r.accept){owner=1;members[1].role='owner';members[0].role='admin';}return true;
@@ -48,6 +55,8 @@ module.exports=async function verifyGroups(host,guest,people,language){
         if(r.op==='state'){
           result.groups=await qaGroup({op:'summary'});
           result.friends=[{id:people[1-i],name:'Саша',state:'friend',devices:[],online:true}];
+          result.friends.push({id:'f'.repeat(64),name:'Сосед',state:'friend',devices:[],online:await qaGroup({op:'outsider-presence'})});
+          window.qaGroupSnapshots=(window.qaGroupSnapshots||0)+1;
         }
         return result;
       };
@@ -75,14 +84,31 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await host.selectOption('#groupField-person',people[1]);await host.click('#groupEditSubmit');await host.click('#groupManageClose');
   await refresh(guest);await choose(guest,'#groupInvites','Принять');
   await guest.locator('#groupChannelName').getByText('Лобби',{exact:false}).waitFor();
+  const readCount=op=>commands.filter(r=>r.op===op).length;
+  const reads=()=>['group-open','group-history','group-file-list'].map(readCount);
+  await guest.locator('#groupInput:enabled').waitFor();
+  const beforePresence=reads();
+  for(let n=0;n<20;n++){
+    outsiderOnline=!outsiderOnline;
+    const seen=await guest.evaluate(()=>window.qaGroupSnapshots);
+    await refresh(guest);
+    await guest.waitForFunction(previous=>window.qaGroupSnapshots>previous,seen);
+    await guest.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  }
+  assert.deepEqual(reads(),beforePresence,'unrelated presence updates must not read the selected group');
   await guest.click('#groupOptions');assert.equal(await guest.locator('#groupManage').getByRole('button',{name:label('Переименовать группу'),exact:true}).count(),0);await guest.click('#groupManageClose');
   await guest.fill('#groupInput','Ссылка https://example.org/game ');await guest.click('#groupEmoji summary');
   await guest.locator('#groupEmoji').getByRole('button',{name:'👍',exact:true}).click();
   assert.equal(await guest.inputValue('#groupInput'),'Ссылка https://example.org/game 👍');await guest.press('#groupInput','Enter');
   await guest.locator('#groupLog .chat-link-card').waitFor();await refresh(host);
   await host.locator('#groupLog .chat-link-card').waitFor();
+  guestCanRead=false;await refresh(guest);
+  await guest.locator('#groupText').waitFor({state:'hidden'});
+  assert.equal(await guest.locator('#groupLog article').count(),0,'revoked channel content is cleared');
+  guestCanRead=true;await refresh(guest);
+  await guest.locator('#groupLog .chat-link-card').waitFor();
   const originalMessage=messages[0];
-  messages[0]={...originalMessage,name:'Ш'.repeat(48),text:'https://example.org/'+'long-segment/'.repeat(24)};
+  messages[0]={...originalMessage,id:'long-link',name:'Ш'.repeat(48),text:'https://example.org/'+'long-segment/'.repeat(24)};
   await refresh(host);
   await require('./compact-group-chat-flow.cjs')(host);
   messages[0]=originalMessage;
@@ -90,7 +116,9 @@ module.exports=async function verifyGroups(host,guest,people,language){
   await host.click('#groupAttach');await host.locator('#groupFiles').getByText('лист.txt').waitFor();
   await refresh(guest);await guest.click('#groupShelf summary');await choose(guest,'#groupFiles','Скачать');
   await guest.locator('#groupFiles').getByRole('button',{name:label('Показать в папке')}).waitFor();
-  fileListFails=true;await refresh(guest);await guest.locator('#groupRetry').waitFor();
+  const beforeFile=reads();
+  fileListFails=true;fileVersion++;await refresh(guest);await guest.locator('#groupRetry').waitFor();
+  assert.deepEqual(reads(),[beforeFile[0],beforeFile[1],beforeFile[2]+1],'local file progress only refreshes the shelf');
   assert(await guest.locator('#groupLog .chat-link-card').isVisible());
   fileListFails=false;await guest.click('#groupRetry');await guest.locator('#groupRetry').waitFor({state:'hidden'});
   await host.click('#groupAddChannel');await host.fill('#groupField-name','Голос');await host.selectOption('#groupField-type','voice');await host.click('#groupEditSubmit');

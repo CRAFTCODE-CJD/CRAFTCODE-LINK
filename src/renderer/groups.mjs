@@ -9,7 +9,9 @@ import {paintAvatar} from './profile-appearance.mjs';
 import {fileSize,transferMeter} from './transfer-progress.mjs';
 
 export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,showGroup,openChat,selectionChanged}) {
-  let owner=null,id=null,group=null,channel=null,visible=false,token=0,reading=false,rerun=false,rawSeen,files=[],messages=[],before=null,more=false;
+  let owner=null,id=null,group=null,channel=null,visible=false,token=0,reading=false,queued=0,viewSeen,fileSeen,routeSeen,files=[],messages=[],before=null,more=false;
+  const FILES=1,VIEW=2,HISTORY=4,FULL=VIEW|HISTORY|FILES;
+  let historyError=null,fileError=null;
   let joining=null;
   const player=new ChatPlayer();
   const selections=new Map(),drafts=new Map(),keys=new Map(),busy=new Set();
@@ -24,7 +26,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     busy.add(action);
     try{
       const result=await call(op,args);
-      if(owner===stamp){await direct.sync();if(owner===stamp)reload();}
+      if(owner===stamp)await direct.sync();
       return result;
     }finally{busy.delete(action);}
   }
@@ -34,7 +36,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
   const draftKey=()=>owner+'/'+id+'/'+channel?.id;
   const validateAttachment=bindAttachmentDraft({area:$('groupText'),input:$('groupInput'),onError,scope:()=>visible && channel?.type==='text' && isOnline() && !group.transferring && !$('strictProxy').checked ?
     {type:'group',profile:owner,group:id,channel:channel.id,key:draftKey()}:null,
-    async publish(target,file,caption){await api.offerSelectedFile(target,file,caption);if(target.key===draftKey())reload();}});
+    async publish(target,file,caption){await api.offerSelectedFile(target,file,caption);if(target.key===draftKey())await direct.sync();}});
   function switchChannel(next=null){
     player.clear();
     const old=channel && draftKey();
@@ -42,7 +44,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     validateAttachment();
     const previous=chat.reset(channel && drafts.get(draftKey()));
     if(old){if(previous)drafts.set(old,previous);else drafts.delete(old);}
-    messages=[];files=[];before=null;more=false;keys.delete('files');
+    messages=[];files=[];before=null;more=false;historyError=fileError=null;keys.delete('files');
     $('groupShelf').open=false;$('groupEmoji').open=false;$('groupFiles').replaceChildren();feedback(null);
   }
   function selectGroup(next,preferred){
@@ -87,7 +89,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
         box.append(trigger);card.append(box);
       }
       if(file&&['downloading','uploading'].includes(file.status))card.append(make('div','','group-chat-transfer'));
-      const b=make('button',m.file.name||tr('Файл канала'),'button button-secondary');b.type='button';
+      const b=make('button',m.file.name||tr('Файл канала'),'button button-secondary');b.type='button';b.dataset.action='channel-file';
       b.onclick=()=>{$('groupShelf').open=true;const row=[...$('groupFiles').children].find(el=>el.dataset.file===m.file.id);(row?.querySelector('button')||$('groupShelf').querySelector('summary')).focus();};card.append(b);
     },
     onSend:async (text,nonce)=>{
@@ -132,8 +134,7 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
   }
   function occupants(data){
     if(!group)return {};
-    const summary=source().items.find(item=>item.id===id);
-    const result=isOnline()?{...(summary?.voiceRooms??group.voiceRooms)}:{};
+    const result=isOnline()?{...group.voiceRooms}:{};
     const session=state.session,voice=session?.groupVoice;
     if(voice?.group===id && !state.controlLost){
       const contacts=data.mixRoom===session.mixRoom?data.roomContacts:null;
@@ -273,50 +274,76 @@ export function groupPanel({$,direct,api,state,confirmAction,onError,openVoice,s
     }
     actions.refresh();
   }
-  async function reload(){
+  function viewKey(item){
+    return item&&JSON.stringify([item.id,item.owner,item.device,item.epoch,item.online,item.revision,item.viewVersion]);
+  }
+  async function reload(scope=FULL){
     if(!visible||!id||!owner)return;
-    if(reading){rerun=true;return;}reading=true;
+    if(reading){queued|=scope;return;}
+    reading=true;
     const generation=token,selected=id;
+    const summary=source().items.find(item=>item.id===selected);
+    let readHistory=!!(scope&HISTORY),readFiles=!!(scope&FILES);
     try{
-      const info=await call('group-open',{id:selected});
-      if(!visible||generation!==token||selected!==id)return;
-      if(!info?.id)throw Error(tr('Группа недоступна.'));
-      group=info;
-      const next=info.channels.find(c=>c.id===selections.get(id)) || info.channels[0];
-      if(channel?.id!==next?.id){switchChannel(next);if(next)selections.set(id,next.id);}
-      else channel=next||null;
-      let readError;
+      if(scope&VIEW){
+        viewSeen=viewKey(summary);routeSeen=summary?.ownerRoute;
+        const previous=group,priorChannel=channel;
+        const info=await call('group-open',{id:selected});
+        if(!visible||generation!==token||selected!==id)return;
+        if(!info?.id)throw Error(tr('Группа недоступна.'));
+        group=info;
+        const next=info.channels.find(c=>c.id===selections.get(id)) || info.channels[0];
+        if(channel?.id!==next?.id){switchChannel(next);if(next)selections.set(id,next.id);}
+        else channel=next||null;
+        const changedAccess=!previous||previous.epoch!==info.epoch||previous.owner!==info.owner||previous.device!==info.device||
+          previous.role!==info.role||previous.online!==info.online||previous.transferring!==info.transferring||priorChannel?.id!==next?.id;
+        // A legacy host sends only a group-wide revision. Refresh both lists in that case.
+        readHistory ||= changedAccess || next?.messageCount===undefined || priorChannel?.messageCount!==next.messageCount || priorChannel?.lastMessage!==next.lastMessage;
+        readFiles ||= changedAccess || next?.fileCount===undefined || priorChannel?.fileCount!==next.fileCount || priorChannel?.lastFile!==next.lastFile;
+        draw();
+      }
       if(channel?.type==='text' && isOnline() && !group.transferring){
-        const [history,list]=await Promise.allSettled([call('group-history',{id,channel:channel.id,...(before?{before}:{})}),call('group-file-list',{group:id,channel:channel.id})]);
+        if(readFiles)fileSeen=summary?.fileVersions?.[channel.id]||0;
+        const [history,list]=await Promise.allSettled([readHistory?call('group-history',{id,channel:channel.id,...(before?{before}:{})}):null,
+          readFiles?call('group-file-list',{group:id,channel:channel.id}):null]);
         if(!visible||token!==generation)return;
-        if(history.status==='fulfilled'){messages=history.value.messages||[];more=!!history.value.more;}
-        else{messages=[];more=false;before=null;readError=history.reason;}
-        if(list.status==='fulfilled')files=Array.isArray(list.value)?list.value:[];
-        else{files=[];readError??=list.reason;}
-      }else{files=[];more=false;}
-      feedback(readError);draw();
+        if(history.status==='rejected'){messages=[];more=false;before=null;historyError=history.reason;}
+        else if(readHistory){messages=history.value.messages||[];more=!!history.value.more;historyError=null;}
+        if(list.status==='rejected'){files=[];fileError=list.reason;}
+        else if(readFiles){files=Array.isArray(list.value)?list.value:[];fileError=null;}
+      }else{files=[];more=false;historyError=fileError=null;}
+      feedback(historyError||fileError);draw();
     }catch(e){if(visible&&generation===token){actions.close();switchChannel();group=null;feedback(e);draw();}}
-    finally{reading=false;if(rerun){rerun=false;void reload();}}
+    finally{reading=false;if(queued){const next=queued;queued=0;void reload(next);}}
   }
   function sync(shown,roomVoice){
     const who=direct.active()?direct.raw().me.id:null;
-    if(who!==owner){actions.close();switchChannel();drafts.clear();selections.clear();keys.clear();id=group=null;owner=who;token++;rawSeen=null;}
+    if(who!==owner){actions.close();switchChannel();drafts.clear();selections.clear();keys.clear();id=group=null;owner=who;token++;viewSeen=undefined;fileSeen=0;}
     const was=visible;visible=shown;
     if(!shown&&was){actions.close();player.close();token++;}
-    const snapshot=direct.raw(),items=source().items||[];
+    const items=source().items||[];
     if(!items.some(g=>g.id===id)){const next=items[0]?.id||null;if(id!==next){actions.close();switchChannel();id=next;group=null;token++;}}
     if(roomVoice && items.some(g=>g.id===roomVoice.group) && (id!==roomVoice.group||selections.get(id)!==roomVoice.channel)){
       selectGroup(roomVoice.group,roomVoice.channel);return;
     }
+    const item=items.find(g=>g.id===id);
+    if(group)group.voiceRooms=item?.voiceRooms;
     draw();
-    if(shown && (snapshot!==rawSeen||!was)){rawSeen=snapshot;reload();}
+    if(!shown||!item)return;
+    const nextView=viewKey(item),nextFile=item.fileVersions?.[channel?.id]||0;
+    let scope=!was||item.ownerRoute!==routeSeen?FULL:(nextView!==viewSeen?VIEW:0)|(nextFile!==fileSeen?FILES:0);
+    if(scope){
+      // Discard a response for an outdated view (including a revoked channel).
+      if(reading&&(scope&VIEW)){token++;scope=FULL;}
+      viewSeen=nextView;fileSeen=nextFile;routeSeen=item.ownerRoute;reload(scope);
+    }
   }
   $('groupCreate').onclick=()=>{if(owner){showGroup();actions.create();}else direct.open('home');};
   $('groupBegin').onclick=()=>id?reload():owner?actions.create():direct.open('home');
   $('groupAddChannel').onclick=actions.addChannel;$('groupMembersButton').onclick=actions.members;$('groupOptions').onclick=actions.options;
   $('groupEarlier').onclick=()=>{if(more&&messages.length){before=messages[0].id;token++;reload();}};
   $('groupLatest').onclick=()=>{before=null;token++;reload();};
-  $('groupRetry').onclick=reload;
+  $('groupRetry').onclick=()=>reload();
   const shelf=$('groupShelf');
   shelf.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&shelf.open){e.preventDefault();e.stopPropagation();shelf.open=false;shelf.querySelector('summary').focus();}

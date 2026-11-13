@@ -18,6 +18,7 @@ module.exports=async page=>{
       view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);
       view.setUint16(32,2,true);view.setUint16(34,16,true);word(36,'data');view.setUint32(40,count*2,true);
       for(let i=0;i<count;i++)view.setInt16(44+i*2,Math.sin(i*Math.PI/20)*9000*(i%rate/rate),true);
+      window.roomVoiceBytes=bytes;
       window.layoutPlayed=0;
       const attachments=chatAttachments({scope:()=>({current:()=>true,async doFile(action){
         if(action==='preview')return {bytes,type:'audio/wav'};
@@ -114,6 +115,67 @@ module.exports=async page=>{
     if(output)await page.locator('#fixture').screenshot({path:path.join(output,'chat-voice-own-'+language+'.png')});
     await own.locator('[data-action=preview]').press('Enter');
     if(output)await page.locator('#fixture').screenshot({path:path.join(output,'chat-layout-'+language+'-played.png')});
+    await checkOtherChats(page,language);
   }
   console.log('PASS compact chat RU/EN: text/time same-line, long/link/multiline, 280px, 24px font, keyboard menu, decoded 82-second waveform, duration/size and local played marker.');
 };
+
+async function checkOtherChats(page,language){
+  await page.evaluate(async()=>{
+    const {createChatView}=await import('./chat-view.mjs');
+    const {RoomFiles}=await import('./room-files.mjs');
+    const fixture=document.querySelector('#fixture');
+    fixture.style.width='250px';
+    fixture.innerHTML='<div id="roomChat"><div id="chatMessages"></div></div><div id="groupLog"></div><div id="gameHistory"></div><form hidden><input><button></button></form>';
+    for(const href of ['workspace.css','profile-appearance.css','group-feed.css']){
+      const sheet=document.createElement('link');sheet.rel='stylesheet';sheet.href=href;
+      await new Promise((resolve,reject)=>{
+        sheet.onload=resolve;sheet.onerror=reject;
+        if(href==='workspace.css')document.querySelector('link[href="chat-view.css"]').before(sheet);else document.head.append(sheet);
+      });
+    }
+    document.documentElement.dataset.theme='light';
+    const inputs={input:fixture.querySelector('input'),form:fixture.querySelector('form'),send:fixture.querySelector('button'),onSend:async()=>true};
+    const name='match-'+('file'.repeat(24))+'.zip';
+    createChatView({...inputs,log:document.getElementById('chatMessages')});
+    const shelf=new RoomFiles({selfId:'host',role:'host'},async ({op})=>{
+      if(op==='preview')return {type:'audio/wav',bytes:window.roomVoiceBytes};
+    });
+    window.layoutShelf=shelf;
+    const voice={id:'voice',author:'host',name:'Voice.wav',clip:'voice',size:window.roomVoiceBytes.byteLength,seenAt:Date.now()};
+    shelf.entries.set(voice.id,voice);shelf.local.add(voice.id);shelf.render(document.getElementById('chatMessages'),true);
+    const file={id:'zip',name,size:1024};
+    const group=createChatView({...inputs,log:document.getElementById('groupLog'),decorate(card){
+      const button=document.createElement('button');button.type='button';button.className='button button-secondary';
+      button.dataset.action='channel-file';button.textContent=name;button.onclick=()=>window.channelOpened=true;card.append(button);
+    }});
+    group.append({id:'file',file,time:Date.now(),author:'Host'});
+    const lan=createChatView({...inputs,log:document.getElementById('gameHistory')});
+    lan.append({id:'long',text:name,time:Date.now(),author:'Guest'});
+  });
+  const voice=page.locator('#chatMessages article');
+  await voice.locator('.voice-wave').waitFor();
+  const alignment=()=>voice.evaluate(card=>{
+    const label=card.querySelector('.clip-time')||card.querySelector('.clip-preview-label');
+    const text=el=>{const r=document.createRange();r.selectNode(el.firstChild);return r.getBoundingClientRect();};
+    const a=text(label),b=text(card.querySelector('time'));
+    return {heightDifference:a.bottom-b.bottom,overlap:a.right-b.left};
+  });
+  const preview=voice.locator('button[aria-expanded]');
+  for(const playing of [false,true]){
+    if(playing){await preview.click();await page.waitForFunction(()=>document.querySelector('#chatMessages audio')?.currentTime>0);}
+    const measured=await alignment();
+    assert(Math.abs(measured.heightDifference)<1&&measured.overlap<0,'room voice timestamp '+JSON.stringify(measured));
+  }
+  await preview.press('Shift+F10');
+  const remove=page.getByRole('menuitem',{name:language==='ru'?'Убрать':'Remove',exact:true});
+  await remove.waitFor();await page.keyboard.press('Escape');
+  assert(await preview.evaluate(el=>el===document.activeElement),'Escape restores the player control');
+  const group=page.locator('#groupLog [data-action=channel-file]');
+  assert(await group.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'long group filename fits');
+  await group.press('Shift+F10');
+  await page.getByRole('menuitem',{name:language==='ru'?'Файлы канала':'Channel files'}).press('Enter');
+  assert(await page.evaluate(()=>window.channelOpened),'group file menu activates the existing channel action');
+  assert(await page.locator('#gameHistory article').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'long LAN message fits');
+  await page.evaluate(()=>window.layoutShelf.close());
+}

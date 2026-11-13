@@ -236,6 +236,7 @@
         <div class="stage-heading room-stream-heading" hidden><div class="stage-label"><h2 id="stageTitle">Общий экран</h2><span id="stageBadge" class="stage-badge">В эфире</span></div><div class="stage-tools"><span id="stageStats" class="mono">—</span><button class="icon-button" id="fullscreenBtn" disabled aria-label="Открыть трансляцию на весь экран" title="На весь экран"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div>
         <div class="stream-stage" id="streamStage">
           <video id="remoteVideo" class="remote-video" autoplay muted playsinline hidden></video>
+          <ul id="streamSpeakers" aria-label="Сейчас говорят"></ul>
           <div id="voiceGrid" class="voice-grid" role="list" aria-label="Участники голосовой комнаты" hidden></div>
           <div class="stage-empty" id="stageEmpty">
             <div class="empty-emblem" aria-hidden="true"><div class="emblem-orbit orbit-one"></div><div class="emblem-orbit orbit-two"></div><div class="emblem-screen"><svg viewBox="0 0 64 64"><rect x="9" y="12" width="46" height="32" rx="5"/><path d="M24 53h16M32 44v9m-5-32 15 7-15 7z"/></svg></div></div>
@@ -573,6 +574,7 @@
       <section id="githubUpdates" hidden>
         <label><input type="checkbox" id="releaseAutomatic"> Проверять обновления на GitHub раз в сутки</label>
         <p id="githubReleaseStatus" role="status" class="field-help"></p>
+        <div id="githubProgress" hidden></div>
         <div class="friend-actions">
           <button type="button" id="githubCheck" class="button button-secondary">Проверить на GitHub</button>
           <button type="button" id="githubDownload" class="button button-primary" hidden>Скачать обновление</button>
@@ -580,9 +582,16 @@
           <button type="button" id="githubInstall" class="button button-primary" hidden>Установить</button>
         </div>
       </section>
-      <p>Друг может прикрепить установщик в файлах комнаты. Для установки скопируйте код обновления из публикации CRAFTCODE.</p>
+      <section class="offline-update">
+        <h3>Обновление без интернета</h3>
+        <p>Выберите файл .linkupdate, который друг передал в чате или на флешке. LINK проверит подпись и покажет версию перед установкой.</p>
+        <button type="button" id="openOfflineUpdate" class="button button-secondary">Открыть пакет обновления</button>
+        <span id="offlineUpdateStatus" role="status"></span>
+      </section>
+      <details id="legacyUpdate"><summary>Старый установщик и код</summary>
+      <p>Для старых выпусков попросите передать два файла из одного релиза: Setup-x64.exe и Update-Code.txt. Вставьте код из текстового файла. Сверьте его с публикацией CRAFTCODE или с доверенным отправителем.</p>
       <label for="releaseCode">Код обновления</label><input id="releaseCode" maxlength="110" autocomplete="off" spellcheck="false" placeholder="LINK-UPDATE …">
-      <div class="friend-actions"><button id="downloadRelease" class="button button-primary" hidden></button><button id="chooseRelease" class="button button-secondary">Выбрать установщик на диске</button></div><p id="releaseStatus" role="status" class="field-help"></p></details>
+      <div class="friend-actions"><button id="downloadRelease" class="button button-primary" hidden></button><button id="chooseRelease" class="button button-secondary">Выбрать установщик на диске</button></div><p id="releaseStatus" role="status" class="field-help"></p></details></details>
       <div id="coffeeSupport" class="coffee-support" hidden>
         <p>Если LINK вам пригодился, можно угостить автора кофе.</p>
         <button type="button" id="helpDonate" class="button button-secondary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 9h1a3 3 0 0 1 0 6h-1M4 21h14M8 2v3m4-3v3"/></svg><span>Угостить кофе</span></button>

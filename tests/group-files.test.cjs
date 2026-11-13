@@ -7,6 +7,7 @@ const {friend,seed}=require('../src/direct/identity.cjs');
 const {createRoomCertificate,fingerprintOf}=require('../src/core/certificate.cjs');
 const {GroupFiles}=require('../src/groups/files.cjs');
 const {GroupBlobs,validMeta,MAX}=require('../src/groups/file-blobs.cjs');
+const {BLOCK}=require('../src/files/storage.cjs');
 async function until(fn){for(let i=0;i<700;i++){const v=await fn();if(v)return v;await new Promise(r=>setTimeout(r,12));}throw Error('Condition timed out');}
 
 test('an authenticated connection without a current trusted device cannot read group history or join voice',async t=>{
@@ -58,7 +59,7 @@ test('unaccepted invitations and attachment offers from one friend cannot exhaus
   for(let i=0;i<16;i++)await offer(sender).catch(()=>{});
   assert.equal(await offer(other),true,'another member can still offer a file');
 });
-test('group files require host acceptance and recipient download, and the next owner really receives the verified bytes',{timeout:40000},async t=>{
+async function groupFileFixture(t){
   const base=await fs.mkdtemp(path.join(os.tmpdir(),'link-group-test-')),peers=[],servers=[];
   t.after(async()=>{await Promise.allSettled(peers.map(p=>p.stop()));await Promise.all(servers.map(s=>new Promise(r=>s.close(r))));await fs.rm(base,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
   const cert=await createRoomCertificate();
@@ -86,6 +87,11 @@ test('group files require host acceptance and recipient download, and the next o
   await act(owner,'invite',{id,person:member.me.id});await until(()=>member.groups.snapshot().invites.length);
   await act(member,'answer',{id,accept:true});await until(()=>owner.groups.authority(id).members.length===2);
   const fileAction=(s,op,extra={})=>s.groups.files.command(op,{group:id,channel,...extra});
+  return {base,owner,member,outsider,connect,act,id,channel,fileAction};
+}
+
+test('group files require host acceptance and recipient download, and the next owner really receives the verified bytes',{timeout:40000},async t=>{
+  const {base,owner,member,outsider,connect,act,id,channel,fileAction}=await groupFileFixture(t);
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1EAAAAASUVORK5CYII=','base64');
   await owner.groups.files.offer(id,channel,{name:'Picture.png',bytes:png},'Готово');
   const [photo]=await fileAction(owner,'list'),photoId={file:photo.id};
@@ -139,6 +145,88 @@ test('group files require host acceptance and recipient download, and the next o
   await assert.rejects(fileAction(outsider,'download',{file:ready.id}));assert.deepEqual(await fs.readFile(outsider.revealed),data);
   console.log('TLS group transfer verified on three profiles with the previous owner stopped, bytes='+data.length+', sha256='+sha);
 });
+test('group downloads share four requests over one authenticated link; blocks can arrive out of order',{timeout:35000},async t=>{
+  const {owner,member,id,channel,fileAction}=await groupFileFixture(t);
+  const data=randomBytes(1024*1024),other=Buffer.from(data).reverse();
+  const host=owner.groups.files,peer=member.groups.files;
+  await host.offer(id,channel,{name:'first.bin',bytes:data});
+  await host.offer(id,channel,{name:'second.bin',bytes:other});
+  const listed=await fileAction(member,'list');
+  const first=listed.find(row=>row.name==='first.bin'),second=listed.find(row=>row.name==='second.bin');
+  const request=peer.wire.request.bind(peer.wire);
+  const delay=require('node:timers/promises').setTimeout;
+  let active=0,peak=0;
+  const completed=[];
+  peer.wire.request=async(link,op,args,signal)=>{
+    if(op!=='read')return request(link,op,args,signal);
+    active++;peak=Math.max(peak,active);
+    try{
+      const bytes=await request(link,op,args,signal);
+      // Delay the first block to force a later response to arrive first.
+      await delay(120+(args.pos===0?70:0),undefined,{signal});
+      completed.push(args.pos);return bytes;
+    }finally{active--;}
+  };
+  const download=async row=>{
+    await fileAction(member,'download',{file:row.id});
+    await fileAction(member,'reveal',{file:row.id});
+    return fs.readFile(member.revealed);
+  };
+  const start=performance.now();
+  assert.deepEqual(await download(first),data);
+  const elapsed=Math.round(performance.now()-start);
+  assert.equal(peak,4);assert.notEqual(completed[0],0);assert.equal(completed.length,Math.ceil(data.length/BLOCK));
+  console.log('Group download at 120 ms added RTT: '+data.length+' bytes in '+elapsed+' ms ('+completed.length+' blocks).');
+
+  peak=0;completed.length=0;
+  const both=performance.now();
+  await Promise.all([fileAction(member,'download',{file:first.id}),fileAction(member,'download',{file:second.id})]);
+  console.log('Two simultaneous group downloads on the same link: '+2*data.length+' bytes in '+Math.round(performance.now()-both)+' ms.');
+  assert.equal(peak,4);assert.equal(completed.length,2*Math.ceil(data.length/BLOCK));assert.equal(active,0);
+  for(const [row,expected] of [[first,data],[second,other]]){
+    await fileAction(member,'reveal',{file:row.id});assert.deepEqual(await fs.readFile(member.revealed),expected);
+  }
+  assert.equal(peer.wire.pending.size,0);
+});
+
+test('in-flight group file reads stop on corrupt data, local cancellation and channel revocation',{timeout:20000},async t=>{
+  const {owner,member,id,channel,act,fileAction,base}=await groupFileFixture(t);
+  const host=owner.groups.files,peer=member.groups.files;
+  const size=256*1024;
+  await host.offer(id,channel,{name:'verify.bin',bytes:randomBytes(size)});
+  const [meta]=await fileAction(member,'list'),file={file:meta.id};
+  const entries=async()=>(await fs.readdir(path.join(base,'Member','Downloads'),{recursive:true,withFileTypes:true})).filter(entry=>entry.isFile());
+  const request=peer.wire.request.bind(peer.wire);
+  peer.wire.request=async(link,op,args,signal)=>{
+    const result=await request(link,op,args,signal);
+    if(op==='read'&&args.pos===BLOCK)return 'malformed';
+    return result;
+  };
+  await assert.rejects(fileAction(member,'download',file));
+  assert.deepEqual(await entries(),[]);assert.equal(peer.wire.pending.size,0);
+  peer.wire.request=request;
+  const read=host.blobs.read.bind(host.blobs);
+  for(const revoke of [false,true]){
+    const gate=Promise.withResolvers();let waiting=0;
+    host.blobs.read=async(...args)=>{waiting++;try{await gate.promise;return await read(...args);}finally{waiting--;}};
+    const download=assert.rejects(fileAction(member,'download',file));
+    try{
+      await until(()=>waiting===4);
+      if(revoke){
+        await act(owner,'channel-access',{id,channel,access:'staff'});
+        await until(()=>!member.groups.records.get(id).view.channels.some(c=>c.id===channel));
+        assert.equal(peer.wire.pending.size,0,'local revocation aborts requests even while the server is still reading');
+      }else{
+        await fileAction(member,'cancel',file);
+        assert.equal(peer.wire.pending.size,0);
+      }
+    }finally{gate.resolve();}
+    await download;await until(()=>!waiting);
+    assert.deepEqual(await entries(),[]);assert.equal(peer.reader.active,0);
+    assert.equal(peer.tasks.size,0);assert.equal(peer.wire.pending.size,0);
+  }
+});
+
 test('file metadata bounds reject oversized files and unsafe names',()=>{
   const meta={id:randomUUID(),size:0,name:'notes',sha:'a'.repeat(64)};
   assert(validMeta(meta));for(const name of ['../../x','NUL','trailing.','a:b'])assert(!validMeta({...meta,name}));

@@ -10,6 +10,14 @@ module.exports=async function roomStreamView(host,guest,language,tr){
   for(const page of [guest,host]){
     await page.evaluate(()=>{
       window.qaScreenCapture=true;
+      // Feed controlled audio through the actual microphone, codec and remote mixer.
+      navigator.mediaDevices.getUserMedia=async()=>{
+        const context=new AudioContext(),tone=context.createOscillator(),gain=context.createGain();
+        const output=context.createMediaStreamDestination();
+        tone.frequency.value=390;gain.gain.value=0;tone.connect(gain).connect(output);tone.start();
+        await context.resume();window.qaTalk=enabled=>{gain.gain.value=enabled ? 0.15 : 0;};
+        return output.stream;
+      };
       const Native=RTCPeerConnection;
       const connections=[];
       window.RTCPeerConnection=class extends Native{constructor(...args){super(...args);connections.push(this);}};
@@ -50,6 +58,29 @@ module.exports=async function roomStreamView(host,guest,language,tr){
   await share(guest);
   await host.waitForFunction(()=>document.querySelector('#remoteVideo').videoWidth>0);
   await host.locator('.voice-tile[data-slot="1"] canvas').waitFor();
+  const speakers=host.locator('#streamSpeakers li');
+  const thumb=host.locator('.voice-tile[data-slot="1"]');
+  for(const page of [host,guest]){
+    if(await page.locator('#micBtn').getAttribute('aria-pressed')!=='true')await page.click('#micBtn');
+  }
+  await host.bringToFront();await host.click('#fullscreenBtn');await host.waitForFunction(()=>document.fullscreenElement?.id==='streamStage');
+  assert.equal(await speakers.count(),0);
+  await guest.evaluate(()=>qaTalk(true));
+  await speakers.filter({hasText:'Борис'}).waitFor();
+  await host.evaluate(()=>qaTalk(true));await host.waitForFunction(()=>document.querySelectorAll('#streamSpeakers li').length===2);
+  assert.equal(await speakers.first().evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+  if(process.env.LINK_UI_QA_IMAGES){
+    await fs.mkdir(process.env.LINK_UI_QA_IMAGES,{recursive:true});
+    await host.screenshot({path:path.join(process.env.LINK_UI_QA_IMAGES,'fullscreen-speakers-'+language+'.png')});
+  }
+  await guest.evaluate(()=>qaTalk(false));await speakers.filter({hasText:'Борис'}).waitFor({state:'detached'});
+  assert.equal(await speakers.count(),1);
+  await guest.evaluate(()=>qaTalk(true));await speakers.filter({hasText:'Борис'}).waitFor();
+  await guest.click('#micBtn');await speakers.filter({hasText:'Борис'}).waitFor({state:'detached'});
+  await host.focus('#exitPlayer');await host.keyboard.press('Enter');
+  await host.waitForFunction(()=>!document.fullscreenElement&&!document.querySelector('#streamSpeakers li'));
+  await thumb.waitFor();await host.click('#micBtn');
+  console.log('PASS fullscreen speakers: silence, simultaneous local and decoded remote voice, mute and keyboard exit');
   await host.evaluate(()=>{
     const draw=CanvasRenderingContext2D.prototype.drawImage;
     window.qaThumbnailDraws=0;

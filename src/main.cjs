@@ -255,7 +255,8 @@ function registerIPC() {
     emit:e=>{if(e.type==='game-invited'||e.type==='game-requested')trayController?.ring(e.type==='game-requested'?'game-request':'game',e);sendEvent(e);},room:()=>currentRoom?.getInfo(),roomToken:()=>currentRoom,openRoom,closeRoom,busy:()=>!!currentRoom||roomTransition,ring:(kind,info)=>trayController?.ring(kind,info),clearChatNotice:id=>trayController?.clearChatNotice(id)});
   updates=require('./release-update.cjs').registerUpdates({handle,app,dialog,window:()=>mainWindow,completed:token=>shelf?.store.completed.get(token),
     allowed:()=>direct?.allowsPublicLookup()===true,sessionActive:()=>!!(currentRoom||roomTransition||direct?.updateSessionActive()),
-    changed:state=>sendEvent({type:'release-updated',state}),openExternal:url=>shell.openExternal(url)});
+    changed:state=>sendEvent({type:'release-updated',state}),announce:version=>!currentRoom&&!roomTransition&&trayController?.offerUpdate(version),
+    openExternal:url=>shell.openExternal(url)});
   if(storageLocationController){
     const storageControls=require('./storage-controls.cjs').createStorageControls({location:storageLocationController,session:()=>mainWindow.webContents.session,updates,openDirectory:folder=>shell.openPath(folder),
       restart:async()=>{mainWindow.webContents.session.flushStorageData();app.relaunch();app.quit();},
@@ -311,6 +312,7 @@ function registerIPC() {
     const connected = Boolean(currentRoom) && raw?.connected === true;
     trayController?.setNoticePolicy(raw?.systemNotices!==false,raw?.dnd===true);
     trayController?.setCall(connected, connected && raw?.sharing === true);
+    updates?.announceAvailable();
   });
   handle('internet', async raw => {
     const {op} = objectArgument(raw);
@@ -356,7 +358,12 @@ function registerIPC() {
     if(op==='sync-game-notices'){if(Array.isArray(raw.ids))trayController?.syncGameNotices(raw.ids.slice(0,48));return;}
     if(op==='clear-request-notice'){trayController?.clearRequestNotice(raw.source);return;}
     if(op==='end-ring'){if(trayController)trayController.endRing();else mainWindow?.flashFrame(false);return;}
-    if (op === 'ring') { if(raw.kind==='message')return; if (trayController) trayController.ring(raw.kind,raw); else if (mainWindow && !mainWindow.isFocused()) mainWindow.flashFrame(true); return; }
+    if (op === 'ring') {
+      if(raw.kind==='message'||raw.kind==='update')return;
+      if(trayController)trayController.ring(raw.kind,raw);
+      else if(mainWindow&&!mainWindow.isFocused())mainWindow.flashFrame(true);
+      return;
+    }
     if(op==='show-executable'){
       if(process.platform==='win32' && app.isPackaged)shell.showItemInFolder(process.execPath);
       return;
@@ -604,14 +611,20 @@ async function createWindow() {
   });
   const stopNote=()=>{liveCamera.reset();shelf?.camera.reset();direct?.camera?.reset();direct?.lanCamera.reset();sendEvent({type:'window-hidden'});};
   mainWindow.on('hide',stopNote);
-  mainWindow.on('focus',()=>sendEvent({type:'window-focused'}));
+  mainWindow.on('focus',()=>{sendEvent({type:'window-focused'});updates?.announceAvailable();});
+  mainWindow.on('enter-full-screen',()=>trayController?.hideUpdate());
+  mainWindow.on('leave-full-screen',()=>updates?.announceAvailable());
+  mainWindow.on('enter-html-full-screen',()=>trayController?.setHtmlFullscreen(true));
+  mainWindow.on('leave-html-full-screen',()=>{trayController?.setHtmlFullscreen(false);updates?.announceAvailable();});
   mainWindow.on('minimize',stopNote);
   if (process.platform === 'win32') {
     mainWindow.setAppDetails({appId:windowsAppId, appIconPath:process.execPath, appIconIndex:0});
     let tray;
     try {
       tray = new Tray(path.join(__dirname, 'renderer', 'assets', 'craftlink.ico'));
-      trayController = attachTray({ window: mainWindow, tray, menu: Menu, createNotification:options=>Notification.isSupported()?new Notification({...options,icon:path.join(__dirname,'renderer','assets','craftlink.ico')}):null, canOpenChat:(profile,id)=>direct?.canOpenChat(profile,id),openChat:(profile,id)=>sendEvent({type:'tray-chat',profile,id}),openGame:id=>sendEvent({type:'tray-game',id}), openRequests:kind=>sendEvent({type:'tray-requests',kind}), stopSharing:()=>sendEvent({type:'tray-stop-sharing'}), leaveRoom:()=>sendEvent({type:'tray-leave'}), quit: () => app.quit(), isQuitting: () => quitting });
+      trayController = attachTray({ window: mainWindow, tray, menu: Menu, createNotification:options=>Notification.isSupported()?new Notification({...options,icon:path.join(__dirname,'renderer','assets','craftlink.ico')}):null, canOpenChat:(profile,id)=>direct?.canOpenChat(profile,id),openChat:(profile,id)=>sendEvent({type:'tray-chat',profile,id}),openGame:id=>sendEvent({type:'tray-game',id}), openRequests:kind=>sendEvent({type:'tray-requests',kind}),
+        openUpdates:()=>sendEvent({type:'tray-update'}),showUpdateHint:version=>sendEvent({type:'release-offer',version}),
+        stopSharing:()=>sendEvent({type:'tray-stop-sharing'}), leaveRoom:()=>sendEvent({type:'tray-leave'}), quit: () => app.quit(), isQuitting: () => quitting });
     } catch {
       tray?.destroy();
       await dialog.showMessageBox(mainWindow, { type: 'info', message: tr('Значок в трее недоступен. В этом сеансе крестик полностью закроет программу.') });

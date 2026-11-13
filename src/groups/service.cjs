@@ -14,14 +14,30 @@ class Groups {
   constructor(s,profileStore){
     this.s=s;this.store=new GroupStore(profileStore);this.handlers=new Map();this.pending=new Map();this.inviteRates=new Map();
     this.handoff=new GroupHandoff(this);this.directory=new VoiceDirectory(this);this.avatarReads=new Map();this.active=false;
+    this.viewVersions=new Map();this.fileVersions=new Map();this.routes=new WeakMap();this.routeSerial=0;
   }
   start(){
     try{this.store.start(this.s.me);this.active=true;}
     catch(error){this.active=false;this.s.issue=error.message;}
   }
   changed(id){
-    if(id&&!this.records.has(id))this.directory.remote.delete(id);
+    if(id){
+      this.files?.permissionsChanged?.(id);
+      if(this.records.has(id))this.viewVersions.set(id,(this.viewVersions.get(id)||0)+1);
+      else{this.directory.remote.delete(id);this.viewVersions.delete(id);this.fileVersions.delete(id);}
+    }
     this.s.update();this.s.groupChanged?.(id);
+  }
+  filesChanged(id,channel){
+    const r=this.records.get(id),view=this.mine(r)?r.group:r?.view;
+    if(!view?.channels.some(c=>c.id===channel))return;
+    let versions=this.fileVersions.get(id);
+    if(!versions)this.fileVersions.set(id,versions=new Map());
+    versions.set(channel,(versions.get(channel)||0)+1);this.s.update();
+  }
+  memberConnectionChanged(person){
+    for(const r of this.records.values())if(this.mine(r)&&M.member(r.group,person))
+      this.viewVersions.set(r.id,(this.viewVersions.get(r.id)||0)+1);
   }
   get records(){return this.store.records;}
   joinedCount(){return [...this.records.values()].filter(r=>!r.invite||r.accepted).length;}
@@ -64,10 +80,15 @@ class Groups {
     const items=[],invites=[],transfers=[];
     if(!this.active||this.s.paused||this.s.strict)return {items,invites,transfers};
     for(const r of this.records.values()){
-      const mine=this.mine(r), online=mine||!!this.link(r.owner,r.device);
+      const mine=this.mine(r),link=mine?null:this.link(r.owner,r.device),online=mine||!!link;
       const meta={id:r.id,name:r.name,owner:r.owner,device:r.device,epoch:r.epoch,online};
       if(r.invite && !r.view && !mine){invites.push({...meta,fromName:this.friend(r.owner)?.name||''});continue;}
-      if(r.view||mine)items.push({...meta,...this.appearance(r),role:mine?'owner':r.view.role,revision:mine?r.group.revision:r.view.revision,voiceRooms:online?this.directory.read(r):undefined});
+      if(r.view||mine){
+        if(link&&!this.routes.has(link))this.routes.set(link,++this.routeSerial);
+        items.push({...meta,...this.appearance(r),role:mine?'owner':r.view.role,revision:mine?r.group.revision:r.view.revision,
+          ownerRoute:link?this.routes.get(link):0,viewVersion:this.viewVersions.get(r.id)||0,
+          fileVersions:Object.fromEntries(this.fileVersions.get(r.id)||[]),voiceRooms:online?this.directory.read(r):undefined});
+      }
       if(r.move?.side==='candidate' && r.move.phase==='offered')transfers.push({...meta,fromName:this.friend(r.owner)?.name||''});
     }
     return {items,invites,transfers};
@@ -82,6 +103,7 @@ class Groups {
   }
   announce(l){
     if(!this.fileAllowed(l))return;
+    this.memberConnectionChanged(l.card.id);
     for(const r of this.records.values()){
       if(this.mine(r)){
         if(M.member(r.group,l.card.id)){
@@ -96,7 +118,12 @@ class Groups {
       this.handoff.reconnect(r,l);
     }
   }
-  put(r){this.store.put(r);this.changed(r.id);}
+  put(r){
+    this.store.put(r);
+    const versions=this.fileVersions.get(r.id),view=this.mine(r)?r.group:r.view;
+    if(versions)for(const channel of versions.keys())if(!view?.channels.some(c=>c.id===channel))versions.delete(channel);
+    this.changed(r.id);
+  }
   publish(r,old){
     this.put(r);
     this.directory.schedule(r.id);
@@ -317,7 +344,10 @@ class Groups {
     if(op==='leave'){this.store.remove(id);this.changed(id);}
     return result;
   }
-  lost(l){this.directory.lost(l);for(const p of [...this.pending.values()])if(p.link===l)p.done(offline());this.changed();}
+  lost(l){
+    if(l.groups&&l.card)this.memberConnectionChanged(l.card.id);
+    this.directory.lost(l);for(const p of [...this.pending.values()])if(p.link===l)p.done(offline());this.changed();
+  }
   forget(person){
     this.inviteRates.delete(person);
     for(const r of [...this.records.values()]){
@@ -335,6 +365,7 @@ class Groups {
   tick(){this.handoff.tick();}
   async close(){
     this.avatarReads.clear();
+    this.viewVersions.clear();this.fileVersions.clear();
     this.inviteRates.clear();
     this.directory.close();
     this.active=false;for(const p of [...this.pending.values()])p.done(offline());

@@ -13,14 +13,20 @@ class FileWire{
     if(at>now)await new Promise(resolve=>setTimeout(resolve,at-now));
     if(!this.allowed(link)||this.scope(link)!==message.scope||link.socket.destroyed||!guard()||!link.send(message))throw lost();
   }
-  request(link,op,args){
+  request(link,op,args,signal){
     if(!link||!this.allowed(link)||this.pending.size>=32)return Promise.reject(lost());
+    if(signal?.aborted)return Promise.reject(signal.reason);
     const id=randomUUID();
     return new Promise((resolve,reject)=>{
-      const finish=(error,value)=>{clearTimeout(timer);this.pending.delete(id);error?reject(error):resolve(value);};
+      const abort=()=>finish(signal.reason);
+      const finish=(error,value)=>{
+        clearTimeout(timer);signal?.removeEventListener('abort',abort);
+        this.pending.delete(id);error?reject(error):resolve(value);
+      };
       const timer=setTimeout(()=>finish(lost()),12000);timer.unref();
       this.pending.set(id,{link,finish});
-      this.send(link,{kind:this.kind,id,op,args,scope:this.scope(link)}).catch(error=>finish(error));
+      signal?.addEventListener('abort',abort,{once:true});
+      this.send(link,{kind:this.kind,id,op,args,scope:this.scope(link)},()=>this.pending.has(id)).catch(error=>finish(error));
     });
   }
   async receive(link,m){

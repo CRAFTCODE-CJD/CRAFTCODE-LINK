@@ -2,55 +2,63 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 const {createHash}=require('node:crypto'),{EventEmitter}=require('node:events');
-const {lookup,selectRelease,download,supportURL,latestURL,home,api}=require('../src/github-releases.cjs');
+const {lookup,download,supportURL,latestURL,home}=require('../src/github-releases.cjs');
 const {UpdateService,DAY}=require('../src/update-service.cjs');
 const {registerUpdates}=require('../src/release-update.cjs');
 const bytes=Buffer.from('MZsample installer; must never be executed');
 const sha=createHash('sha256').update(bytes).digest('hex'),version='0.20.1',tag='v'+version;
 const name='CRAFTCODE-LINK-'+version+'-Setup-x64.exe';
-function metadata(){
-  return {tag_name:tag,draft:false,prerelease:false,html_url:home+'/releases/tag/'+tag,assets:[{
-    name,id:7304,size:bytes.length,state:'uploaded',digest:'sha256:'+sha,url:api+'/releases/assets/7304',
-    browser_download_url:home+'/releases/download/'+tag+'/'+name}]};
+function feed(version){
+  const prefix=home+'/releases/download/v'+version+'/CRAFTCODE-LINK-'+version;
+  return {tag:home+'/releases/tag/v'+version,code:prefix+'-Update-Code.txt',exe:prefix+'-Setup-x64.exe'};
+}
+function published(url,opts,v=version){
+  const f=feed(v);
+  if(url===latestURL){assert.equal(opts.method,'HEAD');return Response.redirect(f.tag,302);}
+  if(url===f.code){assert.equal(opts.method,'GET');return new Response('LINK-UPDATE '+v+' '+sha+'\n');}
+  assert.equal(url,f.exe);
+  return opts.method==='HEAD'?new Response(null,{headers:{'Content-Length':String(bytes.length)}}):new Response(bytes);
 }
 const signal=()=>new AbortController().signal;
 async function temp(t){
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'link-update-test-'));
   t.after(()=>fs.rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:75}));return directory;
 }
-const response=()=>new Response(JSON.stringify(metadata()));
-test('Latest lookup pins the publisher and accepts one compatible stable newer installer with a GitHub digest',async()=>{
-  const r=await lookup('0.9.9',(url,options)=>{
-    assert.equal(url,latestURL);assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');return response();
-  },signal());
-  assert.equal(r.phase,'available');assert.equal(r.release.sha,sha);
-  assert.equal(selectRelease(metadata(),version),null);assert.equal(selectRelease(metadata(),'0.21.0'),null);
-  for(const values of [{draft:true},{prerelease:true},{tag_name:'v0.20.1-beta.1'},{tag_name:'0.020.1'},{html_url:'https://github.com/another/repo'}])
-    assert.throws(()=>selectRelease({...metadata(),...values},'0.9.9'));
-  for(const fields of [{id:0},{digest:null},{digest:'sha1:'+sha},{name:'setup.exe'},{state:'new'},{url:home},
-    {size:513*1024**2},{browser_download_url:'https://another.invalid/'+name}]){
-    const m=metadata();Object.assign(m.assets[0],fields);assert.throws(()=>selectRelease(m,'0.9.9'));
+test('Public latest permalink needs one HEAD for a current client and pinned assets for an upgrade',async()=>{
+  const calls=[],check=(url,opts)=>{calls.push(url);assert.equal(opts.credentials,'omit');assert.equal(opts.redirect,'manual');return published(url,opts);};
+  const r=await lookup('0.9.9',check,signal());
+  assert.equal(r.phase,'available');assert.equal(r.release.sha,sha);assert.equal(r.release.size,bytes.length);
+  assert.deepEqual(calls,[latestURL,feed(version).code,feed(version).exe]);
+  for(const current of [version,'0.21.0']){
+    calls.length=0;assert.deepEqual(await lookup(current,check,signal()),{phase:'current'});assert.deepEqual(calls,[latestURL]);
   }
-  const dup=metadata();dup.assets.push(dup.assets[0]);assert.throws(()=>selectRelease(dup,'0.9.9'));
+  for(const target of [home+'/releases/tag/v0.20.1-beta',home+'/releases/tag/v0.020.1','https://another.invalid/releases/tag/v0.20.1',feed(version).tag+'?q=1'])
+    await assert.rejects(lookup('0.9.9',()=>Response.redirect(target),signal()));
   assert.equal((await lookup('0.9.9',()=>new Response(null,{status:404}),signal())).phase,'unpublished');
-  for(const [status,headers] of [[429,{}],[403,{'x-ratelimit-remaining':'0'}]])
-    await assert.rejects(lookup('0.9.9',()=>new Response(null,{status,headers}),signal()),/частоту проверок/);
-  for(const res of [new Response(null,{status:403}),new Response(null,{status:302}),new Response('x'.repeat(1024**2+1))])
-    await assert.rejects(lookup('0.9.9',()=>res,signal()));
+  for(const [status,headers] of [[429,{}],[403,{'retry-after':'12'}],[403,{'x-ratelimit-remaining':'0'}]])
+    await assert.rejects(lookup('0.9.9',()=>new Response(null,{status,headers}),signal()),e=>e.retryAfterMs>=12000);
+  for(const body of ['LINK-UPDATE 0.20.2 '+sha,'LINK-UPDATE '+version+' '+sha+'x',' '.repeat(300),'']){
+    await assert.rejects(lookup('0.9.9',(url,opts)=>url===feed(version).code?new Response(body):published(url,opts),signal()));
+  }
+  for(const len of ['0',String(513*1024**2),'bad']){
+    await assert.rejects(lookup('0.9.9',(url,opts)=>url===feed(version).exe?new Response(null,{headers:{'content-length':len}}):published(url,opts),signal()));
+  }
+  await assert.rejects(lookup('0.9.9',(url,opts)=>url===feed(version).code?Response.redirect('https://attacker.invalid/code'):published(url,opts),signal()));
   assert.equal(supportURL(),'https://boosty.to/channel-jonathan-developer/donate');
   assert.equal(supportURL(null),null);
   assert.equal(supportURL('https://support.example/path'),'https://support.example/path');
   for(const url of ['http://example.org','file:///C:/x','https://user@example.org','https://example.org:8443'])assert.equal(supportURL(url),null);
 });
 test('Binary retrieves only the bound asset or GitHub release CDN, checks every byte and removes failed downloads',async t=>{
-  const cache=await temp(t),release=selectRelease(metadata(),'0.1.0'),cdn='https://release-assets.githubusercontent.com/r/1234?sig=ref';
-  const calls=[];
+  const cache=await temp(t),{release}=await lookup('0.1.0',published,signal()),cdn='https://release-assets.githubusercontent.com/r/1234?sig=ref';
+  const calls=[],progress=[];
   const file=await download(release,cache,(url,options)=>{
     calls.push(url);assert.equal(options.redirect,'manual');assert.equal(options.credentials,'omit');
-    if(url===release.url){assert.equal(options.headers.Accept,'application/octet-stream');return Response.redirect(cdn);}
+    if(url===release.url){assert.equal(options.method,'GET');return Response.redirect(cdn);}
     return new Response(new ReadableStream({start(controller){controller.enqueue(bytes.subarray(0,1));controller.enqueue(bytes.subarray(1));controller.close();}}));
-  },signal());
+  },signal(),n=>progress.push(n));
   assert.deepEqual(calls,[release.url,cdn]);assert.deepEqual(await fs.readFile(file),bytes);
+  assert.deepEqual(progress,[1,bytes.length]);
   for(const redir of ['http://release-assets.githubusercontent.com/file','https://attacker.invalid/file','https://attacker@release-assets.githubusercontent.com/file',home+'/wrong.exe']){
     let count=0;await assert.rejects(download(release,cache,()=>{count++;return Response.redirect(redir);},signal()));
     assert.equal(count,1);
@@ -62,12 +70,12 @@ test('Binary retrieves only the bound asset or GitHub release CDN, checks every 
   await assert.rejects(download({...release,sha:'0'.repeat(64)},cache,()=>new Response(bytes),signal()));
   assert.deepEqual(await fs.readdir(cache),[path.basename(path.dirname(file))]);
 });
-test('Background checks wait for policy, persist the daily interval, stay silent in the tray and never download',async t=>{
+test('Background checks wait for policy, persist the daily interval and never download',async t=>{
   const directory=await temp(t);let normal=false,calls=0,clock=3*DAY;
   const changes=[];
   const make=()=>new UpdateService({directory,cache:path.join(directory,'cache'),current:'0.1.0',allowed:()=>normal,supported:true,
     scheduled:true,changed:s=>changes.push(s.phase),install:()=>assert.fail('unexpected install'),openExternal:()=>assert.fail('unexpected navigation'),
-    now:()=>clock,fetcher:url=>{assert.equal(url,latestURL);calls++;return response();}});
+    now:()=>clock,fetcher:(url,opts)=>{if(url===latestURL)calls++;return published(url,opts);}});
   let h=make();t.after(()=>h.close());h.policy();assert.equal(h.timer,undefined);
   await assert.rejects(h.command({op:'check'}));assert.equal(calls,0);
   normal=true;h.policy();assert.ok(h.timer);await h.check(true);assert.equal(calls,1);assert.equal(h.phase,'available');assert.deepEqual(changes.slice(-2),['checking','available']);
@@ -78,6 +86,18 @@ test('Background checks wait for policy, persist the daily interval, stay silent
   await h.command({op:'check'});assert.equal(calls,3);
   normal=false;h.policy();await assert.rejects(h.command({op:'download'}));assert.equal(calls,3);
   await assert.rejects(h.command({op:'donate',url:'https://attacker.invalid'}));
+});
+test('An available release is announced after deferral, once across restarts; manual checks count as seen',async t=>{
+  const directory=await temp(t),shown=[];let clock=3*DAY,ready=false,latest=version;
+  const make=()=>new UpdateService({directory,cache:directory,current:'0.1.0',allowed:()=>true,supported:true,scheduled:false,changed:()=>{},
+    now:()=>clock,fetcher:(url,opts)=>published(url,opts,latest),
+    announce:v=>{if(!ready)return false;shown.push(v);return true;}});
+  let hub=make();t.after(()=>hub.close());
+  await hub.check(true);assert.deepEqual(shown,[]);ready=true;hub.announceAvailable();hub.announceAvailable();
+  assert.deepEqual(shown,[version]);hub.close();hub=make();clock+=DAY;await hub.check(true);
+  assert.deepEqual(shown,[version]);
+  latest='0.20.2';clock+=DAY;await hub.check(true);assert.deepEqual(shown,[version,latest]);
+  latest='0.20.3';await hub.check();clock+=DAY;await hub.check(true);assert.deepEqual(shown,[version,'0.20.2']);
 });
 test('Switch to relay-only aborts an in-flight lookup; disabled preferences cancel background work',async t=>{
   const directory=await temp(t);let normal=true,requests=0;
@@ -93,21 +113,21 @@ test('Switch to relay-only aborts an in-flight lookup; disabled preferences canc
 test('Restart preserves the available-version hint only and revalidates with the publisher before download',async t=>{
   const directory=await temp(t),cache=path.join(directory,'cache'),calls=[];
   const mk=()=>new UpdateService({directory,cache,current:'0.1.0',allowed:()=>true,supported:true,scheduled:false,changed:()=>{},
-    fetcher:url=>{calls.push(url);if(url===latestURL)return response();assert.equal(url,metadata().assets[0].url);return new Response(bytes);}});
+    fetcher:(url,opts)=>{calls.push(url);return published(url,opts);}});
   let hub=mk();await hub.check();hub.close();
   const pref=path.join(directory,'release-check-v1.json'),p=JSON.parse(await fs.readFile(pref,'utf8'));
   assert.deepEqual(p.offer,{version,size:bytes.length});p.offer.url='https://attacker.invalid/untrusted';p.offer.sha='0'.repeat(64);
   await fs.writeFile(pref,JSON.stringify(p));hub=mk();t.after(()=>hub.close());assert.equal(hub.state().version,version);
-  assert.equal(hub.phase,'available');await hub.check(true);assert.deepEqual(calls,[latestURL]);
+  assert.equal(hub.phase,'available');await hub.check(true);const check=[latestURL,feed(version).code,feed(version).exe];assert.deepEqual(calls,check);
   assert.equal((await hub.command({op:'download'})).phase,'ready');
-  assert.deepEqual(calls,[latestURL,latestURL,metadata().assets[0].url]);
+  assert.deepEqual(calls,[...check,...check,feed(version).exe]);
 });
 test('Quitting during native confirmation before the installer starts never launches or resumes an install',async t=>{
   const directory=await temp(t),handlers=new Map();let ctrl;
   ctrl=registerUpdates({handle:(op,cb)=>handlers.set(op,cb),app:{getVersion:()=>'0.1.0',getPath:()=>directory,isPackaged:false,quit:()=>assert.fail()},
     supported:true,allowed:()=>true,sessionActive:()=>false,changed:()=>{},window:()=>null,
     dialog:{showMessageBox:async()=>{ctrl.close();return {response:1};}},launcher:()=>assert.fail('App is already quitting'),
-    fetcher:url=>url===latestURL?response():new Response(bytes)});
+    fetcher:published});
   const op=op=>handlers.get('releases')({op});await op('check');await op('download');await assert.rejects(op('install'));
   assert.equal(ctrl.launching,false);await assert.rejects(op('install'));
   const cache=path.join(directory,'update-cache');await fs.mkdir(path.join(cache,'personal'));
@@ -124,7 +144,7 @@ test('Windows IPC separates download and consent, refuses newly active sessions,
   const ctrl=registerUpdates({handle:(name,fn)=>handlers.set(name,fn),app:{isPackaged:false,getPath:()=>directory,getVersion:()=>'0.1.0',quit:()=>quits++},
     dialog:{showMessageBox:async(win,opts)=>{assert.equal(win,fakeWindow);assert.equal(opts.defaultId,0);assert.equal(opts.cancelId,0);prompts++;beforeAnswer();return {response:consent};}},
     window:()=>fakeWindow,completed:()=>null,allowed:()=>true,sessionActive:()=>active,changed:()=>{},openExternal:()=>assert.fail('unexpected navigation'),
-    supported:true,fetcher:(url)=>{if(url===latestURL)return response();assert.equal(url,metadata().assets[0].url);downloads++;return new Response(bytes);},
+    supported:true,fetcher:(url,opts)=>{if(url===feed(version).exe&&opts.method==='GET')downloads++;return published(url,opts);},
     launcher:(file,args,options)=>{assert.deepEqual(args,[]);assert.equal(options.shell,false);launched.push(file);
       const child=new EventEmitter();child.unref=()=>{};process.nextTick(()=>launchFails?child.emit('error',Error('simulated launch failure')):child.emit('spawn'));return child;}});
   t.after(()=>ctrl.close());
@@ -142,4 +162,14 @@ test('Windows IPC separates download and consent, refuses newly active sessions,
   await op('download');launchFails=true;await assert.rejects(op('install'),/simulated launch/);
   assert.equal(ctrl.launching,false);assert.equal(quits,0);assert.equal((await fs.readdir(cache)).length,1);
   launchFails=false;await op('install');assert.deepEqual(await fs.readFile(launched.at(-1)),bytes);assert.equal(quits,1);assert.equal(ctrl.launching,true);
+});
+
+test('A real web/CDN cooldown survives a restart and repeated manual checks, then clears on success',async t=>{
+  const directory=await temp(t);let clock=4*DAY,calls=0;
+  const make=()=>new UpdateService({directory,cache:directory,current:version,allowed:()=>true,supported:true,scheduled:false,now:()=>clock,changed:()=>{},
+    fetcher:(url,opts)=>{calls++;return calls===1?new Response(null,{status:429,headers:{'retry-after':'90'}}):published(url,opts);}});
+  let hub=make();await hub.check();assert.equal(hub.state().retryAt,clock+90000);
+  hub.close();hub=make();t.after(()=>hub.close());
+  await hub.check();assert.equal(calls,1);clock+=90001;
+  assert.equal((await hub.check(true)).phase,'current');assert.equal(calls,2);assert.equal(hub.state().retryAt,0);
 });

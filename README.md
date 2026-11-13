@@ -66,7 +66,7 @@ Profile settings include a photo, interface themes and chat backgrounds. A Windo
 
 Only confirmed LINK friends with photo support receive your profile photo. In a LINK room, friends see photos for verified LINK participants. Guests joining by code, IP or Jabber appear to others with initials. Interface themes and chat backgrounds stay on this device.
 
-The Windows x64 app checks the stable releases of CRAFTCODE-CJD/CRAFTCODE-LINK daily in normal mode. Open Help → Updates to turn checks off, check now, download a release or install after leaving active sessions. The client verifies the downloaded installer against the GitHub release asset digest.
+The Windows x64 app checks the stable releases of CRAFTCODE-CJD/CRAFTCODE-LINK daily in normal mode. Open Help → Updates to turn checks off, check now, download a release or install after leaving active sessions. A current client checks the public latest-release link with one request. For a new version, LINK shows download progress and speed and verifies the installer against the SHA-256 published with that release.
 
 Click a confirmed LINK friend’s name to open **Chats**. Pending messages and attachments stay in the local encrypted queue until both apps are online. A clock indicates a queued message. One check means the recipient’s device has saved the message. Two checks mean the message was visible in the conversation on a recipient device and that device confirmed it. Both apps must support read receipts. Each PC keeps its own private conversation history. In the conversation menu, **Clear chat history** removes that conversation locally. **Chat storage → Clear all private chats** clears all conversations for the active profile on this PC.
 
@@ -90,7 +90,7 @@ Games with a direct IPv4 transport can also use port ranges, for example `UDP 77
 
 If Windows retains the previous LINK adapter, the connection panel can offer an explicit restore after verifying its identity. Background notifications for calls, requests and invitations can be toggled in settings.
 
-In fullscreen, move the pointer to the bottom edge to see the received resolution and decoded FPS. The presenter sees local capture settings. Room files negotiate binary transfers between the host and a participant on 0.7.2. For an in-app update, ask a friend to share the original installer in Room files, then open Help → Updates and paste the independent update code from CRAFTCODE. Download and install are separate actions. Versions 0.7.0 and 0.7.1 require one manual installer run.
+In fullscreen, move the pointer to the bottom edge to see the received resolution and decoded FPS. The presenter sees local capture settings. Room files negotiate binary transfers between the host and a participant on 0.7.2. Names and avatars appear on the left while participants speak in fullscreen. To update an offline PC running 0.7.21 or later, transfer the official .linkupdate file and choose Help → Updates → Open update package. LINK verifies the publisher signature before asking to install. Older clients can use the installer and an independently trusted release code. Download and install are separate actions. Versions 0.7.0 and 0.7.1 require one manual installer run.
 
 ## Game LAN and room files
 

@@ -1,5 +1,7 @@
 const fs=require('node:fs'),os=require('node:os'),net=require('node:net'),path=require('node:path');
 const assert=require('node:assert/strict');
+const crypto=require('node:crypto');
+const {testRuntime}=require('./electron-runtime.cjs');
 const {_electron}=require(require.resolve('playwright',{paths:[__dirname,process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||__dirname]}));
 const {clickPath}=require('./qa-navigation.cjs');
 const {pilot,installProbe,compareEvents}=require('./screen-sync-signals.cjs');
@@ -24,6 +26,50 @@ async function open(label){
  const userData=await app.evaluate(({app})=>app.getPath('userData'));
  assert(userData.startsWith(profile+path.sep));
  const page=await app.firstWindow();page.setDefaultTimeout(20000);await page.click('#entryLater');return {app,page};
+}
+async function prepareDownload(hostApp,host,viewer,mib){
+ const size=mib*1024**2,filename='timing-fixture.bin',source=path.join(tmp,filename);
+ const hash=crypto.createHash('sha256'),block=Buffer.allocUnsafe(1024**2);
+ const file=await fs.promises.open(source,'wx');
+ try{
+   for(let i=0;i<mib;i++){
+     crypto.randomFillSync(block);
+     await file.writeFile(block);
+     hash.update(block);
+   }
+ }finally{await file.close();}
+ const expected=hash.digest('hex');
+ await hostApp.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},source);
+ for(const page of [host,viewer]){
+   if(await page.locator('#roomSidebar').isHidden())await page.click('#togglePanelBtn');
+   const shelf=page.locator('#roomShelf');
+   if(!await shelf.evaluate(el=>el.open))await shelf.locator('summary').click();
+ }
+ await host.click('#shelfOffer');
+ const row=viewer.locator('#shelfItems .file-row').filter({hasText:filename});
+ const download=row.getByRole('button',{name:/^(Скачать|Download)$/});
+ await download.waitFor();
+ return async()=>{
+   const sample=()=>viewer.evaluate(async()=>{
+     const stats=await qaPC.getStats(),rows=[...stats.values()].filter(s=>s.type==='inbound-rtp');
+     const by=mid=>rows.find(s=>s.mid===mid);
+     return {frames:by('1').framesDecoded,videoBytes:by('1').bytesReceived,soundBytes:by('2').bytesReceived,voiceBytes:by('0').bytesReceived};
+   });
+   const before=await sample(),start=Date.now();
+   await download.click();
+   await row.getByText(/Сохранено|Saved/).waitFor({timeout:180000});
+   const end=Date.now(),after=await sample(),media={};
+   for(const key of Object.keys(before)){media[key]=after[key]-before[key];assert(media[key]>0,'No concurrent '+key);}
+   const downloads=path.join(tmp,'guest','downloads');
+   const matches=fs.readdirSync(downloads,{recursive:true}).filter(name=>path.basename(name)===filename);
+   assert.equal(matches.length,1);
+   const target=path.join(downloads,matches[0]);
+   assert.equal(fs.statSync(target).size,size);
+   const received=crypto.createHash('sha256');
+   for await(const chunk of fs.createReadStream(target))received.update(chunk);
+   assert.equal(received.digest('hex'),expected);
+   return {start,end,mib,seconds:(end-start)/1000,mibPerSecond:mib*1000/(end-start),sha256:expected,...media};
+ };
 }
 (async()=>{try{
  const srv=net.createServer();await new Promise(r=>srv.listen(0,'127.0.0.1',r));const port=srv.address().port;await new Promise(r=>srv.close(r));
@@ -79,11 +125,12 @@ async function open(label){
  const report=await qaPC.getStats(),rows=[...report.values()].filter(s=>s.type==='inbound-rtp');
  const by=mid=>rows.find(s=>s.mid===mid);
  return {skew:values.sort((a,b)=>a-b)[Math.floor(values.length/2)],n:values.length,frames:by('1')?.framesDecoded,videoBytes:by('1')?.bytesReceived,voiceBytes:by('0')?.bytesReceived,soundBytes:by('2')?.bytesReceived};};});
- async function stagesBetween(start,end){
+ async function stagesBetween(start,end,{checkCoverage=true}={}){
    const [source,viewer,outputClock]=await Promise.all([
      host.evaluate(()=>qaPulseEvents()),g.evaluate(()=>qaPulseEvents()),g.evaluate(()=>qaOutputTiming())]);
    const stages=compareEvents({...source,...viewer},start,end);
    console.log('PULSES',JSON.stringify({stages,outputClock}));
+   if(!checkCoverage)return stages;
    const expected=Math.floor((end-start)/pilot.period);
    for(const key of ['outputPictureMinusAudio','sourcePictureMinusAudio','receivedPictureMinusAudio']){
      assert(stages[key].n>=Math.max(3,Math.floor(expected*.8)),'Missing independent control signals: '+key);
@@ -91,16 +138,37 @@ async function open(label){
    return stages;
  }
  const stageSeconds=Number(process.env.LINK_AV_STAGE_SECONDS);
+ if(process.env.LINK_AV_DOWNLOAD_MIB!==undefined)assert(Number.isInteger(stageSeconds),'LINK_AV_DOWNLOAD_MIB requires LINK_AV_STAGE_SECONDS');
  if(process.env.LINK_AV_STAGE_SECONDS!==undefined){
    assert(Number.isInteger(stageSeconds) && stageSeconds>=8 && stageSeconds<=600);
    const limits={p95Ms:optionalLimit('LINK_AV_P95_LIMIT_MS'),medianMs:optionalLimit('LINK_AV_MEDIAN_LIMIT_MS')};
-   const start=Date.now(), baseline=await g.evaluate(()=>qaWindow()),markerSkews=[];
+   const mib=Number(process.env.LINK_AV_DOWNLOAD_MIB||0);
+   assert(Number.isInteger(mib)&&mib>=0&&mib<=512,'Invalid download size');
+   const transfer=mib?await prepareDownload(app,host,g,mib):null;
+   if(transfer){
+     // Measure on the same established call before the recipient starts saving the file.
+     const warmupEnd=Date.now()+5000;
+     while(Date.now()<warmupEnd)await g.evaluate(()=>qaWindow());
+     const controlStart=Date.now();
+     while(Date.now()-controlStart<stageSeconds*1000)await g.evaluate(()=>qaWindow());
+     const control=await stagesBetween(controlStart,Date.now()-500);
+     console.log('BEFORE DOWNLOAD',JSON.stringify(control.outputPictureMinusAudio));
+   }
+   const baseline=await g.evaluate(()=>qaWindow()),start=Date.now(),markerSkews=[];
+   let fileResult,downloadError;
+   const finished=transfer?.().then(result=>{fileResult=result;},e=>{downloadError=e;});
    let last=baseline;
-   while(Date.now()-start<stageSeconds*1000){
+   while(Date.now()-start<stageSeconds*1000 || (transfer && !fileResult)){
+     if(downloadError)throw downloadError;
      const m=await g.evaluate(()=>qaWindow());
      assert(m.n>=4 && m.frames>last.frames && m.videoBytes>last.videoBytes && m.soundBytes>last.soundBytes && m.voiceBytes>last.voiceBytes,
        'Media stopped advancing: '+JSON.stringify({previous:last,current:m}));
      markerSkews.push(m.skew);last=m;
+   }
+   await finished;
+   if(fileResult){
+     const overlap=await stagesBetween(fileResult.start,fileResult.end-300,{checkCoverage:fileResult.end-fileResult.start>=5000});
+     console.log('CONCURRENT DOWNLOAD',JSON.stringify({...fileResult,outputPictureMinusAudio:overlap.outputPictureMinusAudio}));
    }
    const stages=await stagesBetween(start,Date.now()-500);
    const nativeRead=await app.evaluate(()=>globalThis.qaReadAges());

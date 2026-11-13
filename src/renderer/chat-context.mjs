@@ -11,7 +11,8 @@ export function chatContext(log,onError,options){
     anchor=null;source=null;
   }
   function show(card,point,topic){
-    close();source=card;anchor=card;
+    close();source=card;
+    anchor=topic?.closest('button,a[href],input,[tabindex]')||card;
     menu.replaceChildren();
     const add=(label,act)=>{
       const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.textContent=label;
@@ -22,19 +23,20 @@ export function chatContext(log,onError,options){
       };
       menu.append(b);
     };
-    const message=card.querySelector('.link-chat-body,.file-name')?.textContent;
+    const message=card.querySelector('.attachment-caption,.link-chat-body:not([hidden])')?.textContent||
+      card.querySelector('.file-name')?.textContent;
     if(message)add(tr('Копировать текст'),()=>window.craftlink.copyText(message));
     const url=(topic?.closest('a.chat-url')||card.querySelector('a.chat-url'))?.href;
     if(url){
       add(tr('Копировать ссылку'),()=>window.craftlink.copyText(url));
       add(tr('Открыть ссылку'),()=>window.craftlink.chatLink({action:'open',url}));
     }
-    for(const b of card.querySelectorAll('.chat-file-actions button:not(:disabled),.file-actions button:not(:disabled),.group-attachment-preview button[data-action]')){
-      if(b.hidden)continue;
-      const label=b.getAttribute('aria-expanded')==='true'?tr('Закрыть просмотр'):b.ariaLabel||b.textContent;
+    for(const b of card.querySelectorAll(':is(.chat-file-actions,.file-actions,.group-attachment-preview) button[data-action]:not(:disabled,[hidden]),button[data-action=channel-file]:not(:disabled,[hidden])')){
+      const label=b.dataset.action==='channel-file'?tr('Файлы канала'):
+        b.getAttribute('aria-expanded')==='true'?tr('Закрыть просмотр'):b.ariaLabel||b.textContent;
       add(label,()=>b.click());
     }
-    if(!menu.childElementCount)return;
+    if(!menu.childElementCount){close();return;}
     menu.showPopover();
     const bounds=(anchor||card).getBoundingClientRect();
     menu.style.left=Math.max(5,Math.min(point?.x??bounds.left,innerWidth-menu.offsetWidth-5))+'px';
@@ -52,6 +54,7 @@ export function chatContext(log,onError,options){
   },options);
   menu.onkeydown=e=>{
     if(e.key==='Escape'){e.preventDefault();close(true);return;}
+    if(e.key==='Tab'){close(true);return;}
     const items=[...menu.children],index=items.indexOf(document.activeElement);
     const next={ArrowDown:index+1,ArrowUp:index-1,Home:0,End:items.length-1}[e.key];
     if(next!==undefined){e.preventDefault();items[(items.length+next)%items.length].focus();}

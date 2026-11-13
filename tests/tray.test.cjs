@@ -18,7 +18,8 @@ function shell(createNotification,canOpenChat) {
   });
   let quitting=false;
   const actions=[];
-  const controller=attachTray({window,tray,createNotification,canOpenChat,openChat:(profile,id)=>actions.push([profile,id]),openGame:id=>actions.push(['game',id]),openRequests:source=>actions.push(source),stopSharing:()=>actions.push('stop'),leaveRoom:()=>actions.push('leave'),menu:{buildFromTemplate:items=>items},quit:()=>{quitting=true;},isQuitting:()=>quitting});
+  const controller=attachTray({window,tray,createNotification,canOpenChat,openChat:(profile,id)=>actions.push([profile,id]),openGame:id=>actions.push(['game',id]),openRequests:source=>actions.push(source),stopSharing:()=>actions.push('stop'),leaveRoom:()=>actions.push('leave'),menu:{buildFromTemplate:items=>items},quit:()=>{quitting=true;},isQuitting:()=>quitting,
+    openUpdates:()=>actions.push('updates'),showUpdateHint:version=>actions.push(['hint',version])});
   const close=()=>{let prevented=false;window.emit('close',{preventDefault(){prevented=true;}});return prevented;};
   return {tray,window,controller,close,actions};
 }
@@ -33,6 +34,23 @@ test('hidden call can be opened from a quiet balloon and never auto-answers',()=
  const {window,tray,controller,close}=shell();close();controller.ring();
  assert.equal(tray.balloons.at(-1).title,'Входящий звонок');assert.equal(window.visible,false);
  tray.emit('balloon-click');assert.ok(window.visible);assert.equal(window.flashing,false);
+});
+test('release notices wait for preferences, quiet mode, calls and fullscreen; only activation opens updates',()=>{
+  const {window,tray,controller,actions,close}=shell();
+  const offer=()=>controller.offerUpdate('2.0.0');
+  assert.equal(offer(),false);
+  controller.setNoticePolicy(false,false);assert.equal(offer(),false);
+  controller.setNoticePolicy(true,true);assert.equal(offer(),false);
+  controller.setNoticePolicy(true,false);
+  controller.setCall(true,false);assert.equal(offer(),false);
+  controller.setCall(false,false);controller.setHtmlFullscreen(true);assert.equal(offer(),false);
+  controller.setHtmlFullscreen(false);window.isFullScreen=()=>true;assert.equal(offer(),false);
+  window.isFullScreen=()=>false;controller.ring('call');assert.equal(offer(),false);
+  controller.endRing();close();assert.equal(offer(),true);
+  assert.equal(window.visible,false);assert.notEqual(window.flashing,true);
+  assert.equal(tray.balloons.at(-1).title,'Доступна новая версия LINK');assert.ok(tray.balloons.at(-1).noSound);
+  assert.deepEqual(actions,[]);tray.emit('balloon-click');assert.deepEqual(actions,['updates']);
+  assert.equal(window.focused,true);assert.equal(offer(),true);assert.deepEqual(actions.at(-1),['hint','2.0.0']);
 });
 test('explicit exit, system shutdown and a destroyed tray let Windows close normally',()=>{
  for(const reason of ['quit','shutdown','broken']){

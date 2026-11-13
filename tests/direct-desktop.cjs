@@ -163,7 +163,8 @@ const remote=(p,op,fields={})=>p.evaluate(([op,fields])=>window.craftlink.direct
    });
    const mediaBefore=await mediaSample(),start=performance.now();
    if(update){
-     await clickPath(c,'#networkHelpBtn');await c.click('#helpHome');if(!await c.locator('#updatePanel').evaluate(el=>el.open))await c.click('#updatePanel summary');
+     await clickPath(c,'#networkHelpBtn');await c.click('#helpHome');if(!await c.locator('#updatePanel').evaluate(el=>el.open))await c.click('#updateSummary');
+     await c.locator('#legacyUpdate > summary').click();
      await c.fill('#releaseCode','LINK-UPDATE 0.8.0 '+'0'.repeat(64));assert(await c.locator('#downloadRelease').isHidden());
      await c.fill('#releaseCode','LINK-UPDATE 0.8.0 '+digest);await c.click('#downloadRelease');
      await c.waitForFunction(()=>document.getElementById('downloadRelease').textContent==='Установить',{},{timeout:60000});

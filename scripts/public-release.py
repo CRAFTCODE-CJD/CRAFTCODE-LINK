@@ -1,4 +1,4 @@
-"""Build the five Windows release assets from a tag or immutable commit in an empty stage."""
+"""Build and verify Windows release assets from a tag or immutable commit in an empty stage."""
 import argparse
 import hashlib
 import json
@@ -88,7 +88,48 @@ def tree_hashes(root):
     return {f.relative_to(root).as_posix(): digest(f) for f in root.rglob('*') if f.is_file()}
 
 
-def verify_output(source, version, tracked, work, seven_zip):
+def verify_offline_package(package, installer, version, public_key):
+    # Construct the only header we expect from the independently built EXE.
+    # Node's OpenSSL verifies the CNG signature with an explicit salt length.
+    header = f'LINKUPD1{version} {installer.stat().st_size} {digest(installer)}\n'.encode('ascii')
+    with package.open('rb') as stream, installer.open('rb') as original:
+        if stream.read(len(header)) != header:
+            raise ValueError('Offline metadata differs from the selected installer.')
+        signature = stream.read(384)
+        verify = """
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const jwk=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+          if(Object.keys(jwk).sort().join(',')!=='e,kty,n'||jwk.kty!=='RSA')process.exit(1);
+          const key=crypto.createPublicKey({format:'jwk',key:jwk});
+          const options={key,padding:crypto.constants.RSA_PKCS1_PSS_PADDING,saltLength:32};
+          const input=fs.readFileSync(0);
+          if(key.asymmetricKeyDetails.modulusLength!==3072||input.length<385||
+             !crypto.verify('sha256',input.subarray(384),options,input.subarray(0,384)))process.exit(1);
+        """
+        subprocess.run(['node', '-e', verify, str(public_key)], input=signature + header, check=True)
+        while chunk := original.read(1024*1024):
+            if stream.read(len(chunk)) != chunk:
+                raise ValueError('Offline package contains different installer bytes.')
+        if stream.read(1):
+            raise ValueError('Unexpected trailing offline package data.')
+
+
+def add_offline_package(source, version):
+    out = source / 'out'
+    prefix = 'CRAFTCODE-LINK-' + version
+    installer = out / (prefix + '-Setup-x64.exe')
+    package = out / (prefix + '-Offline-x64.linkupdate')
+    sums = out / (prefix + '-SHA256SUMS.txt')
+    shell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    signer = Path(__file__).resolve().with_name('offline-package.ps1')
+    subprocess.run([str(shell), '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(signer),
+                    '-Installer', str(installer), '-Output', str(package),
+                    '-PublicKey', str(source/'src/offline-release-key.json')], check=True)
+    with sums.open('ab') as stream:
+        stream.write(f'{digest(package)}  {package.name}\n'.encode('ascii'))
+
+
+def verify_release_manifest(source, version, signed_offline):
     out = source / 'out'
     prefix = 'CRAFTCODE-LINK-' + version
     portable = out / (prefix + '-Portable-x64.zip')
@@ -96,13 +137,24 @@ def verify_output(source, version, tracked, work, seven_zip):
     archive = out / (prefix + '-Source.zip')
     code = out / (prefix + '-Update-Code.txt')
     sums = out / (prefix + '-SHA256SUMS.txt')
-    assets = [installer, portable, archive, code, sums]
+    assets = [installer, portable, archive, code]
+    if signed_offline:
+        package = out / (prefix + '-Offline-x64.linkupdate')
+        verify_offline_package(package, installer, version, source/'src/offline-release-key.json')
+        assets.append(package)
+    assets.append(sums)
     expected = {file.name: digest(file) for file in assets[:-1]}
     lines = sums.read_text(encoding='ascii').splitlines()
     if sorted(lines) != sorted(sha+'  '+name for name, sha in expected.items()):
-        raise ValueError('SHA256SUMS does not describe the other four release files.')
+        raise ValueError('SHA256SUMS does not describe the other release files.')
     if code.read_text(encoding='ascii').splitlines() != ['LINK-UPDATE '+version+' '+expected[installer.name]]:
         raise ValueError('The update code does not match the installer.')
+    return assets
+
+
+def verify_output(source, version, tracked, work, seven_zip):
+    assets = verify_release_manifest(source, version, False)
+    installer, portable, archive = assets[:3]
     sources = zip_hashes(archive, 'SOURCE/')
     manifest = sources.pop('FILES.sha256')
     with zipfile.ZipFile(archive) as packaged:
@@ -127,8 +179,10 @@ def verify_output(source, version, tracked, work, seven_zip):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('ref', help='stable tag or full commit SHA before tagging')
-    parser.add_argument('destination', type=Path, help='new directory for the five verified deliverables')
+    parser.add_argument('destination', type=Path, help='new directory for the verified deliverables')
     parser.add_argument('--runtime-zip', type=Path, help='optional locally cached official Electron archive')
+    parser.add_argument('--signed-offline', action='store_true',
+                        help='official release: require publisher CNG key and include signed offline package')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run the Windows release build on Windows x64.')
@@ -163,13 +217,18 @@ def main():
         run(*pack)
         run(sys.executable, 'scripts/package-setup.py')
         run('node', 'scripts/handoff.cjs', '--installer')
+        # Sign only after the source, installer contents and original checksum
+        # manifest have been verified against the selected Git tree.
         assets = verify_output(source, version, tracked, work, seven_zip)
+        if args.signed_offline:
+            add_offline_package(source, version)
+            assets = verify_release_manifest(source, version, True)
         delivery = work / 'delivery'
         delivery.mkdir()
         for file in assets:
             file.rename(delivery / file.name)
         delivery.rename(destination)
-        print(f'Verified {len(tracked)} Git blobs and 5 release assets from {commit}: {destination}')
+        print(f'Verified {len(tracked)} Git blobs and {len(assets)} release assets from {commit}: {destination}')
 
 
 if __name__ == '__main__':

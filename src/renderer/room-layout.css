@@ -1,4 +1,20 @@
 /* The roster is one set of live participant cards in both the call and screen layouts. */
+#streamSpeakers {display:none}
+#streamStage:fullscreen #streamSpeakers:not(:empty) {
+  display:flex;flex-direction:column;gap:7px;position:absolute;z-index:2;inset-inline-start:clamp(12px,2vw,28px);
+  top:clamp(16px,15vh,120px);max-width:min(32vw,265px);margin:0;padding:0;list-style:none;
+  pointer-events:none;user-select:none;
+}
+.stream-speaker {display:flex;align-items:center;gap:8px;min-width:0;
+  transition:opacity 140ms ease,transform 140ms ease}
+.stream-speaker .room-avatar {width:clamp(26px,4vh,38px);aspect-ratio:1;font-size:13px;
+  box-shadow:0 0 0 2px #6edeb0,0 1px 6px 2px #0009}
+.stream-speaker bdi {overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px 8px;border-radius:6px;
+  color:white;background:rgb(18 23 29 / 88%);font-size:clamp(12px,1.15vw,15px);font-weight:600;line-height:1.2}
+@starting-style {.stream-speaker {opacity:0;transform:translateX(-4px)}}
+.stream-speaker.fading {opacity:0;transform:translateX(-4px)}
+.reduce-motion .stream-speaker {transition:none;transform:none}
+@media(prefers-reduced-motion:reduce){.stream-speaker {transition:none;transform:none}}
 #roomPage {position:relative}
 .app-shell.in-call #roomPage {padding:0;gap:0;grid-template-rows:minmax(0,1fr)}
 .app-shell.in-call:not(.cinema) #roomPage:has(#roomSidebar:not([hidden])):not(:has(#studioDock:not([hidden]))) {

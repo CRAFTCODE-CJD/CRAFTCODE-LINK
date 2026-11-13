@@ -205,7 +205,7 @@
 .link-chat-log > article.link-chat-message.emoji-message {background:transparent;border:0;padding:3px 6px}
 .link-chat-log .emoji-message .chat-emoji-glyph {display:inline-block;font-size:2.65em;line-height:1.16}
 .link-chat-meta .link-chat-time {font-family:inherit;font-size:11px;font-variant-numeric:tabular-nums}
-.chat-transfer {display:grid;gap:4px;min-width:0;width:min(235px,100%)}
+.chat-transfer:not([hidden]) {display:grid;gap:4px;min-width:0;width:min(235px,100%)}
 .chat-transfer progress {width:100%;max-width:100%;height:5px;accent-color:var(--accent)}
 .chat-transfer small {color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
 #groupLog .group-chat-transfer {grid-column:2/-1}
@@ -216,14 +216,14 @@
 :is(#dmLog,#gameHistory) .local-media .chat-file-actions .media-menu-action {display:none}
 :is(#dmLog,#gameHistory) .local-media .chat-file-actions button.clip-preview-trigger {border:0;padding:0}
 :is(#dmLog,#gameHistory) .local-media .chat-file-actions button.preview-voice {background:transparent;max-width:100%}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] {width:min(302px,91%);padding:5px 9px 4px}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice]>.link-chat-meta {position:absolute;inset-inline-end:9px;bottom:4px;margin:0;height:15px}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .link-chat-time {line-height:15px}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .clip-preview-label {padding-inline-end:calc(var(--chat-meta-width,65px) + 7px)}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .clip-tools {grid-template-columns:minmax(0,1fr) auto;grid-template-rows:1fr 15px;align-self:stretch}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .voice-track {grid-column:1;grid-row:1}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .clip-speed {grid-column:2;grid-row:1;margin-inline-end:24px}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .clip-time {grid-column:1/-1;grid-row:2;padding-inline-end:calc(var(--chat-meta-width,65px) + 7px);font-size:11px;line-height:15px}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] {width:min(302px,91%);padding:5px 9px 4px}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice]>.link-chat-meta {position:absolute;inset-inline-end:9px;bottom:4px;margin:0;height:15px}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .link-chat-time {line-height:15px}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .clip-preview-label {padding-inline-end:calc(var(--chat-meta-width,65px) + 7px)}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .clip-tools {grid-template-columns:minmax(0,1fr) auto;grid-template-rows:1fr 15px;align-self:stretch}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .voice-track {grid-column:1;grid-row:1}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .clip-speed {grid-column:2;grid-row:1;margin-inline-end:24px}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .clip-time {grid-column:1/-1;grid-row:2;padding-inline-end:calc(var(--chat-meta-width,65px) + 7px);font-size:11px;line-height:15px}
 :is(#dmLog,#gameHistory) > .local-media[data-attachment-kind=circle],#roomChat .local-media[data-attachment-kind=circle] {width:min(182px,91%)}
 :is(#dmLog,#gameHistory) > .local-media[data-attachment-kind=photo],#roomChat .local-media[data-attachment-kind=photo] {width:min(var(--photo-width,252px),91%)}
 :is(#dmLog,#gameHistory) > .local-media[data-attachment-kind=photo]:has(.clip-photo) {width:min(324px,91%)}
@@ -235,11 +235,18 @@
 :is(#dmLog,#gameHistory) .local-media .clip-preview-trigger[aria-expanded=true] {min-height:22px;max-width:24px}
 :is(#dmLog,#gameHistory) .local-media {position:relative}
 :is(#dmLog,#gameHistory) .local-media .chat-file-actions:has([aria-expanded=true]) {position:absolute;bottom:1px;left:0;z-index:2}
-:is(#dmLog,#gameHistory) .local-media[data-attachment-kind=voice] .chat-file-actions:has([aria-expanded=true]) {display:contents;position:static}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media[data-attachment-kind=voice] .chat-file-actions:has([aria-expanded=true]) {display:contents;position:static}
 .local-media[data-attachment-kind=voice] {position:relative}
 .local-media[data-attachment-kind=voice] .clip-preview-trigger[aria-expanded=true] {position:absolute;top:1px;inset-inline-end:3px;z-index:4;width:24px;min-height:22px;opacity:0;pointer-events:none;border-radius:6px}
 :is(#dmLog,#gameHistory,#roomChat) .local-media[data-attachment-kind=voice]:is(:hover,:focus-within) .clip-preview-trigger[aria-expanded=true] {opacity:1;pointer-events:auto;background:var(--panel)}
 :is(#dmLog,#gameHistory) .local-media .clip-preview-trigger[aria-expanded=true] {box-shadow:none;background:transparent}
-:is(#dmLog,#gameHistory) .local-media .clip-preview-trigger.preview-voice:has(.voice-wave) {text-align:start;justify-items:start}
-:is(#dmLog,#gameHistory) .local-media .clip-preview-trigger.preview-voice .voice-wave {justify-self:stretch}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media .clip-preview-trigger.preview-voice:has(.voice-wave) {text-align:start;justify-items:start}
+:is(#dmLog,#gameHistory,#chatMessages) .local-media .clip-preview-trigger.preview-voice .voice-wave {justify-self:stretch}
 #roomChat .chat-attachment.local-media .file-name {display:none}
+#roomChat .chat-attachment.local-media[data-attachment-kind=voice] {gap:0}
+#roomChat .local-media[data-attachment-kind=voice] .file-details,
+#roomChat .local-media[data-attachment-kind=voice] .file-actions button:not(.clip-preview-trigger) {display:none}
+#roomChat .local-media[data-attachment-kind=voice] .file-actions {display:contents}
+#roomChat .local-media[data-attachment-kind=voice] .preview-voice {order:0;padding:0;border:0;background:transparent}
+#roomChat .local-media[data-attachment-kind=voice] .chat-media-preview {padding:0;margin:0}
+.link-chat-log button[data-action=channel-file] {min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:start}

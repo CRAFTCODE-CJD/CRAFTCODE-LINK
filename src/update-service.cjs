@@ -9,25 +9,33 @@ const busyMessage='Дождитесь завершения текущей опе
 const platformMessage='Этот установщик предназначен для Windows x64.';
 
 class UpdateService {
-  constructor({directory,cache,current,allowed,supported,scheduled,changed,install,openExternal,fetcher=fetch,now=Date.now}){
-    Object.assign(this,{cache,current,allowed,supported,scheduled,changed,install,openExternal,fetcher,now});
+  constructor({directory,cache,current,allowed,supported,scheduled,changed,announce,install,openExternal,fetcher=fetch,now=Date.now}){
+    Object.assign(this,{cache,current,allowed,supported,scheduled,changed,announce,install,openExternal,fetcher,now});
     this.file=path.join(directory,'release-check-v1.json');
-    this.preferences={automatic:true,checked:0,offer:null};
+    this.preferences={automatic:true,checked:0,retryAt:0,offer:null,announced:''};
     try{
       const p=JSON.parse(fs.readFileSync(this.file,'utf8'));
-      this.preferences={automatic:p.automatic===true,checked:Number.isSafeInteger(p.checked)&&p.checked>=0&&p.checked<=now()?p.checked:0,offer:savedOffer(p.offer,current)};
+      this.preferences={automatic:p.automatic===true,checked:Number.isSafeInteger(p.checked)&&p.checked>=0&&p.checked<=now()?p.checked:0,
+        retryAt:Number.isSafeInteger(p.retryAt)&&p.retryAt>0&&p.retryAt<=now()+7*DAY?p.retryAt:0,
+        offer:savedOffer(p.offer,current),announced:typeof p.announced==='string'?p.announced.slice(0,16):''};
     }catch(e){if(e.code!=='ENOENT')this.preferences.automatic=false;}
-    this.phase=this.preferences.offer?'available':'idle';this.error='';this.release=null;this.staged=null;
+    this.phase=this.preferences.offer?'available':'idle';this.error='';this.release=null;this.staged=null;this.received=0;this.bytesPerSecond=0;
   }
   state(){const offer=this.release||this.preferences.offer;return {phase:this.phase,installed:this.current,version:offer?.version||'',bytes:offer?.size||0,
-    automatic:this.preferences.automatic,checked:this.preferences.checked,networkAllowed:this.allowed()===true,
+    received:this.received,bytesPerSecond:this.bytesPerSecond,automatic:this.preferences.automatic,checked:this.preferences.checked,retryAt:this.preferences.retryAt,networkAllowed:this.allowed()===true,
     supported:this.supported,donation:!!supportURL(),error:tr(this.error)};}
   notify(){this.changed(this.state());}
   save(value){writeProfileFile(this.file,JSON.stringify(value));this.preferences=value;}
+  announceAvailable(){
+    const {offer,announced,automatic}=this.preferences;
+    if(this.closed||this.clearing||this.phase!=='available'||!this.release||!automatic||!this.allowed()||!offer||offer.version===announced)return;
+    if(this.announce?.(offer.version)===true)this.save({...this.preferences,announced:offer.version});
+  }
   schedule(){
     clearTimeout(this.timer);
     if(this.closed || this.clearing || !this.scheduled || !this.supported || !this.allowed() || !this.preferences.automatic || this.operation || this.staged)return;
-    const delay=Math.max(20000,this.preferences.checked+DAY-this.now());
+    const due=this.preferences.retryAt||this.preferences.checked+DAY;
+    const delay=Math.max(20000,due-this.now())+Math.floor(Math.random()*8000);
     this.timer=setTimeout(()=>this.check(true).catch(()=>{}),delay);this.timer.unref();
   }
   policy(){
@@ -53,21 +61,26 @@ class UpdateService {
   }
   async check(background=false){
     if(this.staged)return this.state();
-    if(background && (!this.preferences.automatic || this.preferences.checked>this.now()-DAY))return this.state();
+    if(this.preferences.retryAt>this.now()){this.error=rateLimitMessage;this.notify();return this.state();}
+    if(background && (!this.preferences.automatic || !this.preferences.retryAt&&this.preferences.checked>this.now()-DAY))return this.state();
     const request=this.start('checking');this.background=background;this.release=null;
     try{
-      this.save({...this.preferences,checked:this.now()});
+      this.save({...this.preferences,checked:this.now(),retryAt:0});
       const result=await lookup(this.current,this.fetcher,AbortSignal.any([request.signal,AbortSignal.timeout(15000)]));
       request.signal.throwIfAborted();if(!this.allowed())throw Error(tr(strictMessage));
-      this.save({...this.preferences,offer:savedOffer(result.release,this.current)});
+      const offer=savedOffer(result.release,this.current);
+      this.save({...this.preferences,offer,announced:!background&&offer?offer.version:this.preferences.announced});
       this.phase=result.phase;this.release=result.release||null;
+      if(background)this.announceAvailable();
     }catch(e){
+      if(e.retryAfterMs&&!request.signal.aborted)this.save({...this.preferences,retryAt:this.now()+e.retryAfterMs});
       this.phase=request.signal.aborted?'idle':'unavailable';
       this.error=request.signal.aborted?'':[rateLimitMessage,'Установщик выпуска не прошёл проверку.'].includes(e.message)?e.message:'Не удалось получить выпуск с GitHub. Повторите проверку позже.';
     }finally{this.finish();}
     return this.state();
   }
   async fetchInstaller(){
+    if(this.preferences.retryAt>this.now()){this.error=rateLimitMessage;this.notify();return this.state();}
     if(!this.release && this.phase==='available' && this.preferences.offer){
       // Persist only a display hint. Resolve the publisher's current asset and
       // digest again before acting on a hint from a previous app process.
@@ -75,13 +88,23 @@ class UpdateService {
       if(this.release?.version!==expected)return this.state();
     }
     if(!this.release || this.phase!=='available')throw Error(tr('Сначала проверьте наличие обновлений.'));
+    this.received=0;this.bytesPerSecond=0;
     const request=this.start('downloading');
+    const started=performance.now();let last=started;
     try{
-      const file=await download(this.release,this.cache,this.fetcher,AbortSignal.any([request.signal,AbortSignal.timeout(10*60*1000)]));
+      const progress=received=>{
+        if(request.signal.aborted||this.closed)return;
+        this.received=received;
+        const now=performance.now();this.bytesPerSecond=Math.round(received*1000/Math.max(1,now-started));
+        if(now-last>=200||received===this.release.size){last=now;this.notify();}
+      };
+      const file=await download(this.release,this.cache,this.fetcher,AbortSignal.any([request.signal,AbortSignal.timeout(10*60*1000)]),progress);
       if(request.signal.aborted || !this.allowed() || this.closed){await removeStage(path.dirname(file));throw Error(tr(strictMessage));}
       this.staged=file;this.phase='ready';
     }catch(e){
-      this.phase='available';this.error=request.signal.aborted?'':e.message==='Установщик выпуска не прошёл проверку.'?e.message:'Не удалось скачать обновление. Повторите загрузку.';
+      this.received=0;this.bytesPerSecond=0;this.phase='available';
+      if(e.retryAfterMs&&!request.signal.aborted)this.save({...this.preferences,retryAt:this.now()+e.retryAfterMs});
+      this.error=request.signal.aborted?'':e.retryAfterMs?rateLimitMessage:e.message==='Установщик выпуска не прошёл проверку.'?e.message:'Не удалось скачать обновление. Повторите загрузку.';
     }finally{this.finish();}
     return this.state();
   }

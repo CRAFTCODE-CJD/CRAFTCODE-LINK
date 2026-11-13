@@ -123,7 +123,7 @@ const soundMenu=participantSoundMenu({state,mixer,mix,createRow:createMixerRow,c
     const card=introduced&&(!person||introduced.id===person)?introduced:{id:person||undefined,name:peer.name};
     direct.participant(card,()=>state.session===session&&state.peers.some(p=>p.id===peer.id));
   }});
-const portraits=roomPortraits({grid:$('voiceGrid'),state,direct:()=>direct,mixer,mix,soundMenu,
+const portraits=roomPortraits({grid:$('voiceGrid'),speakers:$('streamSpeakers'),state,direct:()=>direct,mixer,mix,soundMenu,
   watch:id=>{if(id!==state.session?.selfId)closeStudio();state.selectedPeerId=id;renderStage();},
   ownLevel:()=>{
   const input=mic.stream?.getAudioTracks()[0];
@@ -161,9 +161,12 @@ function toast(message, isError = false, onOpen,actionLabel='Открыть пр
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, isError || onOpen ? 9000 : 4200);
 }
-function errorToast(error) {
+function errorMessage(error) {
   const message = typeof error === 'string' ? error : error?.message || tr('Неизвестная ошибка');
-  const clean = message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+}
+function errorToast(error) {
+  const clean = errorMessage(error);
   const now = Date.now();
   if (now - (state.errorTimes.get(clean) || 0) < 5000) return;
   state.errorTimes.set(clean, now);
@@ -384,7 +387,7 @@ async function connectRoom(friend) {
     await disconnectRoom(false);
     if (friend) throw error;
     $('inviteInput').value = submittedInvite;
-    $('roomError').textContent = error?.message?.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') || String(error);
+    $('roomError').textContent = errorMessage(error);
     $('roomError').hidden = false;
     if (!$('roomDialog').open) showDialog('roomDialog');
   } finally {
@@ -1506,6 +1509,19 @@ function setSidebar(visible){
   drawChatPanel();
 }
 
+function help(network=false){
+  const jabber=internet.account.status!=='signed-out' && !!internet.account.id;
+  $('helpFriendText').textContent=tr(jabber?'Отправьте другу свой адрес Jabber или введите его адрес. Получатель может ответить в разделе «Заявки».':'Отправьте другу свою карточку LINK. Когда он вставит её и отправит заявку, вы сможете принять её в разделе «Заявки».');
+  $('helpCopyCard').textContent=tr(jabber?'Скопировать адрес':'Скопировать мою карточку');
+  $('helpAddCard').textContent=tr(jabber?'Ввести адрес друга':'Вставить карточку друга');
+  $('helpTopics').hidden=network;$('helpNetwork').hidden=!network;$('technicalReport').open=false;
+  $('networkTitle').textContent=network?tr('Диагностика связи'):tr('Справка LINK');
+  showDialog('networkDialog');renderRelease();if(network)renderStatistics();
+}
+function openUpdates(){
+  help();$('updatePanel').open=true;
+  $('updateSummary').focus();$('updateSummary').scrollIntoView({block:'nearest'});
+}
 function bindUI() {
   $('watchBuffer').addEventListener('change', () => {
     if (!state.media || !state.selectedPeerId) return;
@@ -1532,6 +1548,13 @@ function bindUI() {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !state.starting) { e.preventDefault(); connectRoom().catch(errorToast); }
   });
   $('releaseCode').addEventListener('input',renderRelease);
+  action('openOfflineUpdate',async()=>{
+    const button=$('openOfflineUpdate'),status=$('offlineUpdateStatus');
+    button.disabled=true;status.textContent=tr('Выбор и проверка пакета…');
+    try{await api.installRelease({offline:true});status.textContent='';}
+    catch(error){status.textContent=errorMessage(error);}
+    finally{button.disabled=false;}
+  });
   projectUpdates=updateControls($,api,errorToast);
   $('updatePanel').addEventListener('toggle',renderRelease);
   action('chooseRelease',()=>api.installRelease({code:$('releaseCode').value}));
@@ -1602,15 +1625,6 @@ function bindUI() {
   action('clearRelay',()=>{internet.setRelay('');$('clearRelay').hidden=true;$('relayFeedback').textContent=tr('Дополнительный TURN отключён.');retryRoutes();});
   action('retryMedia',retryRoutes);
   action('showLinkExecutable',()=>api.internet({op:'show-executable'}));
-  function help(network=false){
-    const jabber=internet.account.status!=='signed-out' && !!internet.account.id;
-    $('helpFriendText').textContent=tr(jabber?'Отправьте другу свой адрес Jabber или введите его адрес. Получатель может ответить в разделе «Заявки».':'Отправьте другу свою карточку LINK. Когда он вставит её и отправит заявку, вы сможете принять её в разделе «Заявки».');
-    $('helpCopyCard').textContent=tr(jabber?'Скопировать адрес':'Скопировать мою карточку');
-    $('helpAddCard').textContent=tr(jabber?'Ввести адрес друга':'Вставить карточку друга');
-    $('helpTopics').hidden=network;$('helpNetwork').hidden=!network;$('technicalReport').open=false;
-    $('networkTitle').textContent=network?tr('Диагностика связи'):tr('Справка LINK');
-    showDialog('networkDialog');renderRelease();if(network)renderStatistics();
-  }
   $('technicalReport').addEventListener('toggle',()=>{if($('technicalReport').open)renderStatistics();});
   action('helpHome',()=>help());action('helpConnectivity',()=>help(true));
   action('helpCopyCard',async()=>{if(direct.active()){await api.direct({op:'copy'});$('helpCardStatus').textContent=tr('Карточка скопирована. Отправьте её другу лично.');}else if(internet.account.id){await api.copyText(internet.account.id);$('helpCardStatus').textContent=tr('Адрес скопирован.');}else{closeDialog('networkDialog');direct.open('copy');}});
@@ -1845,6 +1859,12 @@ async function init() {
   });
   api.onEvent(event => {
     if(event.type==='release-updated'){projectUpdates?.draw(event.state);return;}
+    if(event.type==='tray-update'){openUpdates();return;}
+    if(event.type==='release-offer'){
+      if(!settings.dnd&&!state.session&&!document.fullscreenElement)
+        toast(tr('Доступна версия')+' '+event.version,false,openUpdates,'Открыть обновления');
+      return;
+    }
     if(event.type==='window-hidden'){composer.stopCapture();cameraPreview.stop();return;}
     if(event.type==='window-focused'){workspace.windowFocused();return;}
     if(event.type==='tray-game'){void direct.sync().then(()=>workspace.openGameNotice(event.id)).catch(errorToast);return;}

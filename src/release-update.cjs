@@ -4,7 +4,7 @@ const {tr}=require('./native-language.cjs');
 const {spawn}=require('node:child_process');
 const {UpdateService}=require('./update-service.cjs');
 const {removeStage}=require('./github-releases.cjs');
-const maxSize=512*1024**2;
+const {offlineManifest,maxSize}=require('./offline-update.cjs');
 const {parseUpdateCode}=require('./renderer/release-code.mjs');
 const invalidFile=message=>Object.assign(Error(tr(message)),{code:'UPDATE_INVALID_PAYLOAD'});
 function release(code,current){
@@ -12,22 +12,25 @@ function release(code,current){
   if(result.error)throw Error(tr(result.error));
   return result;
 }
+async function verifyInstaller(input,expected,output){
+  const stat=await input.stat(),offset=expected.offset??0,size=stat.size-offset;
+  if(!stat.isFile()||size<2||size>maxSize||(expected.bytes!==undefined&&size!==expected.bytes))throw invalidFile('Неверный файл установщика.');
+  const buffer=Buffer.alloc(256*1024),hash=crypto.createHash('sha256');let pos=0;
+  while(pos<size){
+    const {bytesRead}=await input.read(buffer,0,Math.min(buffer.length,size-pos),offset+pos);
+    if(!bytesRead || (!pos&&buffer[0]!==0x4d) || (pos<2&&pos+bytesRead>=2&&buffer[1-pos]!==0x5a))
+      throw invalidFile('Неверный файл установщика.');
+    const bytes=buffer.subarray(0,bytesRead);hash.update(bytes);if(output)await output.writeFile(bytes);pos+=bytesRead;
+  }
+  if(hash.digest('hex')!==expected.sha)throw invalidFile('Установщик отличается от выпуска CRAFTCODE.');
+}
 async function stage(file,dir,expected){
   await fs.mkdir(dir,{recursive:true,mode:0o700});
   const work=await fs.mkdtemp(path.join(dir,'install-')),dest=path.join(work,expected.name);
   let input,output;
   try{
-    input=await fs.open(file,'r');const stat=await input.stat();
-    if(!stat.isFile()||stat.size<2||stat.size>maxSize)throw invalidFile('Неверный файл установщика.');
-    output=await fs.open(dest,'wx',0o700);
-    const buffer=Buffer.alloc(256*1024),hash=crypto.createHash('sha256');let pos=0;
-    while(pos<stat.size){
-      const {bytesRead}=await input.read(buffer,0,Math.min(buffer.length,stat.size-pos),pos);
-      if(!bytesRead || (!pos&&buffer[0]!==0x4d) || (pos<2&&pos+bytesRead>=2&&buffer[1-pos]!==0x5a))
-        throw invalidFile('Неверный файл установщика.');
-      const bytes=buffer.subarray(0,bytesRead);hash.update(bytes);await output.writeFile(bytes);pos+=bytesRead;
-    }
-    if(hash.digest('hex')!==expected.sha)throw invalidFile('Установщик отличается от выпуска CRAFTCODE.');
+    input=await fs.open(file,'r');output=await fs.open(dest,'wx',0o700);
+    await verifyInstaller(input,expected,output);
     await output.sync();await output.close();output=null;return dest;
   }catch(e){
     await output?.close().catch(()=>{});await removeStage(work);throw e;
@@ -41,7 +44,7 @@ async function cleanup(dir,{strict=false}={}){
   for(const e of list)if(e.isDirectory()&&/^install-[a-zA-Z0-9]{6}$/.test(e.name))
     await removeStage(path.join(dir,e.name)).catch(e=>{if(strict)throw e;});
 }
-function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActive,changed,openExternal,
+function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActive,changed,announce,openExternal,
   supported=process.platform==='win32'&&process.arch==='x64',fetcher,launcher=spawn}){
   const dir=path.join(app.getPath('userData'),'update-cache');
   const ready=cleanup(dir).catch(()=>{});let busy=false,launching=false,closed=false;
@@ -62,7 +65,7 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
     }finally{if(copy){launching=false;await removeStage(path.dirname(copy));}}
   }
   const hub=new UpdateService({directory:app.getPath('userData'),cache:dir,current:app.getVersion(),allowed,supported,
-    scheduled:app.isPackaged===true,changed,openExternal,fetcher,install:async(file,expected)=>{
+    scheduled:app.isPackaged===true,changed,announce,openExternal,fetcher,install:async(file,expected)=>{
       if(busy)throw Error(tr('Обновление уже открыто.'));
       busy=true;try{return await confirmInstall(file,expected);}finally{busy=false;}
     }});
@@ -72,7 +75,22 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
     if(busy)throw Error(tr('Обновление уже открыто.'));
     idle();busy=true;
     try{
-      await ready;const expected=release(value?.code,app.getVersion());
+      await ready;
+      if(value?.offline===true){
+        const picked=await dialog.showOpenDialog(window(),{title:tr('Открыть пакет обновления'),properties:['openFile'],filters:[{name:'CRAFTCODE LINK',extensions:['linkupdate']}]});
+        if(picked.canceled)return false;
+        idle();
+        const file=picked.filePaths[0],handle=await fs.open(file,'r');
+        let expected;
+        try{
+          expected=await offlineManifest(handle,app.getVersion());
+          await verifyInstaller(handle,expected);
+        }finally{await handle.close();}
+        // The selected file can be replaced while the confirmation dialog is open.
+        // stage() rechecks the signed digest while copying to the private cache.
+        return await confirmInstall(file,expected);
+      }
+      const expected=release(value?.code,app.getVersion());
       let file;
       if(value.token){file=completed(value.token);if(!file)throw Error(tr('Выберите сохранённый установщик.'));}
       else{
@@ -82,7 +100,7 @@ function registerUpdates({handle,app,dialog,window,completed,allowed,sessionActi
       return await confirmInstall(file,expected);
     }finally{busy=false;}
   });
-  return {policy:()=>hub.policy(),close:()=>{closed=true;hub.close();},get launching(){return launching;},
+  return {policy:()=>hub.policy(),announceAvailable:()=>hub.announceAvailable(),close:()=>{closed=true;hub.close();},get launching(){return launching;},
     async clearCache(){
       if(busy||launching||closed)throw Error(tr('Дождитесь завершения текущей операции обновления.'));
       busy=true;try{await ready;await hub.clearCache(dir=>cleanup(dir,{strict:true}));}finally{busy=false;}

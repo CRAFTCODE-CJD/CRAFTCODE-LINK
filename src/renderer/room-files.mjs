@@ -284,11 +284,13 @@ export class RoomFiles{
               if(chat){preview.setAttribute('aria-expanded','false');this.player.styleTrigger(preview,meta,read);}actions.append(preview);
             }
         }
+        if(actions.childElementCount)row.append(actions);
         if(chat){
           const stamp=chatTimestamp(v.seenAt);
-          if(stamp)actions.append(stamp);
+          if(stamp){
+            const meta=document.createElement('footer');meta.className='link-chat-meta';meta.append(stamp);row.append(meta);
+          }
         }
-        if(actions.childElementCount)row.append(actions);
         const focused=saved?.row.contains(document.activeElement)?document.activeElement.dataset.action:null;
         if(saved?.row.isConnected)saved.row.replaceWith(row);else if(chat)container.append(row);
         if(focused&&document.hasFocus()){

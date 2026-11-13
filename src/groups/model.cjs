@@ -29,10 +29,25 @@ function access(g,channel,person,type){
 function project(g,person){
   const m=member(g,person);if(!m)throw denied();
   if(g.theme!==undefined&&!themes.has(g.theme)||g.avatar!=null&&!validPixels(g.avatar))throw invalid();
-  return {id:g.id,name:g.name,owner:g.owner,device:g.device,epoch:g.epoch,revision:g.revision,role:m.role,appearanceVersion:1,paletteVersion:1,renameVersion:1,
+  const view={id:g.id,name:g.name,owner:g.owner,device:g.device,epoch:g.epoch,revision:g.revision,role:m.role,appearanceVersion:1,paletteVersion:1,renameVersion:1,
     ...(g.theme&&g.theme!=='personal'?{theme:g.theme}:{}),...(g.avatar?{avatarKey:avatarKey(g.avatar)}:{}),
-    members:g.members,channels:g.channels.filter(c=>access(g,c.id,person)).map(c=>staff(m)?c:{...c,allow:c.allow.includes(person)?[person]:[]}),
+    members:g.members,channels:g.channels.filter(c=>access(g,c.id,person)).map(c=>{
+      const channel=staff(m)?{...c}:{...c,allow:c.allow.includes(person)?[person]:[]};
+      if(c.type==='text'){
+        const messages=rows(g,c.id);
+        channel.lastMessage=messages.at(-1)?.id||null;
+        channel.messageCount=messages.length;
+        const attachments=messages.filter(row=>row.file);
+        channel.fileCount=attachments.length;channel.lastFile=attachments.at(-1)?.file.id||null;
+      }
+      return channel;
+    }),
     bans:staff(m)?g.bans:[]};
+  // Previously valid, nearly full views can still use their group-wide revision.
+  if(Buffer.byteLength(JSON.stringify(view))>35000)for(const c of view.channels){
+    delete c.messageCount;delete c.lastMessage;delete c.fileCount;delete c.lastFile;
+  }
+  return view;
 }
 function acl(g,args){
   const allow=args.allow??[];
@@ -143,6 +158,10 @@ function validateView(v){
   for(const c of v.channels){
     if(!uuid(c.id)||channels.has(c.id)||!['voice','text'].includes(c.type))throw invalid();
     channels.add(c.id);label(c.name,48);acl(v,c);
+    if(c.messageCount!==undefined&&(!Number.isInteger(c.messageCount)||c.messageCount<0||c.messageCount>500||
+      (c.messageCount===0?c.lastMessage!==null:!uuid(c.lastMessage))))throw invalid();
+    if(c.fileCount!==undefined&&(!Number.isInteger(c.fileCount)||!Number.isInteger(c.messageCount)||c.fileCount<0||c.fileCount>c.messageCount||
+      (c.fileCount===0?c.lastFile!==null:!uuid(c.lastFile))))throw invalid();
   }
   for(const b of v.bans){if(!key(b.id)||people.has(b.id))throw invalid();label(b.name,80);}
   if(Buffer.byteLength(JSON.stringify(base))>35000)throw full();

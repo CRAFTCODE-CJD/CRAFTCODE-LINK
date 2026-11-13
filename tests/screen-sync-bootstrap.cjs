@@ -7,6 +7,9 @@ dialog.showErrorBox=(title,message)=>process.stderr.write(title+' '+message+'\n'
 Notification.isSupported=()=>false;
 Tray.prototype.displayBalloon=()=>{};
 app.setPath('appData',process.env.QA_PROFILE_ROOT);
+const downloads=path.join(process.env.QA_PROFILE_ROOT,'downloads');
+require('node:fs').mkdirSync(downloads,{recursive:true});
+app.setPath('downloads',downloads);
 app.on('browser-window-created',(_event,win)=>{win.show=()=>{};win.showInactive=()=>{};});
 desktopCapturer.getSources=async()=>[{id:'screen:1:0',name:'QA timing chart'}];
 app.whenReady().then(()=>{

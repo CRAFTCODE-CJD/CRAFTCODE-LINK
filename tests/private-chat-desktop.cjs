@@ -43,17 +43,19 @@ async function run(){
       Tray.prototype.displayBalloon=()=>{};
       shell.openExternal=async url=>{globalThis.testExternal=url;};
       globalThis.testWebRequests=[];
-      globalThis.fetch=async url=>{
+      globalThis.fetch=async (url,options={})=>{
         globalThis.testWebRequests.push(String(url));
         if(String(url).startsWith('https://www.youtube.com/oembed?'))return Response.json({title:'Тестовый ролик',author_name:'Автор',thumbnail_url:'ignored'});
         if(String(url)==='https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg')return new Response(Buffer.from(globalThis.testPoster,'base64'));
         if(process.env.LINK_QA_MESSENGER_FLOW==='1'){
-          const api='https://api.github.com/repos/CRAFTCODE-CJD/CRAFTCODE-LINK',home='https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK';
-          const file='CRAFTCODE-LINK-0.8.0-Setup-x64.exe',bytes=Buffer.from('MZ test bytes only');
-          if(String(url)===api+'/releases/latest')return Response.json({tag_name:'v0.8.0',draft:false,prerelease:false,html_url:home+'/releases/tag/v0.8.0',assets:[{
-            id:42,name:file,state:'uploaded',size:bytes.length,url:api+'/releases/assets/42',browser_download_url:home+'/releases/download/v0.8.0/'+file,
-            digest:'sha256:'+require('node:crypto').createHash('sha256').update(bytes).digest('hex')}]});
-          if(String(url)===api+'/releases/assets/42')return new Response(bytes);
+          const home='https://github.com/CRAFTCODE-CJD/CRAFTCODE-LINK',prefix=home+'/releases/download/v0.8.0/CRAFTCODE-LINK-0.8.0';
+          const bytes=Buffer.from('MZ test bytes only');
+          if(String(url)===home+'/releases/latest')return Response.redirect(home+'/releases/tag/v0.8.0',302);
+          if(String(url)===prefix+'-Update-Code.txt')return new Response('LINK-UPDATE 0.8.0 '+require('node:crypto').createHash('sha256').update(bytes).digest('hex'));
+          if(String(url)===prefix+'-Setup-x64.exe'){
+            if(options.method==='HEAD')return new Response(null,{headers:{'Content-Length':String(bytes.length)}});
+            globalThis.testInstallerGets=(globalThis.testInstallerGets||0)+1;return new Response(bytes);
+          }
         }
         return new Response('',{status:404});
       };

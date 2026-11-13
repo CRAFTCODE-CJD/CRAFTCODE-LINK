@@ -6,6 +6,7 @@ const {FileWire,lost}=require('../files/file-wire.cjs');
 const {tr}=require('../native-language.cjs');
 const {MAX_CLIP,mediaType,digest,readPreviewBytes}=require('../files/chat-media.cjs');
 const {GroupFileHandoff}=require('./file-handoff.cjs');
+const {GroupBlockReader}=require('./block-reader.cjs');
 const match=(t,a)=>t && t.group===a.group && t.channel===a.channel && t.meta.id===a.file;
 function unpack(value,length){
   if(typeof value!=='string'||value.length!==4*Math.ceil(length/3))throw invalid();
@@ -16,7 +17,8 @@ const rate=t=>t?.started?Math.round(t.done*1000/Math.max(1,performance.now()-t.s
 
 class GroupFiles{
   constructor(groups,io){
-    this.groups=groups;this.io=io;this.tasks=new Map();this.saved=new Map();this.generation=0;this.changedGroups=new Set();this.work=new Set();this.previews=0;
+    this.groups=groups;this.io=io;this.tasks=new Map();this.saved=new Map();this.generation=0;this.changedGroups=new Map();this.work=new Set();this.previews=0;
+    this.reader=new GroupBlockReader();
     this.blobs=new GroupBlobs(io.directory,()=>groups.s.profile.device,(id,bucket,file)=>{
       const r=groups.records.get(id);
       if(bucket!=='data')return r?.move?.side==='candidate'&&r.move.token===bucket;
@@ -26,7 +28,12 @@ class GroupFiles{
       const g=r?.group||r?.move?.staged;
       return !!g&&entries(g).some(row=>row.file.id===file);
     });
-    this.wire=new FileWire('group-file',link=>groups.fileAllowed(link),(l,op,args)=>this.remote(l,op,args));
+    this.wire=new FileWire('group-file',link=>groups.fileAllowed(link),(l,op,args)=>this.remote(l,op,args),undefined,
+      (link,op,a)=>{
+        if(op==='read')this.readable(a.group,a.channel,link.card.id,a.file);
+        if(op==='source')this.sourceTask(link,a);
+        return true;
+      });
     this.handoff=new GroupFileHandoff(this);
   }
   auth(group,channel,person){
@@ -39,29 +46,62 @@ class GroupFiles{
     const l=host&&this.groups.link(host.owner,host.device);
     if(!l||!this.groups.fileAllowed(l))throw lost();return l;
   }
+  readable(group,channel,person,file){
+    const row=entries(this.auth(group,channel,person)).find(row=>row.channel===channel&&row.file.id===file);
+    if(!row)throw invalid();return row.file;
+  }
   validTask(t){
     if(this.tasks.get(t.meta.id)!==t || t.cancelled || t.generation!==this.generation || this.groups.s.paused||this.groups.s.strict)throw lost();
+    if(t.link&&!this.groups.fileAllowed(t.link))throw lost();
+    if(t.link&&!t.ownerUpload){
+      const record=this.groups.records.get(t.group);
+      if(!record?.view||record.move||record.view.transferring||record.owner!==t.link.card.id||record.device!==t.link.card.device||
+        !record.view.channels.some(c=>c.id===t.channel&&c.type==='text'))throw lost();
+    }
+  }
+  sourceTask(link,args){
+    const task=this.tasks.get(args.file);
+    if(!match(task,args)||!task.shelf||task.ownerUpload||link!==task.link||task.status==='downloading')throw invalid();
+    this.validTask(task);return task;
+  }
+  remoteBlock(task,op,pos){
+    this.validTask(task);
+    if(task.ownerUpload)this.auth(task.group,task.channel,task.author);
+    return this.wire.request(task.link,op,{group:task.group,channel:task.channel,file:task.meta.id,pos},task.controller.signal)
+      .then(value=>unpack(value,Math.min(BLOCK,task.meta.size-pos)));
   }
   track(job){
     this.work.add(job);const finished=()=>this.work.delete(job);job.then(finished,finished);return job;
   }
   add(t){
     if(this.tasks.size>=16||this.tasks.has(t.meta.id))throw invalid();
-    t.done=0;t.generation=this.generation;this.tasks.set(t.meta.id,t);
+    t.done=0;t.generation=this.generation;t.controller=new AbortController();this.tasks.set(t.meta.id,t);
     t.timer=setTimeout(()=>{this.cancelTask(t).catch(()=>{});},10*60000);t.timer.unref();
-    this.changed(t.group);return t;
+    this.changed(t.group,t.channel);return t;
   }
-  changed(id){
-    // Progress shares the normal group-state notification without broadcasting each block.
-    this.changedGroups.add(id);
+  changed(group,channel){
+    let channels=this.changedGroups.get(group);
+    if(!channels){channels=new Set();this.changedGroups.set(group,channels);}
+    channels.add(channel);
     if(!this.notifyTimer){this.notifyTimer=setTimeout(()=>{
-      this.notifyTimer=null;const ids=[...this.changedGroups];this.changedGroups.clear();for(const group of ids)this.groups.changed(group);
+      this.notifyTimer=null;const updates=this.changedGroups;this.changedGroups=new Map();
+      for(const [id,channels] of updates)for(const channel of channels)this.groups.filesChanged(id,channel);
     },180);this.notifyTimer.unref();}
   }
   async cancelTask(t){
     if(!t)return;
-    t.cancelled=true;clearTimeout(t.timer);if(!t.running&&this.tasks.get(t.meta.id)===t)this.tasks.delete(t.meta.id);
-    await t.shelf?.close();this.changed(t.group);
+    t.cancelled=true;t.controller.abort(lost());clearTimeout(t.timer);if(!t.running&&this.tasks.get(t.meta.id)===t)this.tasks.delete(t.meta.id);
+    await t.shelf?.close();this.changed(t.group,t.channel);
+  }
+  permissionsChanged(group){
+    for(const task of this.tasks.values()){
+      if(task.group!==group||task.cancelled)continue;
+      try{
+        this.validTask(task);
+        if(task.ownerUpload)this.auth(group,task.channel,task.author);
+        else if(!task.link)this.readable(group,task.channel,task.author,task.meta.id);
+      }catch{this.cancelTask(task).catch(()=>{});}
+    }
   }
   reserve(g,m){
     const files=entries(g).map(r=>r.file);
@@ -106,19 +146,20 @@ class GroupFiles{
   }
   async storeUpload(t){
     const {group,channel,author,meta:m}=t;let w,committed=false;
-    t.status='uploading';t.started=performance.now();t.running=true;this.changed(group);
+    t.status='uploading';t.started=performance.now();t.running=true;this.changed(group,channel);
     try{
       this.validTask(t);this.auth(group,channel,author);
       w=await this.blobs.begin(group,m);
-      for(let pos=0;pos<m.size;pos+=BLOCK){
+      const read=pos=>t.shelf?t.shelf.readBytes(m.id,pos,BLOCK):this.remoteBlock(t,'source',pos);
+      for await(const {pos,bytes} of this.reader.blocks(m.size,false,t.link,t.controller.signal,read)){
         this.validTask(t);this.auth(group,channel,author);
-        const b=t.shelf?await t.shelf.readBytes(m.id,pos,BLOCK):unpack(await this.wire.request(t.link,'source',{group,channel,file:m.id,pos}),Math.min(BLOCK,m.size-pos));
-        this.validTask(t);await this.blobs.write(w,pos,b);t.done=w.pos;this.changed(group);
+        await this.blobs.write(w,pos,bytes);t.done=w.pos;this.changed(group,channel);
       }
       this.validTask(t);this.auth(group,channel,author);await this.blobs.finish(w);
       this.validTask(t);this.auth(group,channel,author);
       await this.groups.appendFile(group,channel,author,m.id,metadata(m),t.caption);committed=true;
     }finally{
+      t.controller.abort(lost());
       if(w && !committed)await this.blobs.abort(w);
       if(t.link)this.wire.request(t.link,'released',{group,channel,file:m.id}).catch(()=>{});
       t.running=false;
@@ -130,15 +171,19 @@ class GroupFiles{
     const r=(await this.list(group,channel)).find(m=>m.id===file&&m.canDownload);
     if(!r)throw invalid();
     const link=local?null:this.ownerLink(group),shelf=new ShelfStorage(this.io.downloads(),this.io.journal?.());
-    const t=this.add({group,channel,author:me,meta:metadata(r),shelf,status:'downloading',running:true,started:performance.now()});
+    const t=this.add({group,channel,author:me,meta:metadata(r),link,shelf,status:'downloading',running:true,started:performance.now()});
     try{
       const id=await shelf.begin(r,'Group-'+group);
-      for(let pos=0;pos<r.size||pos===0;pos+=BLOCK){
+      const check=()=>{
         this.validTask(t);
-        if(local){const g=this.auth(group,channel,me);if(!entries(g).some(e=>e.channel===channel&&e.file.id===file))throw invalid();}
-        const b=local?(r.size?await this.blobs.read(group,r,pos):Buffer.alloc(0)):
-          unpack(await this.wire.request(link,'read',{group,channel,file,pos}),Math.min(BLOCK,r.size-pos));
-        this.validTask(t);const wrote=await shelf.putBytes(id,pos,b);t.done=wrote.pos;this.changed(group);
+        if(local)this.readable(group,channel,me,file);
+      };
+      const read=async pos=>{
+        if(link)return this.remoteBlock(t,'read',pos);
+        check();return r.size?this.blobs.read(group,r,pos):Buffer.alloc(0);
+      };
+      for await(const {pos,bytes} of this.reader.blocks(r.size,true,link,t.controller.signal,read)){
+        check();const wrote=await shelf.putBytes(id,pos,bytes,check);t.done=wrote.pos;this.changed(group,channel);
         if(wrote.done){
           if(this.saved.size>=256)this.saved.delete(this.saved.keys().next().value);
           this.saved.set([group,channel,file].join('/'),wrote.path);break;
@@ -151,10 +196,10 @@ class GroupFiles{
     const {group,channel,file,pos}=a,person=l.card.id;
     if(!uuid(group)||!uuid(channel)||!['list','offer'].includes(op)&&!uuid(file))throw invalid();
     if(op==='source'||op==='released'){
-      const t=this.tasks.get(file);
-      if(!match(t,a)||!t.shelf||t.ownerUpload||this.ownerLink(group)!==l||l!==t.link)throw invalid();
+      const t=this.sourceTask(l,a);
       if(op==='released'){await this.cancelTask(t);return true;}
-      this.validTask(t);t.status='uploading';t.started??=performance.now();const data=await t.shelf.readBytes(file,pos,BLOCK);t.done=pos+data.length;this.changed(group);return data.toString('base64');
+      t.status='uploading';t.started??=performance.now();const data=await t.shelf.readBytes(file,pos,BLOCK);
+      this.validTask(t);t.done=Math.max(t.done,pos+data.length);this.changed(group,channel);return data.toString('base64');
     }
     const g=this.auth(group,channel,person);
     if(op==='list')return this.listed(g,channel,person);
@@ -223,7 +268,7 @@ class GroupFiles{
     }else if(op==='cancel'){
       if(!match(t,a))throw invalid();
       await this.cancelTask(t);
-      if(t.link)this.wire.request(t.link,t.ownerUpload?'released':'cancel-offer',{group,channel,file}).catch(()=>{});
+      if(t.link&&t.status!=='downloading')this.wire.request(t.link,t.ownerUpload?'released':'cancel-offer',{group,channel,file}).catch(()=>{});
     }else if(op==='withdraw'){
       if(own){this.auth(group,channel,me);await this.groups.removeFile(group,channel,me,file);}
       else await this.wire.request(this.ownerLink(group),'withdraw',{group,channel,file});

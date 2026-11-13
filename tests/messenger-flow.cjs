@@ -50,8 +50,9 @@ module.exports=async({a,b})=>{
   await a.page.click('#coffeeQR summary');
   await a.page.uncheck('#releaseAutomatic');
   await a.page.click('#githubCheck');await a.page.locator('#githubDownload').waitFor();
-  assert.equal(await a.app.evaluate(()=>testWebRequests.filter(x=>x.includes('/releases/assets/')).length),0);
+  assert.equal(await a.app.evaluate(()=>globalThis.testInstallerGets||0),0);
   await a.page.click('#githubDownload');await a.page.locator('#githubInstall').waitFor();
+  assert.equal(await a.app.evaluate(()=>globalThis.testInstallerGets),1);
   await a.page.click('#closeNetworkDialog');
   // Disable external ICE discovery for the isolated call and record received RTP.
   for(const page of [a.page,b.page])await page.evaluate(()=>{

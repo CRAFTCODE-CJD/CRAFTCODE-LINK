@@ -9,7 +9,7 @@ function reveal(window) {
   window.flashFrame(false);
 }
 
-function attachTray({ window, tray, menu, quit, isQuitting, stopSharing, leaveRoom, openRequests, openGame, canOpenChat, openChat, createNotification }) {
+function attachTray({ window, tray, menu, quit, isQuitting, stopSharing, leaveRoom, openRequests, openGame, openUpdates, showUpdateHint, canOpenChat, openChat, createNotification }) {
   let explained = false;
   let endingSession = false;
   const show = () => reveal(window);
@@ -18,14 +18,16 @@ function attachTray({ window, tray, menu, quit, isQuitting, stopSharing, leaveRo
     show();
     if(kind==='message')openChat?.(item.profile,item.id);
     else if(kind==='game'||kind==='game-request')openGame?.(item.id);
+    else if(kind==='update')openUpdates?.();
     else if(kind.startsWith('friend-'))openRequests?.(kind);
   }});
   tray.setToolTip('CRAFTCODE LINK');
-  let lastCallState;
+  let lastCallState,updatePolicyReady=false,quietUpdates=false,systemNotices=false,htmlFullscreen=false;
   function setCall(connected, sharing) {
     const state = connected ? (sharing ? 'sharing' : 'call') : 'idle';
     if (state === lastCallState || tray.isDestroyed()) return;
     lastCallState = state;
+    if(connected)notices.remove('update');
     const items = [{ label:tr('Открыть CRAFTCODE LINK'), click:show }];
     if (connected && sharing) items.push({label:tr('Остановить показ'), click:stopSharing});
     if (connected) items.push({label:tr('Завершить звонок…'), click:()=>{ show(); leaveRoom(); }});
@@ -54,7 +56,14 @@ function attachTray({ window, tray, menu, quit, isQuitting, stopSharing, leaveRo
   });
   return {
     setCall,
-    setNoticePolicy:notices.policy,
+    setNoticePolicy(enabled,dnd){notices.policy(enabled,dnd);quietUpdates=dnd;systemNotices=enabled;updatePolicyReady=true;},
+    offerUpdate(version){
+      if(!updatePolicyReady||quietUpdates||lastCallState!=='idle'||htmlFullscreen||window.isDestroyed()||tray.isDestroyed()||window.isFullScreen?.())return false;
+      if(window.isVisible()&&window.isFocused()){if(!showUpdateHint)return false;showUpdateHint(version);return true;}
+      return systemNotices&&notices.show('update',{id:version,name:'LINK '+version})===true;
+    },
+    hideUpdate(){notices.remove('update');},
+    setHtmlFullscreen(value){htmlFullscreen=value;if(value)notices.remove('update');},
     syncGameNotices:notices.restrictGame,
     clearChatNotice:notices.clearChat,
     clearRequestNotice(source){if(source)notices.remove('friend-'+source);else {notices.remove('friend-direct');notices.remove('friend-jabber');}},

@@ -4,36 +4,74 @@ import {tr} from './locale.mjs';
 export function voiceStrength(level){
   return level>0.045?Math.min(1,Math.sqrt((level-0.045)/0.55)):0;
 }
-export function roomPortraits({grid,state,direct,mixer,mix,soundMenu,watch,ownLevel}){
+export function roomPortraits({grid,speakers,state,direct,mixer,mix,soundMenu,watch,ownLevel}){
   const tiles=new Map();
   const room=grid.closest('main');
+  const stage=speakers.parentElement;
   let timer,scope,video,previewId,nextPreview=0;
   function visible(){
     return !room.hidden && !document.hidden && (!document.fullscreenElement || document.fullscreenElement.contains(grid));
   }
+  function hideSpeaker(item){
+    item.speaker?.remove();item.speaker=null;
+  }
+  function drawSpeaker(item,peer,strength,now){
+    if(strength){
+      item.lastSpoke=now;
+      if(!item.speaker){
+        const card=document.createElement('li');
+        card.className='stream-speaker';card.style.order=String(peer.slot);
+        const portrait=document.createElement('span');portrait.className='room-avatar';
+        const name=document.createElement('bdi');
+        card.append(portrait,name);speakers.append(card);
+        item.speaker=card;
+      }
+      paintAvatar(item.speaker.firstChild,peer.name,item.photo);
+      if(item.speaker.lastChild.textContent!==item.caption.textContent)item.speaker.lastChild.textContent=item.caption.textContent;
+      item.speaker.classList.remove('fading');
+    }else if(item.speaker){
+      // Keep the name readable across short gaps between syllables.
+      const quiet=now-item.lastSpoke;
+      if(quiet>=480)hideSpeaker(item);
+      else if(quiet>=320)item.speaker.classList.add('fading');
+    }
+  }
   function tick(){
-    if(!visible())return;
-    if(video && performance.now()>=nextPreview)preview(previewId,video);
+    const full=document.fullscreenElement===stage && !!state.selectedPeerId && !room.hidden && !document.hidden;
+    const showGrid=visible(),now=performance.now();
+    if(!full && speakers.childElementCount)for(const item of tiles.values())hideSpeaker(item);
+    if(!full && !showGrid)return;
+    if(showGrid && video && now>=nextPreview)preview(previewId,video);
     for(const p of state.peers){
       const item=tiles.get(p.id);if(!item)continue;
       const own=p.id===state.session?.selfId;
-      const level=p.micMuted||state.controlLost?0:own?ownLevel():mixer.voiceLevel(p.id);
+      const setting=own?null:mixer.getSetting(p.id,'voice');
+      const muted=p.micMuted||state.controlLost||((own||state.media?.isHost)&&!state.media?.allowed(p.slot,'voice'))||
+        (own?state.micMuted:mixer.deafened||setting.muted||!setting.active||!setting.volume);
+      const level=muted?0:own?ownLevel():mixer.voiceLevel(p.id);
       const strength=voiceStrength(level);
+      if(full){
+        if(muted)hideSpeaker(item);
+        else drawSpeaker(item,p,strength,now);
+      }
+      if(!showGrid)continue;
       const value=strength?String(Math.round(strength*12)/12):'0';
       if(item.tile.style.getPropertyValue('--voice-level')!==value)item.tile.style.setProperty('--voice-level',value);
       item.tile.classList.toggle('is-speaking',strength>0);
     }
   }
+  document.addEventListener('fullscreenchange',tick);
+  document.addEventListener('visibilitychange',tick);
   function sync(){
     mix.sync();
     const live=!!state.session;
     if(!live){clearInterval(timer);timer=null;}
     if(scope!==state.session?.mixRoom){
-      soundMenu.prune(new Set());for(const item of tiles.values())item.tile.remove();tiles.clear();scope=state.session?.mixRoom;
+      soundMenu.prune(new Set());for(const item of tiles.values()){item.tile.remove();hideSpeaker(item);}tiles.clear();scope=state.session?.mixRoom;
     }
     const ids=new Set(live?state.peers.map(p=>p.id):[]);
     soundMenu.prune(ids);
-    for(const [id,item] of tiles)if(!ids.has(id)){item.tile.remove();tiles.delete(id);}
+    for(const [id,item] of tiles)if(!ids.has(id)){item.tile.remove();hideSpeaker(item);tiles.delete(id);}
     if(!live)return;
     const data=direct()?.active()?direct().raw():null;
     for(const p of state.peers){
@@ -52,6 +90,7 @@ export function roomPortraits({grid,state,direct,mixer,mix,soundMenu,watch,ownLe
       const own=p.id===state.session.selfId;
       const person=(state.session.direct||state.session.groupVoice) && data?.mixRoom===state.session.mixRoom && data?.roomContacts?.[p.id];
       const photo=own?data?.me?.avatar:data?.friends.find(f=>person===f.id&&f.state==='friend')?.avatar;
+      item.photo=photo;
       paintAvatar(item.portrait,p.name,photo);
       item.tile.classList.toggle('own-card',own);
       item.caption.textContent=p.name+(own?tr(' · вы'):'');
