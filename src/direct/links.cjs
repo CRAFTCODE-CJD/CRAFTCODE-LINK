@@ -12,6 +12,8 @@ class ContactLink {
     const local=publicCard(profile),timeout=setTimeout(()=>socket.destroy(),7000);
     let buf=Buffer.alloc(0),used=0,count=0,window=Date.now();
     const fileBytes=new TokenBucket(24*1024**2,6*1024**2);
+    this.writeBlocked=false;
+    socket.on('drain',()=>{this.writeBlocked=false;});
     socket.on('error',()=>{});
     socket.once('close',()=>{clearTimeout(timeout);this.wire?.destroy();closed(this);});
     socket.on('data',part=>{
@@ -47,7 +49,10 @@ class ContactLink {
   }
   send(value){
     if(this.socket.destroyed||this.socket.writableLength>512*1024){this.socket.destroy();return false;}
-    this.socket.write(JSON.stringify(value)+'\n');return true;
+    // Node TLS and streamx Noise both accept the write before signalling
+    // backpressure. Never resend its bytes through another route.
+    if(this.socket.write(JSON.stringify(value)+'\n')===false)this.writeBlocked=true;
+    return true;
   }
   makeWire(id=randomUUID()){
     this.wire?.destroy();

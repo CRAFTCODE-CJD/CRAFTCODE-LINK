@@ -6,7 +6,11 @@ const {TokenBucket}=require('../core/protocol.cjs');
 const {PathCheck,isProbePort,isProbe,peerProbePort}=require('./path-check.cjs');
 const {GamePorts,allowedPort}=require('./ports.cjs');
 const {GameDiscovery,discoveryMessage,localAnswer}=require('./discovery.cjs');
-const newTraffic=()=>({tx:0,rx:0,broadcastTx:0,broadcastRx:0,blockedTx:0,blockedRx:0,lastBlockedTx:'',lastBlockedRx:'',relayed:0,queriesTx:0,queriesRx:0,answersTx:0,answersRx:0,matchedRx:0,adapterDrops:0,lastMatch:null});
+// Keep at most four protocol batches per recipient and discard stale game
+// commands if every authenticated route remains congested.
+const maxQueuedFrames=48, queueLifetimeMs=350;
+const writableLink=link=>!link.socket.destroyed&&!link.writeBlocked&&!(link.socket.writableLength>=65536);
+const newTraffic=()=>({tx:0,rx:0,broadcastTx:0,broadcastRx:0,blockedTx:0,blockedRx:0,lastBlockedTx:'',lastBlockedRx:'',relayed:0,queriesTx:0,queriesRx:0,answersTx:0,answersRx:0,matchedRx:0,adapterDrops:0,queueDrops:0,alternateFrames:0,gameplay8088Tx:0,gameplay8088Rx:0,lastMatch:null});
 function inspect(b,prefix){
   if(!Buffer.isBuffer(b)||b.length<28||b.length>1500||b[0]!==0x45||b.readUInt16BE(2)!==b.length||
      (b.readUInt16BE(6)&0xbfff)!==0||b.readUIntBE(12,3)!==ipv4Number(prefix+'.0')/256)return null;
@@ -52,8 +56,8 @@ class GameNetwork {
     this.ports.forgetSeat(slot);this.discovery.forgetSeat(slot);
     if(this.traffic.lastMatch?.seat===slot)this.traffic.lastMatch=null;
     this.queues.delete(device);
-    // Other peers may already have a broadcast from the revoked slot queued.
-    for(const q of this.queues.values())q.frames=q.frames.filter(b=>b[15]!==slot);
+    // A guest's queue to the organizer may contain unicast for a revoked seat.
+    for(const q of this.queues.values())q.frames=q.frames.filter(({packet})=>packet[15]!==slot&&packet[19]!==slot);
   }
   async start(repair=false){
     const r=this.room.active,me=this.mine();if(!r||!me||r.waiting)throw Error(tr('Сначала войдите в игровую LAN.'));
@@ -164,6 +168,7 @@ class GameNetwork {
       if(local || accepted){
         this.traffic[local?'tx':'rx']++;
         if(broadcast)this.traffic[local?'broadcastTx':'broadcastRx']++;
+        else if(h.proto==='UDP'&&h.sport===8088&&h.dport===8088)this.traffic[local?'gameplay8088Tx':'gameplay8088Rx']++;
         if(msg)this.traffic[(msg.type==='answer'?'answers':'queries')+(local?'Tx':'Rx')]++;
         if(accepted&&query){
           this.traffic.matchedRx++;
@@ -178,6 +183,7 @@ class GameNetwork {
     }
     if(diagnostic&&incomingHere)this.adapter?.write(b);
     if(!r.host&&!local)return;
+    const expires=performance.now()+queueLifetimeMs;
     for(const p of r.roster){
       if(p.slot===me.slot||p.slot===from)continue;
       if(r.host&&p.ready!==true)continue;
@@ -185,11 +191,11 @@ class GameNetwork {
       const target=r.host&&replyTargets?.find(query=>query.seat===p.slot);
       if(r.host&&replyTargets&&!target)continue;
       let q=this.queues.get(p.device);
-      if(!q){q={p,frames:[]};this.queues.set(p.device,q);}
-      if(q.frames.length<48){
-        const frame=target?localAnswer(b,target,msg.session):b;
-        q.frames.push(frame);
+      if(!q){q={room:r.id,p,frames:[]};this.queues.set(p.device,q);}
+      if(q.frames.length===maxQueuedFrames){
+        q.frames.shift();this.traffic.queueDrops++;this.reportTraffic();
       }
+      q.frames.push({packet:target?localAnswer(b,target,msg.session):b,expires});
     }
     this.schedule();
   }
@@ -202,11 +208,25 @@ class GameNetwork {
   flush(){
     this.timer=null;
     const r=this.room.active;
-    for(const {p,frames} of this.queues.values()){
-      const l=this.room.link(p);if(!r||!l||l.socket.writableLength>=65536){this.queues.delete(p.device);continue;}
+    const now=performance.now();
+    for(const {room,p,frames} of this.queues.values()){
+      const member=r?.roster.find(peer=>peer.slot===p.slot&&peer.device===p.device&&peer.id===p.id);
+      if(!member||r.id!==room||r.waiting||(r.host&&!member.ready)){
+        this.queues.delete(p.device);continue;
+      }
+      let expired=0;
+      while(expired<frames.length&&frames[expired].expires<=now)expired++;
+      if(expired){frames.splice(0,expired);this.traffic.queueDrops+=expired;this.reportTraffic();}
       if(frames.length){
-        const batch=frames.splice(0,12).map(b=>b.toString('base64'));
-        if(l.send({kind:'game-packets',room:r.id,frames:batch})){this.traffic.relayed+=batch.length;this.reportTraffic();}
+        const primary=this.room.link(p);
+        const link=primary&&!writableLink(primary)?this.room.link(p,writableLink):primary;
+        if(!link||!writableLink(link))continue;
+        const batch=frames.splice(0,12).map(({packet})=>packet.toString('base64'));
+        if(link.send({kind:'game-packets',room,frames:batch})){
+          this.traffic.relayed+=batch.length;
+          if(link!==primary)this.traffic.alternateFrames+=batch.length;
+        }else this.traffic.queueDrops+=batch.length;
+        this.reportTraffic();
       }
       if(!frames.length)this.queues.delete(p.device);
     }

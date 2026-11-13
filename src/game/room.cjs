@@ -29,7 +29,9 @@ class GameRoom {
       invitations:[...this.invitations.values()].map(({actionId,id,title,peer})=>({id:actionId,room:id,person:peer.id,device:peer.device,title,name:peer.name})),
       requests:[...this.joinRequests.values()].map(({actionId,card})=>({actionId,id:card.id,name:card.name,device:card.device})),asked:this.asked?.room,askedTitle:this.asked?.title,listed:!!r?.listed,invited:[...this.sent.keys()]};
   }
-  link(peer){return this.links(peer.id).find(l=>l.card.device===peer.device);}
+  link(peer,available){
+    return this.links(peer.id).find(l=>l.card.id===peer.id&&l.card.device===peer.device&&(!available||available(l)));
+  }
   send(peer,kind,fields={}){return this.link(peer)?.send({kind:'game-room',action:kind,room:this.active?.id,...fields})===true;}
   create(title,listed=true) {
     if(this.active) fail('Сначала выйдите из игровой LAN.');

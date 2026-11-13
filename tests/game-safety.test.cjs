@@ -59,6 +59,84 @@ test('Generals lobby broadcasts and fixed-port match traffic cross the LAN betwe
  await new Promise(resolve=>setTimeout(resolve,35));
  assert.deepEqual(received,[[match],[lobby,reply]]);
  assert.equal(networks[1].status().traffic.blockedTx,2);
+ for(const n of networks){
+   assert.equal(n.status().traffic.gameplay8088Tx,1);
+   assert.equal(n.status().traffic.gameplay8088Rx,1);
+ }
+});
+test('congested routes keep gameplay bounded, private to the seat, and independent of other recipients',t=>{
+ const [self,guest,other]=members;
+ const links=[];
+ const room=new GameRoom({self:()=>self,links:()=>links});
+ room.active={id:crypto.randomUUID(),prefix:'10.90.2',host:true,roster:members};
+ const net=new GameNetwork(room,()=>{});
+ net.reconcile();
+ t.after(()=>net.stop());
+ function link(card){
+   const messages=[];
+   const route={card,socket:{writableLength:0},messages,send(batch){
+     messages.push(...batch.frames.map(data=>Buffer.from(data,'base64').readUInt32BE(28)));
+     return true;
+   }};
+   links.push(route);return route;
+ }
+ const primary=link(guest),wrongPerson=link({...guest,id:other.id}),wrongDevice=link({...guest,device:'different'});
+ const backup=link(guest),independent=link(other);
+ function enqueue(src,dst,sequence){
+   const data=frame({src,dst,sport:8088,dport:8088});
+   data.writeUInt32BE(sequence,28);
+   net.route(src,data,src===self.slot);
+ }
+ function flush(){clearTimeout(net.timer);net.flush();}
+ // A write accepted by one route leaves no duplicate for the primary on drain.
+ primary.socket.writableLength=65536;
+ enqueue(self.slot,guest.slot,1);flush();
+ primary.socket.writableLength=0;flush();
+ assert.deepEqual(backup.messages,[1]);assert.deepEqual(primary.messages,[]);
+ assert.deepEqual(wrongPerson.messages,[]);assert.deepEqual(wrongDevice.messages,[]);
+ assert.equal(net.traffic.alternateFrames,1);
+ // The organizer relays player-to-player data even while its own queue is blocked.
+ primary.writeBlocked=backup.writeBlocked=true;
+ enqueue(self.slot,guest.slot,2);enqueue(guest.slot,other.slot,3);flush();
+ assert.deepEqual(independent.messages,[3]);assert.equal(net.traffic.gameplay8088Rx,0);
+ assert.equal(net.traffic.gameplay8088Tx,2);
+ // Socket replacement during congestion reselects an authorized route on the next tick.
+ links.splice(links.indexOf(primary),1);
+ const replacement=link(guest);
+ flush();assert.deepEqual(replacement.messages,[2]);
+ replacement.writeBlocked=true;
+ // Deterministic expiration, no sleep and no dependence on the runner's load.
+ let tick=performance.now();
+ t.mock.method(performance,'now',()=>tick);
+ enqueue(self.slot,guest.slot,4);tick+=300;flush();
+ backup.writeBlocked=false;flush();assert.deepEqual(backup.messages,[1,4]);
+ backup.writeBlocked=true;
+ for(let i=0;i<60;i++)enqueue(self.slot,guest.slot,i+10);
+ assert.equal(net.traffic.queueDrops,12);
+ assert.equal(net.queues.get(guest.device).frames.length,48);
+ tick+=351;backup.writeBlocked=false;flush();
+ assert.equal(net.traffic.queueDrops,60);assert.deepEqual(backup.messages,[1,4]);
+ // Never send pre-revocation data to a replacement occupant or under a new room id.
+ enqueue(self.slot,guest.slot,70);
+ room.active.roster=[self,{...guest,device:'replacement'},other];net.reconcile();flush();
+ room.active.roster=members;net.reconcile();
+ enqueue(self.slot,guest.slot,71);room.active.id=crypto.randomUUID();flush();
+ assert.deepEqual(backup.messages,[1,4]);
+});
+
+test('a guest drops queued player-to-player commands when the destination seat is revoked',t=>{
+ const [organizer,me,peer]=members, sent=[];
+ const route={card:organizer,socket:{writableLength:65536},send(m){sent.push(m);return true;}};
+ const room=new GameRoom({self:()=>me,links:()=>[route]});
+ room.active={id:crypto.randomUUID(),prefix:'10.90.2',host:false,roster:members};
+ const net=new GameNetwork(room,()=>{});t.after(()=>net.stop());net.reconcile();
+ const command=frame({src:me.slot,dst:peer.slot,sport:8088,dport:8088});
+ net.route(me.slot,command,true);
+ assert.equal(net.queues.get(organizer.device).frames.length,1);
+ room.active.roster=[organizer,me];net.reconcile();
+ room.active.roster=[organizer,me,{...peer,id:'new player',device:'new device'}];net.reconcile();
+ route.socket.writableLength=0;clearTimeout(net.timer);net.flush();
+ assert.equal(sent.length,0);
 });
 test('explicit per-room ports admit a TCP handshake and exact game bytes, enforce revocation and protect system listeners',t=>{
  const id=crypto.randomUUID(),host=members[0],guest=members[1],delivered=[];

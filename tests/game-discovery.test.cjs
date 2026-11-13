@@ -181,7 +181,7 @@ test('malformed and unsolicited advertisements cannot reach sockets, open return
   net.queues.clear();writes.length=0;
   receive(2,frame(2,255,14001,14001,answer));
   assert.equal(writes.length,0);assert.deepEqual([...net.queues.keys()],['device3']);
-  const reply=net.queues.get('device3').frames[0];
+  const reply=net.queues.get('device3').frames[0].packet;
   assert.equal(reply[19],3);assert.equal(reply.readUInt16BE(22),49823);
   const {session:parsed}=discoveryMessage(reply.subarray(28),{sport:14001,dport:49823});
   assert.deepEqual([...reply.subarray(28+parsed.addressOffset,32+parsed.addressOffset)],[10,90,1,2]);
