@@ -13,9 +13,22 @@ function partialName(release){
   return 'installer-'+release.sha+'-'+release.size+'.part';
 }
 async function cacheDirectory(dir,create=false){
-  if(create)await fs.mkdir(dir,{recursive:true,mode:0o700});
-  const s=await fs.lstat(dir);
-  if(!s.isDirectory()||s.isSymbolicLink()||path.relative(path.resolve(dir),await fs.realpath(dir))!=='')throw invalid();
+  const absolute=path.resolve(dir),root=path.parse(absolute).root;
+  let current=root;
+  // Windows may spell a real directory using its 8.3 alias. Check the entries
+  // themselves, including every ancestor, before creating or removing anything.
+  for(const name of path.relative(root,absolute).split(path.sep).filter(Boolean)){
+    current=path.join(current,name);
+    let stat;
+    try{stat=await fs.lstat(current);}
+    catch(e){
+      if(e.code!=='ENOENT'||!create)throw e;
+      await fs.mkdir(current,{mode:0o700}).catch(e=>{if(e.code!=='EEXIST')throw e;});
+      stat=await fs.lstat(current);
+    }
+    if(!stat.isDirectory()||stat.isSymbolicLink())throw invalid();
+  }
+  return fs.realpath(absolute);
 }
 async function partialStat(file){
   const st=await fs.lstat(file,{bigint:true});
@@ -25,14 +38,14 @@ async function partialStat(file){
 async function partialSize(dir,release){
   const name=partialName(release);
   try{
-    await cacheDirectory(dir);
+    dir=await cacheDirectory(dir);
     const {size}=await partialStat(path.join(dir,name));
     return size>BigInt(release.size)?0:Number(size);
   }catch(e){if(e.code==='ENOENT')return 0;throw e;}
 }
 async function cleanupPartials(dir,keepRelease=null){
   const keep=keepRelease&&partialName(keepRelease);
-  try{await cacheDirectory(dir);}catch(e){if(e.code==='ENOENT')return;throw e;}
+  try{dir=await cacheDirectory(dir);}catch(e){if(e.code==='ENOENT')return;throw e;}
   for(const entry of await fs.readdir(dir,{withFileTypes:true})){
     if(entry.name===keep||!/^installer-[a-f0-9]{64}-[1-9]\d{0,8}\.part$/.test(entry.name))continue;
     if(entry.isDirectory()&&!entry.isSymbolicLink())continue;
@@ -128,12 +141,13 @@ async function appendResponse(handle,release,offset,request,signal,progress,idle
 }
 async function receiveInstaller(release,dir,signal,progress,request,{idleTimeoutMs=45000}={}){
   signal.throwIfAborted();
-  const file=path.resolve(dir,partialName(release));
+  const name=partialName(release);
+  dir=await cacheDirectory(dir,true);
+  const file=path.join(dir,name);
   if(active.has(file))throw Error('Дождитесь завершения текущей операции обновления.');
   active.add(file);
   let handle,discard=false,stage;
   try{
-    await cacheDirectory(dir,true);
     handle=await openPartial(file);
     const stat=await handle.stat({bigint:true}),pos=Number(stat.size);
     if(pos>release.size)throw invalid();
@@ -160,4 +174,4 @@ async function receiveInstaller(release,dir,signal,progress,request,{idleTimeout
     }finally{active.delete(file);}
   }
 }
-module.exports={receiveInstaller,partialSize,cleanupPartials};
+module.exports={cacheDirectory,receiveInstaller,partialSize,cleanupPartials};

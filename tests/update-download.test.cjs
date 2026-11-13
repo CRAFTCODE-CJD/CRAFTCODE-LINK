@@ -119,6 +119,8 @@ test('Only matching private partials resume; cache cleanup preserves other files
   const parent=await temp(t),junction=path.join(parent,'data');
   await fs.symlink(dir,junction,process.platform==='win32'?'junction':'dir');
   await assert.rejects(download(release,junction,()=>assert.fail(),signal()),e=>e.code==='UPDATE_INVALID_PAYLOAD');
+  await assert.rejects(download(release,path.join(junction,'new-cache'),()=>assert.fail(),signal()),e=>e.code==='UPDATE_INVALID_PAYLOAD');
+  await assert.rejects(fs.stat(path.join(dir,'new-cache')),{code:'ENOENT'});
 });
 test('A verified full partial finishes locally after restart; status errors and cancel preserve safe progress',async t=>{
   const dir=await temp(t);await cut(dir);

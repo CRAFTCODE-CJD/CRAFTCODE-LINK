@@ -4,6 +4,7 @@ const {tr}=require('./native-language.cjs');
 const {spawn}=require('node:child_process');
 const {UpdateService}=require('./update-service.cjs');
 const {removeStage}=require('./github-releases.cjs');
+const {cacheDirectory}=require('./update-download.cjs');
 const {offlineManifest,maxSize}=require('./offline-update.cjs');
 const {parseUpdateCode}=require('./renderer/release-code.mjs');
 const invalidFile=message=>Object.assign(Error(tr(message)),{code:'UPDATE_INVALID_PAYLOAD'});
@@ -25,7 +26,7 @@ async function verifyInstaller(input,expected,output){
   if(hash.digest('hex')!==expected.sha)throw invalidFile('Установщик отличается от выпуска CRAFTCODE.');
 }
 async function stage(file,dir,expected){
-  await fs.mkdir(dir,{recursive:true,mode:0o700});
+  dir=await cacheDirectory(dir,true);
   const work=await fs.mkdtemp(path.join(dir,'install-')),dest=path.join(work,expected.name);
   let input,output;
   try{
@@ -37,9 +38,7 @@ async function stage(file,dir,expected){
   }finally{await input?.close().catch(()=>{});}
 }
 async function cleanup(dir,{strict=false}={}){
-  const stat=await fs.lstat(dir).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
-  if(!stat)return;
-  if(!stat.isDirectory()||stat.isSymbolicLink())throw Error(tr('Не удалось безопасно открыть расположение данных LINK.'));
+  try{dir=await cacheDirectory(dir);}catch(e){if(e.code==='ENOENT')return;throw e;}
   const list=await fs.readdir(dir,{withFileTypes:true});
   for(const e of list)if(e.isDirectory()&&/^install-[a-zA-Z0-9]{6}$/.test(e.name))
     await removeStage(path.join(dir,e.name)).catch(e=>{if(strict)throw e;});
